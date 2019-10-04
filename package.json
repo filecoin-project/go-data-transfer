@@ -1,0 +1,27 @@
+{
+  "name": "go-data-transfer",
+  "version": "1.0.0",
+  "description": "Data Transfer For Filecoin",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/filecoin-project/go-data-transfer.git"
+  },
+  "keywords": [
+    "filecoin",
+    "data",
+    "transfer"
+  ],
+  "author": "Hannah Howard",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/filecoin-project/go-data-transfer/issues"
+  },
+  "homepage": "https://github.com/filecoin-project/go-data-transfer#readme",
+  "dependencies": {
+    "mermaid.cli": "^0.5.1"
+  }
+}
