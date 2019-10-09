@@ -2,7 +2,7 @@
 
 ### Goals
 
-1. StorageMarket & RetrievalMarket can operate in a seperate process from the chain, storageminer, and data transfer (but don't need to)
+1. StorageMarket & RetrievalMarket can operate in a separate process from the chain, storageminer, and data transfer (but don't need to)
 2. Retrievals can be done in chunks to allow building trust in miner as data is retrieved. But on the client side they can be tracked as a whole.
 3. StorageDeals go on chain. RetrievalDeals operate off chain, only interacting with chain through PaymentChannels
 4. All chain components have no responsibility other than updating the chain (the StorageMarketActor does not coordinate next steps in chain)
@@ -75,7 +75,7 @@ TODO
 #### StorageDealProtocol
 #### RetrievalDealProtocol
 
-Should these be seperate?
+Should these be separate?
 
 ### Data Structures
 
