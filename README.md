@@ -2,10 +2,10 @@
 
 ### Goals
 
-1. File Transfer Module should be nuetral to whether it's on a client or a miner
-2. File Transfer Module should be nuetral to the larger operations being performed (i.e. storage deal, retrieval deal, etc)
+1. File Transfer Module should be neutral to whether it's on a client or a miner
+2. File Transfer Module should be neutral to the larger operations being performed (i.e. storage deal, retrieval deal, etc)
 3. File Transfer can be initiated by either the sender or the receiver
-4. The negotiation of the file transfer should be indepedent of the underlying transport protocol
+4. The negotiation of the file transfer should be independent of the underlying transport protocol
 5. File transfers can happen for either all or part of a piece
 
 ### Concepts
