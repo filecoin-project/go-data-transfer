@@ -136,7 +136,10 @@ func (impl *graphsyncImpl) gsCompletedResponseListener(p peer.ID, request graphs
 	if status == graphsync.RequestCompletedFull {
 		evt.Code = datatransfer.Complete
 	}
-	impl.pubSub.Publish(internalEvent{evt, chst})
+	err = impl.pubSub.Publish(internalEvent{evt, chst})
+	if err != nil {
+		log.Warnf("err publishing DT event: %s", err.Error())
+	}
 }
 
 // RegisterVoucherType registers a validator for the given voucher type
@@ -282,6 +285,9 @@ func (impl *graphsyncImpl) sendGsRequest(ctx context.Context, initiator peer.ID,
 				evt.Message = lastError.Error()
 			}
 		}
-		impl.pubSub.Publish(internalEvent{evt, chst})
+		err := impl.pubSub.Publish(internalEvent{evt, chst})
+		if err != nil {
+			log.Warnf("err publishing DT event: %s", err.Error())
+		}
 	}()
 }
