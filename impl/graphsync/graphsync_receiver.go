@@ -137,7 +137,7 @@ func (receiver *graphsyncReceiver) ReceiveResponse(
 			evt.Code = datatransfer.Progress
 		}
 	}
-	receiver.impl.pubSub.Publish(evt, chst)
+	receiver.impl.pubSub.Publish(internalEvent{evt, chst})
 }
 
 func (receiver *graphsyncReceiver) ReceiveError(error) {}

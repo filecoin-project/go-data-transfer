@@ -6,25 +6,30 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 )
 
+type SubscriberFn interface{}
+type Event interface{}
+type Dispatcher func(Event, SubscriberFn) error
+
 type subscriber struct {
-	fn  datatransfer.Subscriber
+	fn  SubscriberFn
 	key uint64
 }
 
 // PubSub is a simple emitter of data transfer events
 type PubSub struct {
+	dispatcher    Dispatcher
 	subscribersLk sync.RWMutex
 	subscribers   []subscriber
 	nextKey       uint64
 }
 
 // New returns a new PubSub
-func New() *PubSub {
-	return &PubSub{}
+func New(dispatcher Dispatcher) *PubSub {
+	return &PubSub{dispatcher: dispatcher}
 }
 
 // Subscribe adds the given subscriber to the list of subscribers for this Pubsub
-func (ps *PubSub) Subscribe(subscriberFn datatransfer.Subscriber) datatransfer.Unsubscribe {
+func (ps *PubSub) Subscribe(subscriberFn SubscriberFn) datatransfer.Unsubscribe {
 	ps.subscribersLk.Lock()
 	subscriber := subscriber{subscriberFn, ps.nextKey}
 	ps.nextKey++
@@ -51,10 +56,14 @@ func (ps *PubSub) unsubscribeAt(sub subscriber) datatransfer.Unsubscribe {
 }
 
 // Publish publishes the given event and channel state to all subscribers
-func (ps *PubSub) Publish(evt datatransfer.Event, cs datatransfer.ChannelState) {
+func (ps *PubSub) Publish(event Event) error {
 	ps.subscribersLk.RLock()
 	defer ps.subscribersLk.RUnlock()
 	for _, sub := range ps.subscribers {
-		sub.fn(evt, cs)
+		err := ps.dispatcher(event, sub.fn)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }

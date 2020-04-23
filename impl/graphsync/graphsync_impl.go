@@ -3,6 +3,7 @@ package graphsyncimpl
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -44,13 +45,31 @@ type graphsyncImpl struct {
 	storedCounter       *storedcounter.StoredCounter
 }
 
+type internalEvent struct {
+	evt   datatransfer.Event
+	state datatransfer.ChannelState
+}
+
+func dispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
+	ie, ok := evt.(internalEvent)
+	if !ok {
+		return errors.New("wrong type of event")
+	}
+	cb, ok := subscriberFn.(datatransfer.Subscriber)
+	if !ok {
+		return errors.New("wrong type of event")
+	}
+	cb(ie.evt, ie.state)
+	return nil
+}
+
 // NewGraphSyncDataTransfer initializes a new graphsync based data transfer manager
 func NewGraphSyncDataTransfer(host host.Host, gs graphsync.GraphExchange, storedCounter *storedcounter.StoredCounter) datatransfer.Manager {
 	dataTransferNetwork := network.NewFromLibp2pHost(host)
 	impl := &graphsyncImpl{
 		dataTransferNetwork,
 		make(map[string]validateType),
-		pubsub.New(),
+		pubsub.New(dispatcher),
 		channels.New(),
 		gs,
 		host.ID(),
@@ -117,7 +136,7 @@ func (impl *graphsyncImpl) gsCompletedResponseListener(p peer.ID, request graphs
 	if status == graphsync.RequestCompletedFull {
 		evt.Code = datatransfer.Complete
 	}
-	impl.pubSub.Publish(evt, chst)
+	impl.pubSub.Publish(internalEvent{evt, chst})
 }
 
 // RegisterVoucherType registers a validator for the given voucher type
@@ -263,6 +282,6 @@ func (impl *graphsyncImpl) sendGsRequest(ctx context.Context, initiator peer.ID,
 				evt.Message = lastError.Error()
 			}
 		}
-		impl.pubSub.Publish(evt, chst)
+		impl.pubSub.Publish(internalEvent{evt, chst})
 	}()
 }
