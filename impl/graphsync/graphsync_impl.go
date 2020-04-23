@@ -19,8 +19,8 @@ import (
 	"github.com/filecoin-project/go-data-transfer/channels"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
-	"github.com/filecoin-project/go-data-transfer/pubsub"
 	"github.com/filecoin-project/go-storedcounter"
+	"github.com/hannahhoward/go-pubsub"
 )
 
 // This file implements a VERY simple, incomplete version of the data transfer
@@ -239,7 +239,7 @@ func (impl *graphsyncImpl) TransferChannelStatus(x datatransfer.ChannelID) datat
 
 // get notified when certain types of events happen
 func (impl *graphsyncImpl) SubscribeToEvents(subscriber datatransfer.Subscriber) datatransfer.Unsubscribe {
-	return impl.pubSub.Subscribe(subscriber)
+	return datatransfer.Unsubscribe(impl.pubSub.Subscribe(subscriber))
 }
 
 // get all in progress transfers
