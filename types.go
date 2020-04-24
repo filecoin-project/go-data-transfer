@@ -28,6 +28,13 @@ type Registerable interface {
 // from bytes, and has a string identifier type
 type Voucher Registerable
 
+// VoucherResult is used to provide option additional information about a
+// voucher being rejected or accepted
+type VoucherResult Registerable
+
+// RevalidationRequest is used to request revalidation of a data transfer
+type RevalidationRequest Registerable
+
 // Status is the status of transfer for a given channel
 type Status int
 
@@ -99,6 +106,9 @@ const (
 	// Open is an event occurs when a channel is first opened
 	Open EventCode = iota
 
+	// Accepted is an event that occurs when the data transfer is first accepted
+	Accepted
+
 	// Progress is an event that gets emitted every time more data is transferred
 	Progress
 
@@ -130,13 +140,45 @@ type RequestValidator interface {
 		sender peer.ID,
 		voucher Voucher,
 		baseCid cid.Cid,
-		selector ipld.Node) error
+		selector ipld.Node) (VoucherResult, error)
 	// ValidatePull validates a pull request received from the peer that will receive data
 	ValidatePull(
 		receiver peer.ID,
 		voucher Voucher,
 		baseCid cid.Cid,
-		selector ipld.Node) error
+		selector ipld.Node) (VoucherResult, error)
+}
+
+// Revalidator is a request validator revalidates in progress requests
+// by requesting request additional vouchers, and resuming when it receives them
+type Revalidator interface {
+	RequestValidator
+	// OnPullDataSent is called on the responder side when more bytes are sent
+	// for a given pull request. It should return a RevalidationRequest or nil
+	// to continue uninterrupted, and err if the request should be terminated
+	OnPullDataSent(ChannelID, ChannelState) (RevalidationRequest, error)
+	// OnPushDataReceived is called on the responder side when more bytes are received
+	// for a given push request. It should return a RevalidationRequest or nil
+	// to continue uninterrupted, and err if the request should be terminated
+	OnPushDataReceived(ChannelID, ChannelState) (RevalidationRequest, error)
+}
+
+// RevalidationFulfiller produces new vouchers in response to revalidation requests
+type RevalidationFulfiller interface {
+	// FulfillPushVoucherRequest is called on the initiator side when a request
+	// for revalidation is received for a push request
+	FulfillPushRevalidationRequest(
+		sender peer.ID,
+		voucher RevalidationRequest,
+		baseCid cid.Cid,
+		selector ipld.Node) (Voucher, error)
+	// FulfillPushVoucherRequest is called on the initiator side when a request
+	// for revalidation is received for a push request
+	FulfillPullRevalidationRequest(
+		sender peer.ID,
+		voucher RevalidationRequest,
+		baseCid cid.Cid,
+		selector ipld.Node) (Voucher, error)
 }
 
 // Manager is the core interface presented by all implementations of
@@ -146,6 +188,20 @@ type Manager interface {
 	// will error if voucher type does not implement voucher
 	// or if there is a voucher type registered with an identical identifier
 	RegisterVoucherType(voucherType Voucher, validator RequestValidator) error
+
+	// RegisterRevalidator registers a revalidator for the given voucher type
+	// Note: this is the voucher type used to revalidate. It can share a name
+	// with the initial validator type and CAN be the same type, or a different type.
+	// The revalidator can simply be the sampe as the original request validator,
+	// or a different validator that satisfies the revalidator interface.
+	RegisterRevalidator(voucherType Voucher, revalidator Revalidator) error
+
+	// RegisterRevalidationFulfiller registers a fulfiller for revalidation requests
+	RegisterRevalidationFulfiller(revalidationRequestType RevalidationRequest, fulfiller RevalidationFulfiller) error
+
+	// RegisterVoucherResultType allows deserialization of a voucher result,
+	// so that a listener can read the metadata
+	RegisterVoucherResultType(resultType VoucherResult) error
 
 	// open a data transfer that will send data to the recipient peer and
 	// transfer parts of the piece that match the selector

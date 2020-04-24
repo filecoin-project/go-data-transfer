@@ -35,13 +35,6 @@ func NewDAGServiceDataTransfer(dag ipldformat.DAGService) datatransfer.Manager {
 	return &dagserviceImpl{dag, nil}
 }
 
-// RegisterVoucherType registers a validator for the given voucher type
-// will error if voucher type does not implement voucher
-// or if there is a voucher type registered with an identical identifier
-func (impl *dagserviceImpl) RegisterVoucherType(voucherType datatransfer.Voucher, validator datatransfer.RequestValidator) error {
-	return nil
-}
-
 // open a data transfer that will send data to the recipient peer and
 // transfer parts of the piece that match the selector
 func (impl *dagserviceImpl) OpenPushDataChannel(ctx context.Context, to peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, Selector ipld.Node) (datatransfer.ChannelID, error) {
@@ -83,5 +76,32 @@ func (impl *dagserviceImpl) SubscribeToEvents(subscriber datatransfer.Subscriber
 
 // get all in progress transfers
 func (impl *dagserviceImpl) InProgressChannels() map[datatransfer.ChannelID]datatransfer.ChannelState {
+	return nil
+}
+
+// RegisterVoucherType registers a validator for the given voucher type
+// will error if voucher type does not implement voucher
+// or if there is a voucher type registered with an identical identifier
+func (impl *dagserviceImpl) RegisterVoucherType(voucherType datatransfer.Voucher, validator datatransfer.RequestValidator) error {
+	return nil
+}
+
+// RegisterRevalidator registers a revalidator for the given voucher type
+// Note: this is the voucher type used to revalidate. It can share a name
+// with the initial validator type and CAN be the same type, or a different type.
+// The revalidator can simply be the sampe as the original request validator,
+// or a different validator that satisfies the revalidator interface.
+func (impl *dagserviceImpl) RegisterRevalidator(voucherType datatransfer.Voucher, revalidator datatransfer.Revalidator) error {
+	return nil
+}
+
+// RegisterRevalidationFulfiller registers a fulfiller for revalidation requests
+func (impl *dagserviceImpl) RegisterRevalidationFulfiller(revalidationRequestType datatransfer.RevalidationRequest, fulfiller datatransfer.RevalidationFulfiller) error {
+	return nil
+}
+
+// RegisterVoucherResultType allows deserialization of a voucher result,
+// so that a listener can read the metadata
+func (impl *dagserviceImpl) RegisterVoucherResultType(resultType datatransfer.VoucherResult) error {
 	return nil
 }

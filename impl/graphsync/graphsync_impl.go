@@ -305,3 +305,23 @@ func (impl *graphsyncImpl) sendGsRequest(ctx context.Context, initiator peer.ID,
 		}
 	}()
 }
+
+// RegisterRevalidator registers a revalidator for the given voucher type
+// Note: this is the voucher type used to revalidate. It can share a name
+// with the initial validator type and CAN be the same type, or a different type.
+// The revalidator can simply be the sampe as the original request validator,
+// or a different validator that satisfies the revalidator interface.
+func (impl *graphsyncImpl) RegisterRevalidator(voucherType datatransfer.Voucher, revalidator datatransfer.Revalidator) error {
+	panic("not implemented")
+}
+
+// RegisterRevalidationFulfiller registers a fulfiller for revalidation requests
+func (impl *graphsyncImpl) RegisterRevalidationFulfiller(revalidationRequestType datatransfer.RevalidationRequest, fulfiller datatransfer.RevalidationFulfiller) error {
+	panic("not implemented")
+}
+
+// RegisterVoucherResultType allows deserialization of a voucher result,
+// so that a listener can read the metadata
+func (impl *graphsyncImpl) RegisterVoucherResultType(resultType datatransfer.VoucherResult) error {
+	panic("not implemented")
+}

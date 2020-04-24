@@ -24,7 +24,7 @@ func (receiver *graphsyncReceiver) ReceiveRequest(
 	ctx context.Context,
 	initiator peer.ID,
 	incoming message.DataTransferRequest) {
-	err := receiver.receiveRequest(initiator, incoming)
+	result, err := receiver.receiveRequest(initiator, incoming)
 	if err != nil {
 		log.Error(err)
 	}
@@ -32,16 +32,16 @@ func (receiver *graphsyncReceiver) ReceiveRequest(
 		stor, _ := incoming.Selector()
 		receiver.impl.sendGsRequest(ctx, initiator, incoming.TransferID(), incoming.IsPull(), initiator, cidlink.Link{Cid: incoming.BaseCid()}, stor)
 	}
-	receiver.impl.sendResponse(ctx, err == nil, initiator, incoming.TransferID())
+	receiver.impl.sendResponse(ctx, err == nil, initiator, incoming.TransferID(), result)
 }
 
 func (receiver *graphsyncReceiver) receiveRequest(
 	initiator peer.ID,
-	incoming message.DataTransferRequest) error {
+	incoming message.DataTransferRequest) (datatransfer.VoucherResult, error) {
 
 	voucher, err := receiver.validateVoucher(initiator, incoming)
 	if err != nil {
-		return err
+		return result, err
 	}
 	stor, _ := incoming.Selector()
 
@@ -56,7 +56,7 @@ func (receiver *graphsyncReceiver) receiveRequest(
 
 	chid, err := receiver.impl.channels.CreateNew(incoming.TransferID(), incoming.BaseCid(), stor, voucher, initiator, dataSender, dataReceiver)
 	if err != nil {
-		return err
+		return result, err
 	}
 	evt := datatransfer.Event{
 		Code:      datatransfer.Open,
@@ -65,13 +65,13 @@ func (receiver *graphsyncReceiver) receiveRequest(
 	}
 	chst, err := receiver.impl.channels.GetByID(chid)
 	if err != nil {
-		return err
+		return result, err
 	}
 	err = receiver.impl.pubSub.Publish(internalEvent{evt, chst})
 	if err != nil {
 		log.Warnf("err publishing DT event: %s", err.Error())
 	}
-	return nil
+	return result, nil
 }
 
 // validateVoucher converts a voucher in an incoming message to its appropriate
@@ -93,7 +93,7 @@ func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming mess
 	}
 	vouch := encodable.(datatransfer.Registerable)
 
-	var validatorFunc func(peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) error
+	var validatorFunc func(peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.VoucherResult, error)
 	processor, _ := receiver.impl.validatedTypes.Processor(vtypStr)
 	validator := processor.(datatransfer.RequestValidator)
 	if incoming.IsPull() {
@@ -107,7 +107,7 @@ func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming mess
 		return vouch, err
 	}
 
-	if err = validatorFunc(sender, vouch, incoming.BaseCid(), stor); err != nil {
+	if _, err = validatorFunc(sender, vouch, incoming.BaseCid(), stor); err != nil {
 		return nil, err
 	}
 

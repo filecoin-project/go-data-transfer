@@ -179,26 +179,26 @@ func (fv *fakeValidator) ValidatePush(
 	sender peer.ID,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
-	selector ipld.Node) error {
+	selector ipld.Node) (datatransfer.VoucherResult, error) {
 
 	select {
 	case <-fv.ctx.Done():
 	case fv.validationsReceived <- receivedValidation{false, sender, voucher, baseCid, selector}:
 	}
-	return nil
+	return nil, nil
 }
 
 func (fv *fakeValidator) ValidatePull(
 	receiver peer.ID,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
-	selector ipld.Node) error {
+	selector ipld.Node) (datatransfer.VoucherResult, error) {
 
 	select {
 	case <-fv.ctx.Done():
 	case fv.validationsReceived <- receivedValidation{true, receiver, voucher, baseCid, selector}:
 	}
-	return nil
+	return nil, nil
 }
 
 func TestDataTransferValidation(t *testing.T) {
@@ -301,18 +301,18 @@ func (sv *stubbedValidator) ValidatePush(
 	sender peer.ID,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
-	selector ipld.Node) error {
+	selector ipld.Node) (datatransfer.VoucherResult, error) {
 	sv.didPush = true
-	return sv.pushError
+	return nil, sv.pushError
 }
 
 func (sv *stubbedValidator) ValidatePull(
 	receiver peer.ID,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
-	selector ipld.Node) error {
+	selector ipld.Node) (datatransfer.VoucherResult, error) {
 	sv.didPull = true
-	return sv.pullError
+	return nil, sv.pullError
 }
 
 func (sv *stubbedValidator) stubErrorPush() {
