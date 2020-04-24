@@ -239,8 +239,16 @@ func (impl *graphsyncImpl) sendDtRequest(ctx context.Context, selector ipld.Node
 	return tid, nil
 }
 
-func (impl *graphsyncImpl) sendResponse(ctx context.Context, isAccepted bool, to peer.ID, tid datatransfer.TransferID) {
-	resp := message.NewResponse(tid, isAccepted)
+func (impl *graphsyncImpl) sendResponse(ctx context.Context, isAccepted bool, to peer.ID, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) {
+	var resultType datatransfer.TypeIdentifier
+	if voucherResult != nil {
+		resultType = voucherResult.Type()
+	}
+	resp, err := message.NewResponse(tid, isAccepted, resultType, voucherResult)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 	if err := impl.dataTransferNetwork.SendMessage(ctx, to, resp); err != nil {
 		log.Error(err)
 	}

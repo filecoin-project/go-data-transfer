@@ -41,6 +41,8 @@ type DataTransferRequest interface {
 type DataTransferResponse interface {
 	DataTransferMessage
 	Accepted() bool
+	VoucherResultType() datatransfer.TypeIdentifier
+	VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error)
 }
 
 // NewRequest generates a new request for the data transfer protocol
@@ -75,8 +77,12 @@ func CancelRequest(id datatransfer.TransferID) DataTransferRequest {
 }
 
 // NewResponse builds a new Data Transfer response
-func NewResponse(id datatransfer.TransferID, accepted bool) DataTransferResponse {
-	return &transferResponse{Acpt: accepted, XferID: uint64(id)}
+func NewResponse(id datatransfer.TransferID, accepted bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (DataTransferResponse, error) {
+	vbytes, err := encoding.Encode(voucherResult)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
+	return &transferResponse{Acpt: accepted, XferID: uint64(id), VTyp: voucherResultType, VRes: &cborgen.Deferred{Raw: vbytes}}, nil
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage

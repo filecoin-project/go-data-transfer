@@ -3,7 +3,10 @@ package message
 import (
 	"io"
 
-	"github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/encoding"
+	cbg "github.com/whyrusleeping/cbor-gen"
+	xerrors "golang.org/x/xerrors"
 )
 
 //go:generate cbor-gen-for transferResponse
@@ -12,6 +15,8 @@ import (
 type transferResponse struct {
 	Acpt   bool
 	XferID uint64
+	VRes   *cbg.Deferred
+	VTyp   datatransfer.TypeIdentifier
 }
 
 func (trsp *transferResponse) TransferID() datatransfer.TransferID {
@@ -26,6 +31,17 @@ func (trsp *transferResponse) IsRequest() bool {
 // 	Accepted returns true if the request is accepted in the response
 func (trsp *transferResponse) Accepted() bool {
 	return trsp.Acpt
+}
+
+func (trsp *transferResponse) VoucherResultType() datatransfer.TypeIdentifier {
+	return trsp.VTyp
+}
+
+func (trsp *transferResponse) VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error) {
+	if trsp.VRes == nil {
+		return nil, xerrors.New("No voucher present to read")
+	}
+	return decoder.DecodeFromCbor(trsp.VRes.Raw)
 }
 
 // ToNet serializes a transfer response. It's a wrapper for MarshalCBOR to provide

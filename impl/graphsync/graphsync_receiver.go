@@ -39,7 +39,7 @@ func (receiver *graphsyncReceiver) receiveRequest(
 	initiator peer.ID,
 	incoming message.DataTransferRequest) (datatransfer.VoucherResult, error) {
 
-	voucher, err := receiver.validateVoucher(initiator, incoming)
+	voucher, result, err := receiver.validateVoucher(initiator, incoming)
 	if err != nil {
 		return result, err
 	}
@@ -80,16 +80,16 @@ func (receiver *graphsyncReceiver) receiveRequest(
 //   * reading voucher fails
 //   * deserialization of selector fails
 //   * validation fails
-func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming message.DataTransferRequest) (datatransfer.Voucher, error) {
+func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming message.DataTransferRequest) (datatransfer.Voucher, datatransfer.VoucherResult, error) {
 
 	vtypStr := datatransfer.TypeIdentifier(incoming.VoucherType())
 	decoder, has := receiver.impl.validatedTypes.Decoder(vtypStr)
 	if !has {
-		return nil, xerrors.Errorf("unknown voucher type: %s", vtypStr)
+		return nil, nil, xerrors.Errorf("unknown voucher type: %s", vtypStr)
 	}
 	encodable, err := incoming.Voucher(decoder)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	vouch := encodable.(datatransfer.Registerable)
 
@@ -104,14 +104,15 @@ func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming mess
 
 	stor, err := incoming.Selector()
 	if err != nil {
-		return vouch, err
+		return vouch, nil, err
 	}
 
-	if _, err = validatorFunc(sender, vouch, incoming.BaseCid(), stor); err != nil {
-		return nil, err
+	result, err := validatorFunc(sender, vouch, incoming.BaseCid(), stor)
+	if err != nil {
+		return nil, result, err
 	}
 
-	return vouch, nil
+	return vouch, result, nil
 }
 
 // ReceiveResponse handles responses to our  Push or Pull data transfer request.
