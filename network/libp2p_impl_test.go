@@ -14,7 +14,6 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
-	"github.com/filecoin-project/go-data-transfer/registry"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
 
@@ -85,9 +84,9 @@ func TestMessageSendAndReceive(t *testing.T) {
 		selector := testutil.RandomBytes(100)
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
-		vType := registry.Identifier("FakeVoucherType")
-		voucher := testutil.RandomBytes(100)
-		request := message.NewRequest(id, isPull, vType, voucher, baseCid, selector)
+		voucher := testutil.NewFakeDTType()
+		request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, selector)
+		require.NoError(t, err)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 
 		select {
@@ -107,8 +106,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		assert.Equal(t, request.IsPull(), receivedRequest.IsPull())
 		assert.Equal(t, request.IsRequest(), receivedRequest.IsRequest())
 		assert.True(t, receivedRequest.BaseCid().Equals(request.BaseCid()))
-		assert.Equal(t, request.VoucherType(), receivedRequest.VoucherType())
-		assert.Equal(t, request.Voucher(), receivedRequest.Voucher())
+		testutil.AssertEqualFakeDTVoucher(t, request, receivedRequest)
 		assert.Equal(t, request.Selector(), receivedRequest.Selector())
 	})
 

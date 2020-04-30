@@ -66,7 +66,7 @@ func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming mess
 	if !has {
 		return nil, xerrors.Errorf("unknown voucher type: %s", vtypStr)
 	}
-	encodable, err := decoder.DecodeFromCbor(incoming.Voucher())
+	encodable, err := incoming.Voucher(decoder)
 	if err != nil {
 		return nil, err
 	}

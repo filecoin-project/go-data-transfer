@@ -16,7 +16,6 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"
-	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/registry"
@@ -190,17 +189,15 @@ func (impl *graphsyncImpl) sendDtRequest(ctx context.Context, selector ipld.Node
 	if err != nil {
 		return 0, err
 	}
-	vbytes, err := encoding.Encode(voucher)
-	if err != nil {
-		return 0, err
-	}
 	next, err := impl.storedCounter.Next()
 	if err != nil {
 		return 0, err
 	}
 	tid := datatransfer.TransferID(next)
-	req := message.NewRequest(tid, isPull, voucher.Type(), vbytes, baseCid, sbytes)
-
+	req, err := message.NewRequest(tid, isPull, voucher.Type(), voucher, baseCid, sbytes)
+	if err != nil {
+		return 0, err
+	}
 	if err := impl.dataTransferNetwork.SendMessage(ctx, to, req); err != nil {
 		return 0, err
 	}

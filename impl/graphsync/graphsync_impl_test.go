@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/encoding"
 	. "github.com/filecoin-project/go-data-transfer/impl/graphsync"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
@@ -90,9 +89,9 @@ func TestDataTransferOneWay(t *testing.T) {
 		stor := ssb.ExploreRecursive(selector.RecursionLimitNone(),
 			ssb.ExploreAll(ssb.ExploreRecursiveEdge())).Node()
 
-		voucher := testutil.FakeDTType{Data: "applesauce"}
+		voucher := testutil.NewFakeDTType()
 		baseCid := testutil.GenerateCids(1)[0]
-		channelID, err := dt.OpenPushDataChannel(ctx, host2.ID(), &voucher, baseCid, stor)
+		channelID, err := dt.OpenPushDataChannel(ctx, host2.ID(), voucher, baseCid, stor)
 		require.NoError(t, err)
 		require.NotNil(t, channelID)
 		require.Equal(t, channelID.Initiator, host1.ID())
@@ -123,14 +122,7 @@ func TestDataTransferOneWay(t *testing.T) {
 		require.NoError(t, err)
 		receivedSelector := nb.Build()
 		require.Equal(t, receivedSelector, stor)
-		decoder, err := encoding.NewDecoder(&testutil.FakeDTType{})
-		require.NoError(t, err)
-		decoded, err := decoder.DecodeFromCbor(receivedRequest.Voucher())
-		require.NoError(t, err)
-		receivedVoucher, ok := decoded.(*testutil.FakeDTType)
-		require.True(t, ok)
-		require.Equal(t, *receivedVoucher, voucher)
-		require.Equal(t, receivedRequest.VoucherType(), voucher.Type())
+		testutil.AssertFakeDTVoucher(t, receivedRequest, voucher)
 	})
 
 	t.Run("OpenPullDataTransfer", func(t *testing.T) {
@@ -139,9 +131,9 @@ func TestDataTransferOneWay(t *testing.T) {
 		stor := ssb.ExploreRecursive(selector.RecursionLimitNone(),
 			ssb.ExploreAll(ssb.ExploreRecursiveEdge())).Node()
 
-		voucher := testutil.FakeDTType{Data: "applesauce"}
+		voucher := testutil.NewFakeDTType()
 		baseCid := testutil.GenerateCids(1)[0]
-		channelID, err := dt.OpenPullDataChannel(ctx, host2.ID(), &voucher, baseCid, stor)
+		channelID, err := dt.OpenPullDataChannel(ctx, host2.ID(), voucher, baseCid, stor)
 		require.NoError(t, err)
 		require.NotNil(t, channelID)
 		require.Equal(t, channelID.Initiator, host1.ID())
@@ -172,14 +164,7 @@ func TestDataTransferOneWay(t *testing.T) {
 		require.NoError(t, err)
 		receivedSelector := nb.Build()
 		require.Equal(t, receivedSelector, stor)
-		decoder, err := encoding.NewDecoder(&testutil.FakeDTType{})
-		require.NoError(t, err)
-		decoded, err := decoder.DecodeFromCbor(receivedRequest.Voucher())
-		require.NoError(t, err)
-		receivedVoucher, ok := decoded.(*testutil.FakeDTType)
-		require.True(t, ok)
-		require.Equal(t, *receivedVoucher, voucher)
-		require.Equal(t, receivedRequest.VoucherType(), voucher.Type())
+		testutil.AssertFakeDTVoucher(t, receivedRequest, voucher)
 	})
 }
 
@@ -302,9 +287,8 @@ func TestDataTransferValidation(t *testing.T) {
 func createDTRequest(t *testing.T, isPull bool, id datatransfer.TransferID, selectorBytes []byte) (testutil.FakeDTType, cid.Cid, message.DataTransferRequest) {
 	voucher := &testutil.FakeDTType{Data: "applesauce"}
 	baseCid := testutil.GenerateCids(1)[0]
-	voucherBytes, err := encoding.Encode(voucher)
+	request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, selectorBytes)
 	require.NoError(t, err)
-	request := message.NewRequest(id, isPull, voucher.Type(), voucherBytes, baseCid, selectorBytes)
 	return *voucher, baseCid, request
 }
 

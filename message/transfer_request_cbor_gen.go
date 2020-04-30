@@ -22,16 +22,16 @@ func (t *transferRequest) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.BCid (string) (string)
-	if len(t.BCid) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.BCid was too long")
-	}
+	// t.BCid (cid.Cid) (struct)
 
-	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajTextString, uint64(len(t.BCid)))); err != nil {
-		return err
-	}
-	if _, err := w.Write([]byte(t.BCid)); err != nil {
-		return err
+	if t.BCid == nil {
+		if _, err := w.Write(cbg.CborNull); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteCid(w, *t.BCid); err != nil {
+			return xerrors.Errorf("failed to write cid field t.BCid: %w", err)
+		}
 	}
 
 	// t.Canc (bool) (bool)
@@ -121,15 +121,29 @@ func (t *transferRequest) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.BCid (string) (string)
+	// t.BCid (cid.Cid) (struct)
 
 	{
-		sval, err := cbg.ReadString(br)
+
+		pb, err := br.PeekByte()
 		if err != nil {
 			return err
 		}
+		if pb == cbg.CborNull[0] {
+			var nbuf [1]byte
+			if _, err := br.Read(nbuf[:]); err != nil {
+				return err
+			}
+		} else {
 
-		t.BCid = string(sval)
+			c, err := cbg.ReadCid(br)
+			if err != nil {
+				return xerrors.Errorf("failed to read cid field t.BCid: %w", err)
+			}
+
+			t.BCid = &c
+		}
+
 	}
 	// t.Canc (bool) (bool)
 

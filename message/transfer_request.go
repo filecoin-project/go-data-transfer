@@ -4,6 +4,7 @@ import (
 	"io"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/registry"
 	"github.com/ipfs/go-cid"
 )
@@ -13,7 +14,7 @@ import (
 // transferRequest is a struct that fulfills the DataTransferRequest interface.
 // its members are exported to be used by cbor-gen
 type transferRequest struct {
-	BCid   string
+	BCid   *cid.Cid
 	Canc   bool
 	PID    []byte
 	Part   bool
@@ -45,17 +46,16 @@ func (trq *transferRequest) VoucherType() registry.Identifier {
 }
 
 // Voucher returns the Voucher bytes
-func (trq *transferRequest) Voucher() []byte {
-	return trq.Vouch
+func (trq *transferRequest) Voucher(decoder encoding.Decoder) (encoding.Encodable, error) {
+	return decoder.DecodeFromCbor(trq.Vouch)
 }
 
 // BaseCid returns the Base CID
 func (trq *transferRequest) BaseCid() cid.Cid {
-	res, err := cid.Decode(trq.BCid)
-	if err != nil {
+	if trq.BCid == nil {
 		return cid.Undef
 	}
-	return res
+	return *trq.BCid
 }
 
 // Selector returns the message Selector bytes
