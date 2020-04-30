@@ -10,16 +10,16 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-// Identifier is a unique string identifier for a type of encodable object in a
+// TypeIdentifier is a unique string identifier for a type of encodable object in a
 // registry
-type Identifier string
+type TypeIdentifier string
 
 // Registerable is a type of object in a registry. It must be encodable and must
 // have a single method that uniquely identifies its type
 type Registerable interface {
 	encoding.Encodable
 	// Type is a unique string identifier for this voucher type
-	Type() Identifier
+	Type() TypeIdentifier
 }
 
 // Voucher is used to validate

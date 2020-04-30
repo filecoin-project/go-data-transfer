@@ -25,7 +25,7 @@ type transferRequest struct {
 	Pull   bool
 	Stor   *cbg.Deferred
 	Vouch  *cbg.Deferred
-	VTyp   datatransfer.Identifier
+	VTyp   datatransfer.TypeIdentifier
 	XferID uint64
 }
 
@@ -45,7 +45,7 @@ func (trq *transferRequest) IsPull() bool {
 }
 
 // VoucherType returns the Voucher ID
-func (trq *transferRequest) VoucherType() datatransfer.Identifier {
+func (trq *transferRequest) VoucherType() datatransfer.TypeIdentifier {
 	return trq.VTyp
 }
 

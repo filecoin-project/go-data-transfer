@@ -25,13 +25,13 @@ type registryEntry struct {
 // on this unique identifier
 type Registry struct {
 	registryLk sync.RWMutex
-	entries    map[datatransfer.Identifier]registryEntry
+	entries    map[datatransfer.TypeIdentifier]registryEntry
 }
 
 // NewRegistry initialzes a new registy
 func NewRegistry() *Registry {
 	return &Registry{
-		entries: make(map[datatransfer.Identifier]registryEntry),
+		entries: make(map[datatransfer.TypeIdentifier]registryEntry),
 	}
 }
 
@@ -52,7 +52,7 @@ func (r *Registry) Register(entry datatransfer.Registerable, processor Processor
 }
 
 // Decoder gets a decoder for the given identifier
-func (r *Registry) Decoder(identifier datatransfer.Identifier) (encoding.Decoder, bool) {
+func (r *Registry) Decoder(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool) {
 	r.registryLk.RLock()
 	entry, has := r.entries[identifier]
 	r.registryLk.RUnlock()
@@ -60,7 +60,7 @@ func (r *Registry) Decoder(identifier datatransfer.Identifier) (encoding.Decoder
 }
 
 // Processor gets the processing interface for the given identifer
-func (r *Registry) Processor(identifier datatransfer.Identifier) (Processor, bool) {
+func (r *Registry) Processor(identifier datatransfer.TypeIdentifier) (Processor, bool) {
 	r.registryLk.RLock()
 	entry, has := r.entries[identifier]
 	r.registryLk.RUnlock()

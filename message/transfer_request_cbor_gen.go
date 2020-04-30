@@ -59,7 +59,7 @@ func (t *transferRequest) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.VTyp (datatransfer.Identifier) (string)
+	// t.VTyp (datatransfer.TypeIdentifier) (string)
 	if len(t.VTyp) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.VTyp was too long")
 	}
@@ -212,7 +212,7 @@ func (t *transferRequest) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.VTyp (datatransfer.Identifier) (string)
+	// t.VTyp (datatransfer.TypeIdentifier) (string)
 
 	{
 		sval, err := cbg.ReadString(br)
@@ -220,7 +220,7 @@ func (t *transferRequest) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.VTyp = datatransfer.Identifier(sval)
+		t.VTyp = datatransfer.TypeIdentifier(sval)
 	}
 	// t.XferID (uint64) (uint64)
 

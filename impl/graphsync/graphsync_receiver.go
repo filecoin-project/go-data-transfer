@@ -60,7 +60,7 @@ func (receiver *graphsyncReceiver) ReceiveRequest(
 //   * validation fails
 func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming message.DataTransferRequest) (datatransfer.Voucher, error) {
 
-	vtypStr := datatransfer.Identifier(incoming.VoucherType())
+	vtypStr := datatransfer.TypeIdentifier(incoming.VoucherType())
 	decoder, has := receiver.impl.validatedTypes.Decoder(vtypStr)
 	if !has {
 		return nil, xerrors.Errorf("unknown voucher type: %s", vtypStr)

@@ -30,7 +30,7 @@ type DataTransferMessage interface {
 type DataTransferRequest interface {
 	DataTransferMessage
 	IsPull() bool
-	VoucherType() datatransfer.Identifier
+	VoucherType() datatransfer.TypeIdentifier
 	Voucher(decoder encoding.Decoder) (encoding.Encodable, error)
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
@@ -44,7 +44,7 @@ type DataTransferResponse interface {
 }
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.Identifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (DataTransferRequest, error) {
+func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (DataTransferRequest, error) {
 	vbytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)

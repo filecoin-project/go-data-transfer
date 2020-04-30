@@ -18,13 +18,13 @@ type FakeDTType struct {
 }
 
 // Type satisfies registry.Entry
-func (ft FakeDTType) Type() datatransfer.Identifier {
+func (ft FakeDTType) Type() datatransfer.TypeIdentifier {
 	return "FakeDTType"
 }
 
 // AssertFakeDTVoucher asserts that a data transfer requests contains the expected fake data transfer voucher type
 func AssertFakeDTVoucher(t *testing.T, request message.DataTransferRequest, expected *FakeDTType) {
-	require.Equal(t, datatransfer.Identifier("FakeDTType"), request.VoucherType())
+	require.Equal(t, datatransfer.TypeIdentifier("FakeDTType"), request.VoucherType())
 	fakeDTDecoder, err := encoding.NewDecoder(&FakeDTType{})
 	require.NoError(t, err)
 	decoded, err := request.Voucher(fakeDTDecoder)
