@@ -185,16 +185,12 @@ func (impl *graphsyncImpl) OpenPullDataChannel(ctx context.Context, requestTo pe
 
 // sendDtRequest encapsulates message creation and posting to the data transfer network with the provided parameters
 func (impl *graphsyncImpl) sendDtRequest(ctx context.Context, selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid, to peer.ID) (datatransfer.TransferID, error) {
-	sbytes, err := nodeAsBytes(selector)
-	if err != nil {
-		return 0, err
-	}
 	next, err := impl.storedCounter.Next()
 	if err != nil {
 		return 0, err
 	}
 	tid := datatransfer.TransferID(next)
-	req, err := message.NewRequest(tid, isPull, voucher.Type(), voucher, baseCid, sbytes)
+	req, err := message.NewRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
 	if err != nil {
 		return 0, err
 	}

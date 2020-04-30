@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"github.com/ipfs/go-cid"
+	"github.com/ipld/go-ipld-prime"
 	cborgen "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 
@@ -33,7 +34,7 @@ type DataTransferRequest interface {
 	VoucherType() registry.Identifier
 	Voucher(decoder encoding.Decoder) (encoding.Encodable, error)
 	BaseCid() cid.Cid
-	Selector() []byte
+	Selector() (ipld.Node, error)
 	IsCancel() bool
 }
 
@@ -44,7 +45,7 @@ type DataTransferResponse interface {
 }
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isPull bool, vtype registry.Identifier, voucher encoding.Encodable, baseCid cid.Cid, selector []byte) (DataTransferRequest, error) {
+func NewRequest(id datatransfer.TransferID, isPull bool, vtype registry.Identifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (DataTransferRequest, error) {
 	vbytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
@@ -52,10 +53,14 @@ func NewRequest(id datatransfer.TransferID, isPull bool, vtype registry.Identifi
 	if baseCid == cid.Undef {
 		return nil, xerrors.Errorf("base CID must be defined")
 	}
+	selBytes, err := encoding.Encode(selector)
+	if err != nil {
+		return nil, xerrors.Errorf("Error encoding selector")
+	}
 	return &transferRequest{
 		Pull:   isPull,
-		Vouch:  vbytes,
-		Stor:   selector,
+		Vouch:  &cborgen.Deferred{Raw: vbytes},
+		Stor:   &cborgen.Deferred{Raw: selBytes},
 		BCid:   &baseCid,
 		VTyp:   vtype,
 		XferID: uint64(id),

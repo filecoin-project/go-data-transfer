@@ -31,7 +31,7 @@ func (receiver *graphsyncReceiver) ReceiveRequest(
 		receiver.impl.sendResponse(ctx, false, initiator, incoming.TransferID())
 		return
 	}
-	stor, _ := nodeFromBytes(incoming.Selector())
+	stor, _ := incoming.Selector()
 	root := cidlink.Link{Cid: incoming.BaseCid()}
 
 	var dataSender, dataReceiver peer.ID
@@ -81,7 +81,7 @@ func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming mess
 		validatorFunc = validator.ValidatePush
 	}
 
-	stor, err := nodeFromBytes(incoming.Selector())
+	stor, err := incoming.Selector()
 	if err != nil {
 		return vouch, err
 	}

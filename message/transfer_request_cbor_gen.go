@@ -18,7 +18,7 @@ func (t *transferRequest) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{137}); err != nil {
+	if _, err := w.Write([]byte{136}); err != nil {
 		return err
 	}
 
@@ -39,18 +39,6 @@ func (t *transferRequest) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.PID ([]uint8) (slice)
-	if len(t.PID) > cbg.ByteArrayMaxLen {
-		return xerrors.Errorf("Byte array in field t.PID was too long")
-	}
-
-	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajByteString, uint64(len(t.PID)))); err != nil {
-		return err
-	}
-	if _, err := w.Write(t.PID); err != nil {
-		return err
-	}
-
 	// t.Part (bool) (bool)
 	if err := cbg.WriteBool(w, t.Part); err != nil {
 		return err
@@ -61,27 +49,13 @@ func (t *transferRequest) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Stor ([]uint8) (slice)
-	if len(t.Stor) > cbg.ByteArrayMaxLen {
-		return xerrors.Errorf("Byte array in field t.Stor was too long")
-	}
-
-	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajByteString, uint64(len(t.Stor)))); err != nil {
-		return err
-	}
-	if _, err := w.Write(t.Stor); err != nil {
+	// t.Stor (typegen.Deferred) (struct)
+	if err := t.Stor.MarshalCBOR(w); err != nil {
 		return err
 	}
 
-	// t.Vouch ([]uint8) (slice)
-	if len(t.Vouch) > cbg.ByteArrayMaxLen {
-		return xerrors.Errorf("Byte array in field t.Vouch was too long")
-	}
-
-	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajByteString, uint64(len(t.Vouch)))); err != nil {
-		return err
-	}
-	if _, err := w.Write(t.Vouch); err != nil {
+	// t.Vouch (typegen.Deferred) (struct)
+	if err := t.Vouch.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -117,7 +91,7 @@ func (t *transferRequest) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 9 {
+	if extra != 8 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -162,23 +136,6 @@ func (t *transferRequest) UnmarshalCBOR(r io.Reader) error {
 	default:
 		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 	}
-	// t.PID ([]uint8) (slice)
-
-	maj, extra, err = cbg.CborReadHeader(br)
-	if err != nil {
-		return err
-	}
-
-	if extra > cbg.ByteArrayMaxLen {
-		return fmt.Errorf("t.PID: byte array too large (%d)", extra)
-	}
-	if maj != cbg.MajByteString {
-		return fmt.Errorf("expected byte array")
-	}
-	t.PID = make([]byte, extra)
-	if _, err := io.ReadFull(br, t.PID); err != nil {
-		return err
-	}
 	// t.Part (bool) (bool)
 
 	maj, extra, err = cbg.CborReadHeader(br)
@@ -213,39 +170,47 @@ func (t *transferRequest) UnmarshalCBOR(r io.Reader) error {
 	default:
 		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 	}
-	// t.Stor ([]uint8) (slice)
+	// t.Stor (typegen.Deferred) (struct)
 
-	maj, extra, err = cbg.CborReadHeader(br)
-	if err != nil {
-		return err
-	}
+	{
 
-	if extra > cbg.ByteArrayMaxLen {
-		return fmt.Errorf("t.Stor: byte array too large (%d)", extra)
-	}
-	if maj != cbg.MajByteString {
-		return fmt.Errorf("expected byte array")
-	}
-	t.Stor = make([]byte, extra)
-	if _, err := io.ReadFull(br, t.Stor); err != nil {
-		return err
-	}
-	// t.Vouch ([]uint8) (slice)
+		pb, err := br.PeekByte()
+		if err != nil {
+			return err
+		}
+		if pb == cbg.CborNull[0] {
+			var nbuf [1]byte
+			if _, err := br.Read(nbuf[:]); err != nil {
+				return err
+			}
+		} else {
+			t.Stor = new(cbg.Deferred)
+			if err := t.Stor.UnmarshalCBOR(br); err != nil {
+				return xerrors.Errorf("unmarshaling t.Stor pointer: %w", err)
+			}
+		}
 
-	maj, extra, err = cbg.CborReadHeader(br)
-	if err != nil {
-		return err
 	}
+	// t.Vouch (typegen.Deferred) (struct)
 
-	if extra > cbg.ByteArrayMaxLen {
-		return fmt.Errorf("t.Vouch: byte array too large (%d)", extra)
-	}
-	if maj != cbg.MajByteString {
-		return fmt.Errorf("expected byte array")
-	}
-	t.Vouch = make([]byte, extra)
-	if _, err := io.ReadFull(br, t.Vouch); err != nil {
-		return err
+	{
+
+		pb, err := br.PeekByte()
+		if err != nil {
+			return err
+		}
+		if pb == cbg.CborNull[0] {
+			var nbuf [1]byte
+			if _, err := br.Read(nbuf[:]); err != nil {
+				return err
+			}
+		} else {
+			t.Vouch = new(cbg.Deferred)
+			if err := t.Vouch.UnmarshalCBOR(br); err != nil {
+				return xerrors.Errorf("unmarshaling t.Vouch pointer: %w", err)
+			}
+		}
+
 	}
 	// t.VTyp (registry.Identifier) (string)
 

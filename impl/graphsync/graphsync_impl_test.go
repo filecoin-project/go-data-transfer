@@ -12,7 +12,6 @@ import (
 	"github.com/ipfs/go-graphsync"
 	gsmsg "github.com/ipfs/go-graphsync/message"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector"
@@ -116,11 +115,8 @@ func TestDataTransferOneWay(t *testing.T) {
 		require.Equal(t, receivedRequest.BaseCid(), baseCid)
 		require.False(t, receivedRequest.IsCancel())
 		require.False(t, receivedRequest.IsPull())
-		reader := bytes.NewReader(receivedRequest.Selector())
-		nb := basicnode.Style.Any.NewBuilder()
-		err = dagcbor.Decoder(nb, reader)
+		receivedSelector, err := receivedRequest.Selector()
 		require.NoError(t, err)
-		receivedSelector := nb.Build()
 		require.Equal(t, receivedSelector, stor)
 		testutil.AssertFakeDTVoucher(t, receivedRequest, voucher)
 	})
@@ -158,11 +154,8 @@ func TestDataTransferOneWay(t *testing.T) {
 		require.Equal(t, receivedRequest.BaseCid(), baseCid)
 		require.False(t, receivedRequest.IsCancel())
 		require.True(t, receivedRequest.IsPull())
-		reader := bytes.NewReader(receivedRequest.Selector())
-		nb := basicnode.Style.Any.NewBuilder()
-		err = dagcbor.Decoder(nb, reader)
+		receivedSelector, err := receivedRequest.Selector()
 		require.NoError(t, err)
-		receivedSelector := nb.Build()
 		require.Equal(t, receivedSelector, stor)
 		testutil.AssertFakeDTVoucher(t, receivedRequest, voucher)
 	})
@@ -226,15 +219,13 @@ func TestDataTransferValidation(t *testing.T) {
 	fv := &fakeValidator{ctx, make(chan receivedValidation)}
 
 	id := datatransfer.TransferID(rand.Int31())
-	var buffer bytes.Buffer
-	require.NoError(t, dagcbor.Encoder(gsData.AllSelector, &buffer))
 
 	t.Run("ValidatePush", func(t *testing.T) {
 		dt2 := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
 		err := dt2.RegisterVoucherType(&testutil.FakeDTType{}, fv)
 		require.NoError(t, err)
 		// create push request
-		voucher, baseCid, request := createDTRequest(t, false, id, buffer.Bytes())
+		voucher, baseCid, request := createDTRequest(t, false, id, gsData.AllSelector)
 
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 
@@ -261,7 +252,7 @@ func TestDataTransferValidation(t *testing.T) {
 
 	t.Run("ValidatePull", func(t *testing.T) {
 		// create pull request
-		voucher, baseCid, request := createDTRequest(t, true, id, buffer.Bytes())
+		voucher, baseCid, request := createDTRequest(t, true, id, gsData.AllSelector)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 
 		var validation receivedValidation
@@ -284,10 +275,10 @@ func TestDataTransferValidation(t *testing.T) {
 	})
 }
 
-func createDTRequest(t *testing.T, isPull bool, id datatransfer.TransferID, selectorBytes []byte) (testutil.FakeDTType, cid.Cid, message.DataTransferRequest) {
+func createDTRequest(t *testing.T, isPull bool, id datatransfer.TransferID, selector ipld.Node) (testutil.FakeDTType, cid.Cid, message.DataTransferRequest) {
 	voucher := &testutil.FakeDTType{Data: "applesauce"}
 	baseCid := testutil.GenerateCids(1)[0]
-	request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, selectorBytes)
+	request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, selector)
 	require.NoError(t, err)
 	return *voucher, baseCid, request
 }
@@ -497,12 +488,8 @@ func TestDataTransferInitiatingPushGraphsyncRequests(t *testing.T) {
 	dtnet1.SetDelegate(r)
 
 	id := datatransfer.TransferID(rand.Int31())
-	var buffer bytes.Buffer
 
-	err := dagcbor.Encoder(gsData.AllSelector, &buffer)
-	require.NoError(t, err)
-
-	_, baseCid, request := createDTRequest(t, false, id, buffer.Bytes())
+	_, baseCid, request := createDTRequest(t, false, id, gsData.AllSelector)
 
 	t.Run("with successful validation", func(t *testing.T) {
 		sv := newSV()
@@ -863,10 +850,6 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 	link := gsData.LoadUnixFSFile(t, true)
 
 	id := datatransfer.TransferID(rand.Int31())
-	var buf bytes.Buffer
-	err := dagcbor.Encoder(gsData.AllSelector, &buf)
-	require.NoError(t, err)
-	selectorBytes := buf.Bytes()
 
 	t.Run("When a pull request is initiated and validated", func(t *testing.T) {
 		sv := newSV()
@@ -875,7 +858,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		dt1 := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
 		require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
-		_, _, request := createDTRequest(t, true, id, selectorBytes)
+		_, _, request := createDTRequest(t, true, id, gsData.AllSelector)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 		var messageReceived receivedMessage
 		select {
@@ -894,7 +877,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		}
 
 		var buf2 = bytes.Buffer{}
-		err = extStruct.MarshalCBOR(&buf2)
+		err := extStruct.MarshalCBOR(&buf2)
 		require.NoError(t, err)
 		extData := buf2.Bytes()
 
@@ -916,7 +899,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		extStruct := &ExtensionDataTransferData{TransferID: rand.Uint64(), Initiator: host1.ID()}
 
 		var buf2 bytes.Buffer
-		err = extStruct.MarshalCBOR(&buf2)
+		err := extStruct.MarshalCBOR(&buf2)
 		require.NoError(t, err)
 		extData := buf2.Bytes()
 		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{

@@ -1,12 +1,18 @@
 package message
 
 import (
+	"bytes"
 	"io"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/registry"
 	"github.com/ipfs/go-cid"
+	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	basicnode "github.com/ipld/go-ipld-prime/node/basic"
+	cbg "github.com/whyrusleeping/cbor-gen"
+	xerrors "golang.org/x/xerrors"
 )
 
 //go:generate cbor-gen-for transferRequest
@@ -16,11 +22,10 @@ import (
 type transferRequest struct {
 	BCid   *cid.Cid
 	Canc   bool
-	PID    []byte
 	Part   bool
 	Pull   bool
-	Stor   []byte
-	Vouch  []byte
+	Stor   *cbg.Deferred
+	Vouch  *cbg.Deferred
 	VTyp   registry.Identifier
 	XferID uint64
 }
@@ -47,7 +52,10 @@ func (trq *transferRequest) VoucherType() registry.Identifier {
 
 // Voucher returns the Voucher bytes
 func (trq *transferRequest) Voucher(decoder encoding.Decoder) (encoding.Encodable, error) {
-	return decoder.DecodeFromCbor(trq.Vouch)
+	if trq.Vouch == nil {
+		return nil, xerrors.New("No voucher present to read")
+	}
+	return decoder.DecodeFromCbor(trq.Vouch.Raw)
 }
 
 // BaseCid returns the Base CID
@@ -59,8 +67,17 @@ func (trq *transferRequest) BaseCid() cid.Cid {
 }
 
 // Selector returns the message Selector bytes
-func (trq *transferRequest) Selector() []byte {
-	return trq.Stor
+func (trq *transferRequest) Selector() (ipld.Node, error) {
+	if trq.Stor == nil {
+		return nil, xerrors.New("No selector present to read")
+	}
+	builder := basicnode.Style.Any.NewBuilder()
+	reader := bytes.NewReader(trq.Stor.Raw)
+	err := dagcbor.Decoder(builder, reader)
+	if err != nil {
+		return nil, xerrors.Errorf("Error decoding selector: %w", err)
+	}
+	return builder.Build(), nil
 }
 
 // IsCancel returns true if this is a cancel request

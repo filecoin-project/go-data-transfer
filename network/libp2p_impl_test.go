@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	basicnode "github.com/ipld/go-ipld-prime/node/basic"
+	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/libp2p/go-libp2p-core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
@@ -81,7 +83,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 
 	t.Run("Send Request", func(t *testing.T) {
 		baseCid := testutil.GenerateCids(1)[0]
-		selector := testutil.RandomBytes(100)
+		selector := builder.NewSelectorSpecBuilder(basicnode.Style.Any).Matcher().Node()
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
 		voucher := testutil.NewFakeDTType()
@@ -107,7 +109,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		assert.Equal(t, request.IsRequest(), receivedRequest.IsRequest())
 		assert.True(t, receivedRequest.BaseCid().Equals(request.BaseCid()))
 		testutil.AssertEqualFakeDTVoucher(t, request, receivedRequest)
-		assert.Equal(t, request.Selector(), receivedRequest.Selector())
+		testutil.AssertEqualSelector(t, request, receivedRequest)
 	})
 
 	t.Run("Send Response", func(t *testing.T) {
