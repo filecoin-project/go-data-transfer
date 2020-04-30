@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/filecoin-project/go-data-transfer/registry"
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 )
@@ -59,7 +59,7 @@ func (t *transferRequest) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.VTyp (registry.Identifier) (string)
+	// t.VTyp (datatransfer.Identifier) (string)
 	if len(t.VTyp) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.VTyp was too long")
 	}
@@ -212,7 +212,7 @@ func (t *transferRequest) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.VTyp (registry.Identifier) (string)
+	// t.VTyp (datatransfer.Identifier) (string)
 
 	{
 		sval, err := cbg.ReadString(br)
@@ -220,7 +220,7 @@ func (t *transferRequest) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.VTyp = registry.Identifier(sval)
+		t.VTyp = datatransfer.Identifier(sval)
 	}
 	// t.XferID (uint64) (uint64)
 

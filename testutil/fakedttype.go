@@ -3,10 +3,11 @@ package testutil
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/message"
-	"github.com/filecoin-project/go-data-transfer/registry"
-	"github.com/stretchr/testify/require"
 )
 
 //go:generate cbor-gen-for FakeDTType
@@ -17,13 +18,13 @@ type FakeDTType struct {
 }
 
 // Type satisfies registry.Entry
-func (ft FakeDTType) Type() registry.Identifier {
+func (ft FakeDTType) Type() datatransfer.Identifier {
 	return "FakeDTType"
 }
 
 // AssertFakeDTVoucher asserts that a data transfer requests contains the expected fake data transfer voucher type
 func AssertFakeDTVoucher(t *testing.T, request message.DataTransferRequest, expected *FakeDTType) {
-	require.Equal(t, registry.Identifier("FakeDTType"), request.VoucherType())
+	require.Equal(t, datatransfer.Identifier("FakeDTType"), request.VoucherType())
 	fakeDTDecoder, err := encoding.NewDecoder(&FakeDTType{})
 	require.NoError(t, err)
 	decoded, err := request.Voucher(fakeDTDecoder)
@@ -48,4 +49,4 @@ func NewFakeDTType() *FakeDTType {
 	return &FakeDTType{Data: string(RandomBytes(100))}
 }
 
-var _ registry.Entry = &FakeDTType{}
+var _ datatransfer.Registerable = &FakeDTType{}

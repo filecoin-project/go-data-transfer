@@ -10,7 +10,6 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/registry"
 )
 
 // Reference file: https://github.com/ipfs/go-graphsync/blob/master/message/message.go
@@ -31,7 +30,7 @@ type DataTransferMessage interface {
 type DataTransferRequest interface {
 	DataTransferMessage
 	IsPull() bool
-	VoucherType() registry.Identifier
+	VoucherType() datatransfer.Identifier
 	Voucher(decoder encoding.Decoder) (encoding.Encodable, error)
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
@@ -45,7 +44,7 @@ type DataTransferResponse interface {
 }
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isPull bool, vtype registry.Identifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (DataTransferRequest, error) {
+func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.Identifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (DataTransferRequest, error) {
 	vbytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)

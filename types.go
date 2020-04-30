@@ -4,17 +4,29 @@ import (
 	"context"
 	"time"
 
-	"github.com/filecoin-project/go-data-transfer/registry"
+	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
+// Identifier is a unique string identifier for a type of encodable object in a
+// registry
+type Identifier string
+
+// Registerable is a type of object in a registry. It must be encodable and must
+// have a single method that uniquely identifies its type
+type Registerable interface {
+	encoding.Encodable
+	// Type is a unique string identifier for this voucher type
+	Type() Identifier
+}
+
 // Voucher is used to validate
 // a data transfer request against the underlying storage or retrieval deal
 // that precipitated it. The only requirement is a voucher can read and write
 // from bytes, and has a string identifier type
-type Voucher registry.Entry
+type Voucher Registerable
 
 // Status is the status of transfer for a given channel
 type Status int

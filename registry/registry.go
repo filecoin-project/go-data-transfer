@@ -3,6 +3,7 @@ package registry
 import (
 	"sync"
 
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
 	"golang.org/x/xerrors"
 )
@@ -11,18 +12,6 @@ import (
 // in a registry. The actual specifics of the interface that must be satisfied are
 // left to the user of the registry
 type Processor interface{}
-
-// Identifier is a unique string identifier for a type of encodable object in a
-// registry
-type Identifier string
-
-// Entry is a type of object in a registry. It must be encodable and must
-// have a single method that uniquely identifies its type
-type Entry interface {
-	encoding.Encodable
-	// Type is a unique string identifier for this voucher type
-	Type() Identifier
-}
 
 type registryEntry struct {
 	decoder   encoding.Decoder
@@ -36,18 +25,18 @@ type registryEntry struct {
 // on this unique identifier
 type Registry struct {
 	registryLk sync.RWMutex
-	entries    map[Identifier]registryEntry
+	entries    map[datatransfer.Identifier]registryEntry
 }
 
 // NewRegistry initialzes a new registy
 func NewRegistry() *Registry {
 	return &Registry{
-		entries: make(map[Identifier]registryEntry),
+		entries: make(map[datatransfer.Identifier]registryEntry),
 	}
 }
 
 // Register registers the given processor for the given entry type
-func (r *Registry) Register(entry Entry, processor Processor) error {
+func (r *Registry) Register(entry datatransfer.Registerable, processor Processor) error {
 	identifier := entry.Type()
 	decoder, err := encoding.NewDecoder(entry)
 	if err != nil {
@@ -63,7 +52,7 @@ func (r *Registry) Register(entry Entry, processor Processor) error {
 }
 
 // Decoder gets a decoder for the given identifier
-func (r *Registry) Decoder(identifier Identifier) (encoding.Decoder, bool) {
+func (r *Registry) Decoder(identifier datatransfer.Identifier) (encoding.Decoder, bool) {
 	r.registryLk.RLock()
 	entry, has := r.entries[identifier]
 	r.registryLk.RUnlock()
@@ -71,7 +60,7 @@ func (r *Registry) Decoder(identifier Identifier) (encoding.Decoder, bool) {
 }
 
 // Processor gets the processing interface for the given identifer
-func (r *Registry) Processor(identifier Identifier) (Processor, bool) {
+func (r *Registry) Processor(identifier datatransfer.Identifier) (Processor, bool) {
 	r.registryLk.RLock()
 	entry, has := r.entries[identifier]
 	r.registryLk.RUnlock()

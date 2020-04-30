@@ -6,7 +6,6 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/registry"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
@@ -26,7 +25,7 @@ type transferRequest struct {
 	Pull   bool
 	Stor   *cbg.Deferred
 	Vouch  *cbg.Deferred
-	VTyp   registry.Identifier
+	VTyp   datatransfer.Identifier
 	XferID uint64
 }
 
@@ -46,7 +45,7 @@ func (trq *transferRequest) IsPull() bool {
 }
 
 // VoucherType returns the Voucher ID
-func (trq *transferRequest) VoucherType() registry.Identifier {
+func (trq *transferRequest) VoucherType() datatransfer.Identifier {
 	return trq.VTyp
 }
 

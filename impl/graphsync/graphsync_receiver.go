@@ -12,7 +12,6 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
-	"github.com/filecoin-project/go-data-transfer/registry"
 )
 
 type graphsyncReceiver struct {
@@ -61,7 +60,7 @@ func (receiver *graphsyncReceiver) ReceiveRequest(
 //   * validation fails
 func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming message.DataTransferRequest) (datatransfer.Voucher, error) {
 
-	vtypStr := registry.Identifier(incoming.VoucherType())
+	vtypStr := datatransfer.Identifier(incoming.VoucherType())
 	decoder, has := receiver.impl.validatedTypes.Decoder(vtypStr)
 	if !has {
 		return nil, xerrors.Errorf("unknown voucher type: %s", vtypStr)
@@ -70,7 +69,7 @@ func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming mess
 	if err != nil {
 		return nil, err
 	}
-	vouch := encodable.(registry.Entry)
+	vouch := encodable.(datatransfer.Registerable)
 
 	var validatorFunc func(peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) error
 	processor, _ := receiver.impl.validatedTypes.Processor(vtypStr)
