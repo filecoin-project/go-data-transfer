@@ -3,7 +3,8 @@ package message
 import (
 	"io"
 
-	"github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/registry"
 	"github.com/ipfs/go-cid"
 )
 
@@ -19,7 +20,7 @@ type transferRequest struct {
 	Pull   bool
 	Stor   []byte
 	Vouch  []byte
-	VTyp   string
+	VTyp   registry.Identifier
 	XferID uint64
 }
 
@@ -39,7 +40,7 @@ func (trq *transferRequest) IsPull() bool {
 }
 
 // VoucherType returns the Voucher ID
-func (trq *transferRequest) VoucherType() string {
+func (trq *transferRequest) VoucherType() registry.Identifier {
 	return trq.VTyp
 }
 

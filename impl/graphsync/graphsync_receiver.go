@@ -2,17 +2,17 @@ package graphsyncimpl
 
 import (
 	"context"
-	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
+	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/registry"
 )
 
 type graphsyncReceiver struct {
@@ -56,22 +56,29 @@ func (receiver *graphsyncReceiver) ReceiveRequest(
 // validateVoucher converts a voucher in an incoming message to its appropriate
 // voucher struct, then runs the validator and returns the results.
 // returns error if:
-//   * voucherFromRequest fails
+//   * reading voucher fails
 //   * deserialization of selector fails
 //   * validation fails
 func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming message.DataTransferRequest) (datatransfer.Voucher, error) {
 
-	vtypStr := incoming.VoucherType()
-	vouch, err := receiver.voucherFromRequest(incoming)
-	if err != nil {
-		return vouch, err
+	vtypStr := registry.Identifier(incoming.VoucherType())
+	decoder, has := receiver.impl.validatedTypes.Decoder(vtypStr)
+	if !has {
+		return nil, xerrors.Errorf("unknown voucher type: %s", vtypStr)
 	}
+	encodable, err := decoder.DecodeFromCbor(incoming.Voucher())
+	if err != nil {
+		return nil, err
+	}
+	vouch := encodable.(registry.Entry)
 
 	var validatorFunc func(peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) error
+	processor, _ := receiver.impl.validatedTypes.Processor(vtypStr)
+	validator := processor.(datatransfer.RequestValidator)
 	if incoming.IsPull() {
-		validatorFunc = receiver.impl.validatedTypes[vtypStr].validator.ValidatePull
+		validatorFunc = validator.ValidatePull
 	} else {
-		validatorFunc = receiver.impl.validatedTypes[vtypStr].validator.ValidatePush
+		validatorFunc = validator.ValidatePush
 	}
 
 	stor, err := nodeFromBytes(incoming.Selector())
@@ -84,30 +91,6 @@ func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming mess
 	}
 
 	return vouch, nil
-}
-
-// voucherFromRequest takes an incoming request and attempts to create a
-// voucher struct from it using the registered validated types.  It returns
-// a deserialized voucher and any error.  It returns error if:
-//    * the voucher type has no validator registered
-//    * the voucher cannot be instantiated via reflection
-//    * request voucher bytes cannot be deserialized via <voucher>.FromBytes()
-func (receiver *graphsyncReceiver) voucherFromRequest(incoming message.DataTransferRequest) (datatransfer.Voucher, error) {
-	vtypStr := incoming.VoucherType()
-
-	validatedType, ok := receiver.impl.validatedTypes[vtypStr]
-	if !ok {
-		return nil, fmt.Errorf("unregistered voucher type %s", vtypStr)
-	}
-	vStructVal := reflect.New(validatedType.voucherType.Elem())
-	voucher, ok := vStructVal.Interface().(datatransfer.Voucher)
-	if !ok || reflect.ValueOf(voucher).IsNil() {
-		return nil, fmt.Errorf("problem instantiating type %s, voucher: %v", vtypStr, voucher)
-	}
-	if err := voucher.FromBytes(incoming.Voucher()); err != nil {
-		return voucher, err
-	}
-	return voucher, nil
 }
 
 // ReceiveResponse handles responses to our  Push or Pull data transfer request.

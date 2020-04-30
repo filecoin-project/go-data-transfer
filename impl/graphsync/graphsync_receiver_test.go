@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"math/rand"
-	"reflect"
 	"testing"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/encoding"
 	. "github.com/filecoin-project/go-data-transfer/impl/graphsync"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
@@ -38,7 +38,7 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 
 	gs2 := testutil.NewFakeGraphSync()
 
-	voucher := fakeDTType{"applesauce"}
+	voucher := testutil.FakeDTType{Data: "applesauce"}
 	baseCid := testutil.GenerateCids(1)[0]
 	var buffer bytes.Buffer
 	err := dagcbor.Encoder(gsData.AllSelector, &buffer)
@@ -50,10 +50,10 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv.expectSuccessPush()
 
 		dt := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
-		require.NoError(t, dt.RegisterVoucherType(reflect.TypeOf(&fakeDTType{}), sv))
+		require.NoError(t, dt.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 		isPull := false
-		voucherBytes, err := voucher.ToBytes()
+		voucherBytes, err := encoding.Encode(&voucher)
 		require.NoError(t, err)
 		_ = message.NewRequest(id, isPull, voucher.Type(), voucherBytes, baseCid, buffer.Bytes())
 		request := message.NewRequest(id, isPull, voucher.Type(), voucherBytes, baseCid, buffer.Bytes())
@@ -85,12 +85,12 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv := newSV()
 		sv.expectErrorPush()
 		dt := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
-		err = dt.RegisterVoucherType(reflect.TypeOf(&fakeDTType{}), sv)
+		err = dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
 		isPull := false
 
-		voucherBytes, err := voucher.ToBytes()
+		voucherBytes, err := encoding.Encode(&voucher)
 		require.NoError(t, err)
 		request := message.NewRequest(id, isPull, voucher.Type(), voucherBytes, baseCid, buffer.Bytes())
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
@@ -122,12 +122,12 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv.expectSuccessPull()
 
 		dt := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
-		err = dt.RegisterVoucherType(reflect.TypeOf(&fakeDTType{}), sv)
+		err = dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
 		isPull := true
 
-		voucherBytes, err := voucher.ToBytes()
+		voucherBytes, err := encoding.Encode(&voucher)
 		require.NoError(t, err)
 		request := message.NewRequest(id, isPull, voucher.Type(), voucherBytes, baseCid, buffer.Bytes())
 
@@ -159,11 +159,11 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv.expectErrorPull()
 
 		dt := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
-		err = dt.RegisterVoucherType(reflect.TypeOf(&fakeDTType{}), sv)
+		err = dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
 		isPull := true
-		voucherBytes, err := voucher.ToBytes()
+		voucherBytes, err := encoding.Encode(&voucher)
 		require.NoError(t, err)
 		request := message.NewRequest(id, isPull, voucher.Type(), voucherBytes, baseCid, buffer.Bytes())
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))

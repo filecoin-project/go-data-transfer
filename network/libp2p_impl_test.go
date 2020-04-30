@@ -11,9 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
+	"github.com/filecoin-project/go-data-transfer/registry"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
 
@@ -84,7 +85,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		selector := testutil.RandomBytes(100)
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
-		vType := "FakeVoucherType"
+		vType := registry.Identifier("FakeVoucherType")
 		voucher := testutil.RandomBytes(100)
 		request := message.NewRequest(id, isPull, vType, voucher, baseCid, selector)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))

@@ -6,7 +6,8 @@ import (
 	"github.com/ipfs/go-cid"
 	cborgen "github.com/whyrusleeping/cbor-gen"
 
-	"github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/registry"
 )
 
 // Reference file: https://github.com/ipfs/go-graphsync/blob/master/message/message.go
@@ -27,7 +28,7 @@ type DataTransferMessage interface {
 type DataTransferRequest interface {
 	DataTransferMessage
 	IsPull() bool
-	VoucherType() string
+	VoucherType() registry.Identifier
 	Voucher() []byte
 	BaseCid() cid.Cid
 	Selector() []byte
@@ -41,7 +42,7 @@ type DataTransferResponse interface {
 }
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isPull bool, voucherIdentifier string, voucher []byte, baseCid cid.Cid, selector []byte) DataTransferRequest {
+func NewRequest(id datatransfer.TransferID, isPull bool, voucherIdentifier registry.Identifier, voucher []byte, baseCid cid.Cid, selector []byte) DataTransferRequest {
 	return &transferRequest{
 		Pull:   isPull,
 		Vouch:  voucher,

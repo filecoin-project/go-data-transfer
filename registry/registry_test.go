@@ -20,7 +20,7 @@ func TestRegistry(t *testing.T) {
 	})
 	t.Run("it errors when decoder setup fails", func(t *testing.T) {
 		err := r.Register(testutil.FakeDTType{}, func() {})
-		require.EqualError(t, err, "registering entry type FakeDTType: node type must be a pointer")
+		require.EqualError(t, err, "registering entry type FakeDTType: type must be a pointer")
 	})
 	t.Run("it reads decoders", func(t *testing.T) {
 		decoder, has := r.Decoder("FakeDTType")

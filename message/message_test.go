@@ -8,8 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 	. "github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/registry"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
 
@@ -18,7 +19,7 @@ func TestNewRequest(t *testing.T) {
 	selector := testutil.RandomBytes(100)
 	isPull := true
 	id := datatransfer.TransferID(rand.Int31())
-	vtype := "FakeVoucherType"
+	vtype := registry.Identifier("FakeVoucherType")
 	voucher := testutil.RandomBytes(100)
 
 	request := NewRequest(id, isPull, vtype, voucher, baseCid, selector)
@@ -136,7 +137,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 	isPull := false
 	id := datatransfer.TransferID(rand.Int31())
 	accepted := false
-	voucherType := "FakeVoucherType"
+	voucherType := registry.Identifier("FakeVoucherType")
 	voucher := testutil.RandomBytes(100)
 	request := NewRequest(id, isPull, voucherType, voucher, baseCid, selector)
 	buf := new(bytes.Buffer)
@@ -190,7 +191,7 @@ func NewTestTransferRequest() DataTransferRequest {
 	selector := testutil.RandomBytes(100)
 	isPull := false
 	id := datatransfer.TransferID(rand.Int31())
-	vtype := "FakeVoucherType"
+	vtype := registry.Identifier("FakeVoucherType")
 	v := testutil.RandomBytes(100)
 	return NewRequest(id, isPull, vtype, v, bcid, selector)
 }

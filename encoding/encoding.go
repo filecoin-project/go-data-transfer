@@ -53,7 +53,7 @@ func NewDecoder(decodeType Encodable) (Decoder, error) {
 	// for cborgen types & regular IPLD types
 	decodeReflectType := reflect.TypeOf(decodeType)
 	if decodeReflectType.Kind() != reflect.Ptr {
-		return nil, xerrors.New("node type must be a pointer")
+		return nil, xerrors.New("type must be a pointer")
 	}
 	// check if type is a cbor-gen type
 	if _, ok := decodeType.(cborgen.CBORUnmarshaler); ok {

@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/ipfs/go-cid"
@@ -14,11 +12,14 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"
+	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
+	"github.com/filecoin-project/go-data-transfer/registry"
 	"github.com/filecoin-project/go-storedcounter"
 	"github.com/hannahhoward/go-pubsub"
 )
@@ -30,14 +31,9 @@ import (
 // -- support multiple subscribers
 // -- do any actual network coordination or use Graphsync
 
-type validateType struct {
-	voucherType reflect.Type                  // nolint: structcheck
-	validator   datatransfer.RequestValidator // nolint: structcheck
-}
-
 type graphsyncImpl struct {
 	dataTransferNetwork network.DataTransferNetwork
-	validatedTypes      map[string]validateType
+	validatedTypes      *registry.Registry
 	pubSub              *pubsub.PubSub
 	channels            *channels.Channels
 	gs                  graphsync.GraphExchange
@@ -68,7 +64,7 @@ func NewGraphSyncDataTransfer(host host.Host, gs graphsync.GraphExchange, stored
 	dataTransferNetwork := network.NewFromLibp2pHost(host)
 	impl := &graphsyncImpl{
 		dataTransferNetwork,
-		make(map[string]validateType),
+		registry.NewRegistry(),
 		pubsub.New(dispatcher),
 		channels.New(),
 		gs,
@@ -147,24 +143,10 @@ func (impl *graphsyncImpl) gsCompletedResponseListener(p peer.ID, request graphs
 // * voucher type does not implement voucher
 // * there is a voucher type registered with an identical identifier
 // * voucherType's Kind is not reflect.Ptr
-func (impl *graphsyncImpl) RegisterVoucherType(voucherType reflect.Type, validator datatransfer.RequestValidator) error {
-	if voucherType.Kind() != reflect.Ptr {
-		return fmt.Errorf("voucherType must be a reflect.Ptr Kind")
-	}
-	v := reflect.New(voucherType.Elem())
-	voucher, ok := v.Interface().(datatransfer.Voucher)
-	if !ok {
-		return fmt.Errorf("voucher does not implement Voucher interface")
-	}
-
-	_, isReg := impl.validatedTypes[voucher.Type()]
-	if isReg {
-		return fmt.Errorf("voucher type already registered: %s", voucherType.String())
-	}
-
-	impl.validatedTypes[voucher.Type()] = validateType{
-		voucherType: voucherType,
-		validator:   validator,
+func (impl *graphsyncImpl) RegisterVoucherType(voucherType datatransfer.Voucher, validator datatransfer.RequestValidator) error {
+	err := impl.validatedTypes.Register(voucherType, validator)
+	if err != nil {
+		return xerrors.Errorf("error registering voucher type: %w", err)
 	}
 	return nil
 }
@@ -208,7 +190,7 @@ func (impl *graphsyncImpl) sendDtRequest(ctx context.Context, selector ipld.Node
 	if err != nil {
 		return 0, err
 	}
-	vbytes, err := voucher.ToBytes()
+	vbytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return 0, err
 	}
