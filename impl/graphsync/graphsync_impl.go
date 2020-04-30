@@ -8,6 +8,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
+	logging "github.com/ipfs/go-log"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -22,6 +23,8 @@ import (
 	"github.com/filecoin-project/go-storedcounter"
 	"github.com/hannahhoward/go-pubsub"
 )
+
+var log = logging.Logger("graphsync-impl")
 
 // This file implements a VERY simple, incomplete version of the data transfer
 // module that allows us to make the necessary insertions of data transfer
