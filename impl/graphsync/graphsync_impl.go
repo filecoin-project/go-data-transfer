@@ -99,10 +99,9 @@ func (impl *graphsyncImpl) gsReqRecdHook(p peer.ID, request graphsync.RequestDat
 		return
 	}
 
-	sender := impl.peerID
 	chid := transferData.GetChannelID()
-
-	if impl.channels.GetByIDAndSender(chid, sender) == datatransfer.EmptyChannelState {
+	_, err = impl.channels.GetByID(chid)
+	if err != nil {
 		hookActions.TerminateWithError(err)
 		return
 	}
@@ -119,11 +118,9 @@ func (impl *graphsyncImpl) gsCompletedResponseListener(p peer.ID, request graphs
 		return
 	}
 
-	sender := impl.peerID
 	chid := transferData.GetChannelID()
-
-	chst := impl.channels.GetByIDAndSender(chid, sender)
-	if chst == datatransfer.EmptyChannelState {
+	chst, err := impl.channels.GetByID(chid)
+	if err != nil {
 		return
 	}
 
@@ -171,7 +168,10 @@ func (impl *graphsyncImpl) OpenPushDataChannel(ctx context.Context, requestTo pe
 		Message:   "New Request Initiated",
 		Timestamp: time.Now(),
 	}
-	chst := impl.channels.GetByIDAndSender(chid, impl.peerID)
+	chst, err := impl.channels.GetByID(chid)
+	if err != nil {
+		return chid, err
+	}
 	err = impl.pubSub.Publish(internalEvent{evt, chst})
 	if err != nil {
 		log.Warnf("err publishing DT event: %s", err.Error())
@@ -198,7 +198,10 @@ func (impl *graphsyncImpl) OpenPullDataChannel(ctx context.Context, requestTo pe
 		Message:   "New Request Initiated",
 		Timestamp: time.Now(),
 	}
-	chst := impl.channels.GetByIDAndSender(chid, requestTo)
+	chst, err := impl.channels.GetByID(chid)
+	if err != nil {
+		return chid, err
+	}
 	err = impl.pubSub.Publish(internalEvent{evt, chst})
 	if err != nil {
 		log.Warnf("err publishing DT event: %s", err.Error())
@@ -272,8 +275,8 @@ func (impl *graphsyncImpl) sendGsRequest(ctx context.Context, initiator peer.ID,
 			Timestamp: time.Now(),
 		}
 		chid := datatransfer.ChannelID{Initiator: initiator, ID: transferID}
-		chst := impl.channels.GetByIDAndSender(chid, dataSender)
-		if chst == datatransfer.EmptyChannelState {
+		chst, err := impl.channels.GetByID(chid)
+		if err != nil {
 			msg := "cannot find a matching channel for this request"
 			evt.Message = msg
 		} else {
@@ -283,7 +286,7 @@ func (impl *graphsyncImpl) sendGsRequest(ctx context.Context, initiator peer.ID,
 				evt.Message = lastError.Error()
 			}
 		}
-		err := impl.pubSub.Publish(internalEvent{evt, chst})
+		err = impl.pubSub.Publish(internalEvent{evt, chst})
 		if err != nil {
 			log.Warnf("err publishing DT event: %s", err.Error())
 		}
