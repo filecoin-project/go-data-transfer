@@ -99,26 +99,4 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, uint64(125), sent)
 		require.NoError(t, err)
 	})
-
-	t.Run("updating implementation specific values", func(t *testing.T) {
-		val, err := channelList.GetImplementationData(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
-		require.Nil(t, val)
-		require.NoError(t, err)
-
-		err = channelList.SetImplementationData(datatransfer.ChannelID{Initiator: peers[0], ID: tid1}, "applesauce")
-		require.NoError(t, err)
-
-		val, err = channelList.GetImplementationData(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
-		require.Equal(t, val, "applesauce")
-		require.NoError(t, err)
-
-		err = channelList.SetImplementationData(datatransfer.ChannelID{Initiator: peers[0], ID: tid1}, 16)
-		require.EqualError(t, err, channels.ErrWrongType.Error())
-
-		_, err = channelList.GetImplementationData(datatransfer.ChannelID{Initiator: peers[1], ID: tid1})
-		require.EqualError(t, err, channels.ErrNotFound.Error())
-
-		err = channelList.SetImplementationData(datatransfer.ChannelID{Initiator: peers[1], ID: tid1}, 16)
-		require.EqualError(t, err, channels.ErrNotFound.Error())
-	})
 }

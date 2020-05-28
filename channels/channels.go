@@ -81,9 +81,8 @@ func (c ChannelState) Received() uint64 { return c.received }
 
 type internalChannel struct {
 	datatransfer.Channel
-	sent               *uint64
-	received           *uint64
-	implementationData *atomic.Value
+	sent     *uint64
+	received *uint64
 }
 
 // ErrNotFound is returned when a channel cannot be found with a given channel ID
@@ -116,7 +115,7 @@ func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selec
 	if ok {
 		return chid, errors.New("tried to create channel but it already exists")
 	}
-	c.channels[chid] = internalChannel{Channel: NewChannel(0, baseCid, selector, voucher, dataSender, dataReceiver, 0), sent: new(uint64), received: new(uint64), implementationData: new(atomic.Value)}
+	c.channels[chid] = internalChannel{Channel: NewChannel(0, baseCid, selector, voucher, dataSender, dataReceiver, 0), sent: new(uint64), received: new(uint64)}
 	return chid, nil
 }
 
@@ -151,8 +150,8 @@ func (c *Channels) GetByID(chid datatransfer.ChannelID) (datatransfer.ChannelSta
 // the new total)
 func (c *Channels) IncrementSent(chid datatransfer.ChannelID, delta uint64) (uint64, error) {
 	c.channelsLk.RLock()
-	defer c.channelsLk.RUnlock()
 	channel, ok := c.channels[chid]
+	c.channelsLk.RUnlock()
 	if !ok {
 		return 0, ErrNotFound
 	}
@@ -169,32 +168,4 @@ func (c *Channels) IncrementReceived(chid datatransfer.ChannelID, delta uint64) 
 		return 0, ErrNotFound
 	}
 	return atomic.AddUint64(channel.received, delta), nil
-}
-
-// SetImplementationData sets data transfer implementation specific data for a given transfer ID
-func (c *Channels) SetImplementationData(chid datatransfer.ChannelID, value interface{}) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = ErrWrongType
-		}
-	}()
-	c.channelsLk.RLock()
-	channel, ok := c.channels[chid]
-	c.channelsLk.RUnlock()
-	if !ok {
-		return ErrNotFound
-	}
-	channel.implementationData.Store(value)
-	return nil
-}
-
-// GetImplementationData gets data transfer implementation specific data for a given transfer ID
-func (c *Channels) GetImplementationData(chid datatransfer.ChannelID) (interface{}, error) {
-	c.channelsLk.RLock()
-	channel, ok := c.channels[chid]
-	c.channelsLk.RUnlock()
-	if !ok {
-		return nil, ErrNotFound
-	}
-	return channel.implementationData.Load(), nil
 }

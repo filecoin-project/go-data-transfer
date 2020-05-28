@@ -82,6 +82,11 @@ func (fgs *FakeGraphSync) RegisterOutgoingBlockHook(hook graphsync.OnOutgoingBlo
 	return nil
 }
 
+// RegisterIncomingBlockHook adds a hook that runs every time a block is received by the requestor
+func (fgs *FakeGraphSync) RegisterIncomingBlockHook(hook graphsync.OnIncomingBlockHook) graphsync.UnregisterHookFunc {
+	return nil
+}
+
 // RegisterRequestUpdatedHook adds a hook that runs every time an update to a request is received
 func (fgs *FakeGraphSync) RegisterRequestUpdatedHook(hook graphsync.OnRequestUpdatedHook) graphsync.UnregisterHookFunc {
 	return nil

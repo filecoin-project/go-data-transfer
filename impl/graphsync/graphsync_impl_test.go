@@ -22,6 +22,7 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	. "github.com/filecoin-project/go-data-transfer/impl/graphsync"
+	"github.com/filecoin-project/go-data-transfer/impl/graphsync/extension"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/testutil"
@@ -733,13 +734,13 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		requestReceived := messageReceived.message.(message.DataTransferRequest)
 
 		var buf bytes.Buffer
-		extStruct := &ExtensionDataTransferData{TransferID: uint64(requestReceived.TransferID()), Initiator: host1.ID()}
+		extStruct := &extension.TransferData{TransferID: uint64(requestReceived.TransferID()), Initiator: host1.ID()}
 		err = extStruct.MarshalCBOR(&buf)
 		require.NoError(t, err)
 		extData := buf.Bytes()
 
 		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
-			Name: ExtensionDataTransfer,
+			Name: extension.ExtensionDataTransfer,
 			Data: extData,
 		})
 		gsmessage := gsmsg.New()
@@ -752,13 +753,13 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 
 	t.Run("when no request is initiated", func(t *testing.T) {
 		var buf bytes.Buffer
-		extStruct := &ExtensionDataTransferData{TransferID: rand.Uint64(), Initiator: host1.ID()}
+		extStruct := &extension.TransferData{TransferID: rand.Uint64(), Initiator: host1.ID()}
 		err := extStruct.MarshalCBOR(&buf)
 		require.NoError(t, err)
 		extData := buf.Bytes()
 
 		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
-			Name: ExtensionDataTransfer,
+			Name: extension.ExtensionDataTransfer,
 			Data: extData,
 		})
 		gsmessage := gsmsg.New()
@@ -870,7 +871,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		receivedResponse, ok := messageReceived.message.(message.DataTransferResponse)
 		require.True(t, ok)
 		require.True(t, receivedResponse.Accepted())
-		extStruct := &ExtensionDataTransferData{
+		extStruct := &extension.TransferData{
 			TransferID: uint64(receivedResponse.TransferID()),
 			Initiator:  host1.ID(),
 			IsPull:     true,
@@ -882,7 +883,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		extData := buf2.Bytes()
 
 		gsRequest := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
-			Name: ExtensionDataTransfer,
+			Name: extension.ExtensionDataTransfer,
 			Data: extData,
 		})
 
@@ -896,14 +897,14 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 
 	t.Run("When request is not initiated, graphsync response is error", func(t *testing.T) {
 		_ = NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
-		extStruct := &ExtensionDataTransferData{TransferID: rand.Uint64(), Initiator: host1.ID()}
+		extStruct := &extension.TransferData{TransferID: rand.Uint64(), Initiator: host1.ID()}
 
 		var buf2 bytes.Buffer
 		err := extStruct.MarshalCBOR(&buf2)
 		require.NoError(t, err)
 		extData := buf2.Bytes()
 		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
-			Name: ExtensionDataTransfer,
+			Name: extension.ExtensionDataTransfer,
 			Data: extData,
 		})
 		gsmessage := gsmsg.New()
