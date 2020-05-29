@@ -938,7 +938,16 @@ func TestDataTransferPushRoundTrip(t *testing.T) {
 	finished := make(chan struct{}, 2)
 	errChan := make(chan struct{}, 2)
 	opened := make(chan struct{}, 2)
+	sent := make(chan uint64, 21)
+	received := make(chan uint64, 21)
 	var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+		if event.Code == datatransfer.Progress {
+			if channelState.Received() > 0 {
+				received <- channelState.Received()
+			} else if channelState.Sent() > 0 {
+				sent <- channelState.Sent()
+			}
+		}
 		if event.Code == datatransfer.Complete {
 			finished <- struct{}{}
 		}
@@ -960,7 +969,9 @@ func TestDataTransferPushRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	opens := 0
 	completes := 0
-	for opens < 2 || completes < 2 {
+	sentIncrements := make([]uint64, 0, 21)
+	receivedIncrements := make([]uint64, 0, 21)
+	for opens < 2 || completes < 2 || len(sentIncrements) < 21 || len(receivedIncrements) < 21 {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Did not complete succcessful data transfer")
@@ -968,10 +979,15 @@ func TestDataTransferPushRoundTrip(t *testing.T) {
 			completes++
 		case <-opened:
 			opens++
+		case sentIncrement := <-sent:
+			sentIncrements = append(sentIncrements, sentIncrement)
+		case receivedIncrement := <-received:
+			receivedIncrements = append(receivedIncrements, receivedIncrement)
 		case <-errChan:
 			t.Fatal("received error on data transfer")
 		}
 	}
+	require.Equal(t, sentIncrements, receivedIncrements)
 	gsData.VerifyFileTransferred(t, root, true)
 	assert.Equal(t, chid.Initiator, host1.ID())
 }
@@ -996,7 +1012,16 @@ func TestDataTransferPullRoundTrip(t *testing.T) {
 	finished := make(chan struct{}, 2)
 	errChan := make(chan struct{}, 2)
 	opened := make(chan struct{}, 2)
+	sent := make(chan uint64, 21)
+	received := make(chan uint64, 21)
 	var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+		if event.Code == datatransfer.Progress {
+			if channelState.Received() > 0 {
+				received <- channelState.Received()
+			} else if channelState.Sent() > 0 {
+				sent <- channelState.Sent()
+			}
+		}
 		if event.Code == datatransfer.Complete {
 			finished <- struct{}{}
 		}
@@ -1018,7 +1043,9 @@ func TestDataTransferPullRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	opens := 0
 	completes := 0
-	for opens < 2 || completes < 2 {
+	sentIncrements := make([]uint64, 0, 21)
+	receivedIncrements := make([]uint64, 0, 21)
+	for opens < 2 || completes < 2 || len(sentIncrements) < 21 || len(receivedIncrements) < 21 {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Did not complete succcessful data transfer")
@@ -1026,9 +1053,14 @@ func TestDataTransferPullRoundTrip(t *testing.T) {
 			completes++
 		case <-opened:
 			opens++
+		case sentIncrement := <-sent:
+			sentIncrements = append(sentIncrements, sentIncrement)
+		case receivedIncrement := <-received:
+			receivedIncrements = append(receivedIncrements, receivedIncrement)
 		case <-errChan:
 			t.Fatal("received error on data transfer")
 		}
 	}
+	require.Equal(t, sentIncrements, receivedIncrements)
 	gsData.VerifyFileTransferred(t, root, true)
 }

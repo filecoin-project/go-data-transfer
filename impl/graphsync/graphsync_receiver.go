@@ -24,15 +24,18 @@ func (receiver *graphsyncReceiver) ReceiveRequest(
 	ctx context.Context,
 	initiator peer.ID,
 	incoming message.DataTransferRequest) {
-	err := receiver.receiveRequest(ctx, initiator, incoming)
+	err := receiver.receiveRequest(initiator, incoming)
 	if err != nil {
 		log.Error(err)
+	}
+	if err == nil && !incoming.IsPull() {
+		stor, _ := incoming.Selector()
+		receiver.impl.sendGsRequest(ctx, initiator, incoming.TransferID(), incoming.IsPull(), initiator, cidlink.Link{Cid: incoming.BaseCid()}, stor)
 	}
 	receiver.impl.sendResponse(ctx, err == nil, initiator, incoming.TransferID())
 }
 
 func (receiver *graphsyncReceiver) receiveRequest(
-	ctx context.Context,
 	initiator peer.ID,
 	incoming message.DataTransferRequest) error {
 
@@ -41,7 +44,6 @@ func (receiver *graphsyncReceiver) receiveRequest(
 		return err
 	}
 	stor, _ := incoming.Selector()
-	root := cidlink.Link{Cid: incoming.BaseCid()}
 
 	var dataSender, dataReceiver peer.ID
 	if incoming.IsPull() {
@@ -50,7 +52,6 @@ func (receiver *graphsyncReceiver) receiveRequest(
 	} else {
 		dataSender = initiator
 		dataReceiver = receiver.impl.peerID
-		receiver.impl.sendGsRequest(ctx, initiator, incoming.TransferID(), incoming.IsPull(), dataSender, root, stor)
 	}
 
 	chid, err := receiver.impl.channels.CreateNew(incoming.TransferID(), incoming.BaseCid(), stor, voucher, initiator, dataSender, dataReceiver)

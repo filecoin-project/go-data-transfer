@@ -85,7 +85,6 @@ func (hm *Manager) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestDat
 	if err != nil {
 		return
 	}
-
 	// record the outgoing graphsync request to map it to channel ID going forward
 	hm.graphsyncRequestMapLk.Lock()
 	hm.graphsyncRequestMap[graphsyncKey{request.ID(), hm.peerID}] = chid
@@ -143,6 +142,7 @@ func (hm *Manager) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hookA
 	err = hm.events.OnRequestReceived(chid)
 	if err != nil {
 		hookActions.TerminateWithError(err)
+		return
 	}
 
 	hm.graphsyncRequestMapLk.Lock()
