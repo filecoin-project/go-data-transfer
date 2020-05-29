@@ -7,7 +7,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/impl/graphsync/extension"
 	"github.com/ipfs/go-graphsync"
 	ipld "github.com/ipld/go-ipld-prime"
-	peer "github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/prometheus/common/log"
 )
 
@@ -73,7 +73,7 @@ func (hm *Manager) RegisterHooks(gs graphsync.GraphExchange) {
 }
 
 func (hm *Manager) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestData, hookActions graphsync.OutgoingRequestHookActions) {
-	transferData, err := extension.GetTransferData(request)
+	transferData, _ := extension.GetTransferData(request)
 
 	// extension not found; probably not our request.
 	if transferData == nil {
@@ -81,7 +81,7 @@ func (hm *Manager) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestDat
 	}
 
 	chid := transferData.GetChannelID()
-	err = hm.events.OnRequestSent(chid)
+	err := hm.events.OnRequestSent(chid)
 	if err != nil {
 		return
 	}
