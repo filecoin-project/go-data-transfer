@@ -222,6 +222,29 @@ func (impl *graphsyncImpl) OpenPullDataChannel(ctx context.Context, requestTo pe
 	return chid, nil
 }
 
+// SendVoucher sends an intermediate voucher as needed when the receiver sends a request for revalidation
+func (impl *graphsyncImpl) SendVoucher(ctx context.Context, channelID datatransfer.ChannelID, voucher datatransfer.Voucher) error {
+	chst, err := impl.channels.GetByID(channelID)
+	if err != nil {
+		return err
+	}
+	if channelID.Initiator != impl.peerID {
+		return errors.New("cannot send voucher for request we did not initiate")
+	}
+	updateRequest, err := message.UpdateRequest(channelID.ID, voucher.Type(), voucher)
+	if err != nil {
+		return err
+	}
+	var otherParty peer.ID
+	if chst.Sender() == impl.peerID {
+		otherParty = chst.Recipient()
+	} else {
+		otherParty = chst.Sender()
+	}
+	impl.dataTransferNetwork.SendMessage(ctx, otherParty, updateRequest)
+	return nil
+}
+
 // sendDtRequest encapsulates message creation and posting to the data transfer network with the provided parameters
 func (impl *graphsyncImpl) sendDtRequest(ctx context.Context, selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid, to peer.ID) (datatransfer.TransferID, error) {
 	next, err := impl.storedCounter.Next()
@@ -244,7 +267,7 @@ func (impl *graphsyncImpl) sendResponse(ctx context.Context, isAccepted bool, to
 	if voucherResult != nil {
 		resultType = voucherResult.Type()
 	}
-	resp, err := message.NewResponse(tid, isAccepted, resultType, voucherResult)
+	resp, err := message.NewResponse(tid, isAccepted, false, resultType, voucherResult)
 	if err != nil {
 		log.Error(err)
 		return
@@ -320,11 +343,6 @@ func (impl *graphsyncImpl) sendGsRequest(ctx context.Context, initiator peer.ID,
 // The revalidator can simply be the sampe as the original request validator,
 // or a different validator that satisfies the revalidator interface.
 func (impl *graphsyncImpl) RegisterRevalidator(voucherType datatransfer.Voucher, revalidator datatransfer.Revalidator) error {
-	panic("not implemented")
-}
-
-// RegisterRevalidationFulfiller registers a fulfiller for revalidation requests
-func (impl *graphsyncImpl) RegisterRevalidationFulfiller(revalidationRequestType datatransfer.RevalidationRequest, fulfiller datatransfer.RevalidationFulfiller) error {
 	panic("not implemented")
 }
 

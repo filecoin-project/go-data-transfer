@@ -14,6 +14,7 @@ import (
 // transferResponse is a private struct that satisfies the DataTransferResponse interface
 type transferResponse struct {
 	Acpt   bool
+	Updt   bool
 	XferID uint64
 	VRes   *cbg.Deferred
 	VTyp   datatransfer.TypeIdentifier
@@ -26,6 +27,11 @@ func (trsp *transferResponse) TransferID() datatransfer.TransferID {
 // IsRequest always returns false in this case because this is a transfer response
 func (trsp *transferResponse) IsRequest() bool {
 	return false
+}
+
+// IsRequest always returns false in this case because this is a transfer response
+func (trsp *transferResponse) IsUpdate() bool {
+	return trsp.Updt
 }
 
 // 	Accepted returns true if the request is accepted in the response

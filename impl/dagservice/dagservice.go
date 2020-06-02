@@ -95,8 +95,8 @@ func (impl *dagserviceImpl) RegisterRevalidator(voucherType datatransfer.Voucher
 	return nil
 }
 
-// RegisterRevalidationFulfiller registers a fulfiller for revalidation requests
-func (impl *dagserviceImpl) RegisterRevalidationFulfiller(revalidationRequestType datatransfer.RevalidationRequest, fulfiller datatransfer.RevalidationFulfiller) error {
+// SendVoucher sends an intermediate voucher as needed when the receiver sends a request for revalidation
+func (impl *dagserviceImpl) SendVoucher(ctx context.Context, channelID datatransfer.ChannelID, voucher datatransfer.Voucher) error {
 	return nil
 }
 

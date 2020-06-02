@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/channels"
 	. "github.com/filecoin-project/go-data-transfer/impl/graphsync"
 	"github.com/filecoin-project/go-data-transfer/impl/graphsync/extension"
 	"github.com/filecoin-project/go-data-transfer/message"
@@ -159,6 +160,72 @@ func TestDataTransferOneWay(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, receivedSelector, stor)
 		testutil.AssertFakeDTVoucher(t, receivedRequest, voucher)
+	})
+
+	t.Run("SendVoucher", func(t *testing.T) {
+		t.Run("with no channel open", func(t *testing.T) {
+			voucher := testutil.NewFakeDTType()
+			err := dt.SendVoucher(ctx, datatransfer.ChannelID{Initiator: host1.ID(), ID: 999999}, voucher)
+			require.EqualError(t, err, channels.ErrNotFound.Error())
+		})
+		t.Run("with channel open", func(t *testing.T) {
+			baseVoucher := testutil.NewFakeDTType()
+			baseCid := testutil.GenerateCids(1)[0]
+
+			t.Run("push succeeds", func(t *testing.T) {
+				channelID, err := dt.OpenPushDataChannel(ctx, host2.ID(), baseVoucher, baseCid, gsData.AllSelector)
+				require.NoError(t, err)
+				require.NotNil(t, channelID)
+				select {
+				case <-ctx.Done():
+					t.Fatal("did not receive message sent")
+				case <-r.messageReceived:
+				}
+				voucher := testutil.NewFakeDTType()
+				err = dt.SendVoucher(ctx, channelID, voucher)
+				require.NoError(t, err)
+				var messageReceived receivedMessage
+				select {
+				case <-ctx.Done():
+					t.Fatal("did not receive message sent")
+				case messageReceived = <-r.messageReceived:
+				}
+				received := messageReceived.message
+				require.True(t, received.IsRequest())
+				require.True(t, received.IsUpdate())
+				receivedRequest, ok := received.(message.DataTransferRequest)
+				require.True(t, ok)
+				require.False(t, receivedRequest.IsCancel())
+				testutil.AssertFakeDTVoucher(t, receivedRequest, voucher)
+			})
+
+			t.Run("pull succeeds", func(t *testing.T) {
+				channelID, err := dt.OpenPullDataChannel(ctx, host2.ID(), baseVoucher, baseCid, gsData.AllSelector)
+				require.NoError(t, err)
+				require.NotNil(t, channelID)
+				select {
+				case <-ctx.Done():
+					t.Fatal("did not receive message sent")
+				case <-r.messageReceived:
+				}
+				voucher := testutil.NewFakeDTType()
+				err = dt.SendVoucher(ctx, channelID, voucher)
+				require.NoError(t, err)
+				var messageReceived receivedMessage
+				select {
+				case <-ctx.Done():
+					t.Fatal("did not receive message sent")
+				case messageReceived = <-r.messageReceived:
+				}
+				received := messageReceived.message
+				require.True(t, received.IsRequest())
+				require.True(t, received.IsUpdate())
+				receivedRequest, ok := received.(message.DataTransferRequest)
+				require.True(t, ok)
+				require.False(t, receivedRequest.IsCancel())
+				testutil.AssertFakeDTVoucher(t, receivedRequest, voucher)
+			})
+		})
 	})
 }
 

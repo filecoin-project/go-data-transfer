@@ -20,6 +20,7 @@ import (
 // (either request or response) that can serialize to a protobuf
 type DataTransferMessage interface {
 	IsRequest() bool
+	IsUpdate() bool
 	TransferID() datatransfer.TransferID
 	cborgen.CBORMarshaler
 	cborgen.CBORUnmarshaler
@@ -76,13 +77,27 @@ func CancelRequest(id datatransfer.TransferID) DataTransferRequest {
 	}
 }
 
+// UpdateRequest generates a new request update
+func UpdateRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable) (DataTransferRequest, error) {
+	vbytes, err := encoding.Encode(voucher)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
+	return &transferRequest{
+		Updt:   true,
+		Vouch:  &cborgen.Deferred{Raw: vbytes},
+		VTyp:   vtype,
+		XferID: uint64(id),
+	}, nil
+}
+
 // NewResponse builds a new Data Transfer response
-func NewResponse(id datatransfer.TransferID, accepted bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (DataTransferResponse, error) {
+func NewResponse(id datatransfer.TransferID, accepted bool, isUpdate bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (DataTransferResponse, error) {
 	vbytes, err := encoding.Encode(voucherResult)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
-	return &transferResponse{Acpt: accepted, XferID: uint64(id), VTyp: voucherResultType, VRes: &cborgen.Deferred{Raw: vbytes}}, nil
+	return &transferResponse{Acpt: accepted, Updt: isUpdate, XferID: uint64(id), VTyp: voucherResultType, VRes: &cborgen.Deferred{Raw: vbytes}}, nil
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage

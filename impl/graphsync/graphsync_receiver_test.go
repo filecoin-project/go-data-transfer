@@ -72,6 +72,11 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		assert.Equal(t, receivedResponse.TransferID(), id)
 		require.True(t, receivedResponse.Accepted())
 
+		t.Run("Sending vouchers does not work on responder", func(t *testing.T) {
+			newVoucher := testutil.NewFakeDTType()
+			err := dt.SendVoucher(ctx, datatransfer.ChannelID{Initiator: host1.ID(), ID: id}, newVoucher)
+			require.EqualError(t, err, "cannot send voucher for request we did not initiate")
+		})
 	})
 
 	t.Run("Response to push with error validation", func(t *testing.T) {
@@ -142,6 +147,12 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 
 		require.Equal(t, receivedResponse.TransferID(), id)
 		require.True(t, receivedResponse.Accepted())
+
+		t.Run("Sending vouchers does not work on responder", func(t *testing.T) {
+			newVoucher := testutil.NewFakeDTType()
+			err := dt.SendVoucher(ctx, datatransfer.ChannelID{Initiator: host1.ID(), ID: id}, newVoucher)
+			require.EqualError(t, err, "cannot send voucher for request we did not initiate")
+		})
 	})
 
 	t.Run("Response to push with error validation", func(t *testing.T) {

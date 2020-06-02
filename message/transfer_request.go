@@ -21,6 +21,7 @@ import (
 type transferRequest struct {
 	BCid   *cid.Cid
 	Canc   bool
+	Updt   bool
 	Part   bool
 	Pull   bool
 	Stor   *cbg.Deferred
@@ -32,6 +33,10 @@ type transferRequest struct {
 // IsRequest always returns true in this case because this is a transfer request
 func (trq *transferRequest) IsRequest() bool {
 	return true
+}
+
+func (trq *transferRequest) IsUpdate() bool {
+	return trq.Updt
 }
 
 func (trq *transferRequest) TransferID() datatransfer.TransferID {

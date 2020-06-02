@@ -2,6 +2,7 @@ package datatransfer
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/filecoin-project/go-data-transfer/encoding"
@@ -31,9 +32,6 @@ type Voucher Registerable
 // VoucherResult is used to provide option additional information about a
 // voucher being rejected or accepted
 type VoucherResult Registerable
-
-// RevalidationRequest is used to request revalidation of a data transfer
-type RevalidationRequest Registerable
 
 // Status is the status of transfer for a given channel
 type Status int
@@ -149,6 +147,11 @@ type RequestValidator interface {
 		selector ipld.Node) (VoucherResult, error)
 }
 
+// ErrRetryValidation is a special error that the a revalidator can return
+// for ValidatePush/ValidatePull that will not fail the request
+// but send the voucher result back and await another attempt
+var ErrRetryValidation = errors.New("Retry Revalidation")
+
 // Revalidator is a request validator revalidates in progress requests
 // by requesting request additional vouchers, and resuming when it receives them
 type Revalidator interface {
@@ -156,29 +159,11 @@ type Revalidator interface {
 	// OnPullDataSent is called on the responder side when more bytes are sent
 	// for a given pull request. It should return a RevalidationRequest or nil
 	// to continue uninterrupted, and err if the request should be terminated
-	OnPullDataSent(ChannelID, ChannelState) (RevalidationRequest, error)
+	OnPullDataSent(ChannelID, ChannelState) (VoucherResult, error)
 	// OnPushDataReceived is called on the responder side when more bytes are received
 	// for a given push request. It should return a RevalidationRequest or nil
 	// to continue uninterrupted, and err if the request should be terminated
-	OnPushDataReceived(ChannelID, ChannelState) (RevalidationRequest, error)
-}
-
-// RevalidationFulfiller produces new vouchers in response to revalidation requests
-type RevalidationFulfiller interface {
-	// FulfillPushVoucherRequest is called on the initiator side when a request
-	// for revalidation is received for a push request
-	FulfillPushRevalidationRequest(
-		sender peer.ID,
-		voucher RevalidationRequest,
-		baseCid cid.Cid,
-		selector ipld.Node) (Voucher, error)
-	// FulfillPushVoucherRequest is called on the initiator side when a request
-	// for revalidation is received for a push request
-	FulfillPullRevalidationRequest(
-		sender peer.ID,
-		voucher RevalidationRequest,
-		baseCid cid.Cid,
-		selector ipld.Node) (Voucher, error)
+	OnPushDataReceived(ChannelID, ChannelState) (VoucherResult, error)
 }
 
 // Manager is the core interface presented by all implementations of
@@ -196,9 +181,6 @@ type Manager interface {
 	// or a different validator that satisfies the revalidator interface.
 	RegisterRevalidator(voucherType Voucher, revalidator Revalidator) error
 
-	// RegisterRevalidationFulfiller registers a fulfiller for revalidation requests
-	RegisterRevalidationFulfiller(revalidationRequestType RevalidationRequest, fulfiller RevalidationFulfiller) error
-
 	// RegisterVoucherResultType allows deserialization of a voucher result,
 	// so that a listener can read the metadata
 	RegisterVoucherResultType(resultType VoucherResult) error
@@ -210,6 +192,9 @@ type Manager interface {
 	// open a data transfer that will request data from the sending peer and
 	// transfer parts of the piece that match the selector
 	OpenPullDataChannel(ctx context.Context, to peer.ID, voucher Voucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
+
+	// send an intermediate voucher as needed when the receiver sends a request for revalidation
+	SendVoucher(ctx context.Context, x ChannelID, voucher Voucher) error
 
 	// close an open channel (effectively a cancel)
 	CloseDataTransferChannel(x ChannelID)
