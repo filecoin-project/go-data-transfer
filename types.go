@@ -84,6 +84,12 @@ type Channel interface {
 
 	// TotalSize returns the total size for the data being transferred
 	TotalSize() uint64
+
+	// IsPull returns whether this is a pull request based on who initiated it
+	IsPull(initiator peer.ID) bool
+
+	// OtherParty returns the opposite party in the channel to the passed in party
+	OtherParty(thisParty peer.ID) peer.ID
 }
 
 // ChannelState is channel parameters plus it's current state

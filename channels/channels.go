@@ -61,6 +61,19 @@ func (c channel) Recipient() peer.ID { return c.recipient }
 // TotalSize returns the total size for the data being transferred
 func (c channel) TotalSize() uint64 { return c.totalSize }
 
+// IsPull returns whether this is a pull request based on who initiated it
+func (c channel) IsPull(initiator peer.ID) bool {
+	return initiator == c.recipient
+}
+
+// OtherParty returns the opposite party in the channel to the passed in party
+func (c channel) OtherParty(thisParty peer.ID) peer.ID {
+	if thisParty == c.sender {
+		return c.recipient
+	}
+	return c.sender
+}
+
 // ChannelState is immutable channel data plus mutable state
 type ChannelState struct {
 	datatransfer.Channel

@@ -235,13 +235,7 @@ func (impl *graphsyncImpl) SendVoucher(ctx context.Context, channelID datatransf
 	if err != nil {
 		return err
 	}
-	var otherParty peer.ID
-	if chst.Sender() == impl.peerID {
-		otherParty = chst.Recipient()
-	} else {
-		otherParty = chst.Sender()
-	}
-	impl.dataTransferNetwork.SendMessage(ctx, otherParty, updateRequest)
+	impl.dataTransferNetwork.SendMessage(ctx, chst.OtherParty(impl.peerID), updateRequest)
 	return nil
 }
 
