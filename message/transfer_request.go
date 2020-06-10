@@ -22,6 +22,7 @@ type transferRequest struct {
 	BCid   *cid.Cid
 	Canc   bool
 	Updt   bool
+	Paus   bool
 	Part   bool
 	Pull   bool
 	Stor   *cbg.Deferred
@@ -37,6 +38,10 @@ func (trq *transferRequest) IsRequest() bool {
 
 func (trq *transferRequest) IsUpdate() bool {
 	return trq.Updt
+}
+
+func (trq *transferRequest) IsPaused() bool {
+	return trq.Paus
 }
 
 func (trq *transferRequest) TransferID() datatransfer.TransferID {

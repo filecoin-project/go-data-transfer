@@ -18,7 +18,7 @@ func (t *transferRequest) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{137}); err != nil {
+	if _, err := w.Write([]byte{138}); err != nil {
 		return err
 	}
 
@@ -41,6 +41,11 @@ func (t *transferRequest) MarshalCBOR(w io.Writer) error {
 
 	// t.Updt (bool) (bool)
 	if err := cbg.WriteBool(w, t.Updt); err != nil {
+		return err
+	}
+
+	// t.Paus (bool) (bool)
+	if err := cbg.WriteBool(w, t.Paus); err != nil {
 		return err
 	}
 
@@ -96,7 +101,7 @@ func (t *transferRequest) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 9 {
+	if extra != 10 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -155,6 +160,23 @@ func (t *transferRequest) UnmarshalCBOR(r io.Reader) error {
 		t.Updt = false
 	case 21:
 		t.Updt = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
+	// t.Paus (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeader(br)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.Paus = false
+	case 21:
+		t.Paus = true
 	default:
 		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 	}

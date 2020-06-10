@@ -116,7 +116,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		accepted := false
 		id := datatransfer.TransferID(rand.Int31())
 		voucherResult := testutil.NewFakeDTType()
-		response, err := message.NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
+		response, err := message.NewResponse(id, accepted, false, false, voucherResult.Type(), voucherResult)
 		require.NoError(t, err)
 		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), response))
 

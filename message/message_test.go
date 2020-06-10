@@ -73,11 +73,12 @@ func TestTransferRequest_UnmarshalCBOR(t *testing.T) {
 func TestResponses(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucherResult := testutil.NewFakeDTType()
-	response, err := NewResponse(id, false, true, voucherResult.Type(), voucherResult) // not accepted
+	response, err := NewResponse(id, false, true, true, voucherResult.Type(), voucherResult) // not accepted
 	require.NoError(t, err)
 	assert.Equal(t, response.TransferID(), id)
 	assert.False(t, response.Accepted())
 	assert.True(t, response.IsUpdate())
+	assert.True(t, response.IsPaused())
 	assert.False(t, response.IsRequest())
 	testutil.AssertFakeDTVoucherResult(t, response, voucherResult)
 	// Sanity check to make sure we can cast to DataTransferMessage
@@ -86,13 +87,14 @@ func TestResponses(t *testing.T) {
 
 	assert.False(t, msg.IsRequest())
 	assert.True(t, msg.IsUpdate())
+	assert.True(t, msg.IsPaused())
 	assert.Equal(t, response.TransferID(), msg.TransferID())
 }
 
 func TestTransferResponse_MarshalCBOR(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucherResult := testutil.NewFakeDTType()
-	response, err := NewResponse(id, true, false, voucherResult.Type(), voucherResult) // accepted
+	response, err := NewResponse(id, true, false, false, voucherResult.Type(), voucherResult) // accepted
 	require.NoError(t, err)
 
 	// sanity check that we can marshal data
@@ -104,7 +106,7 @@ func TestTransferResponse_MarshalCBOR(t *testing.T) {
 func TestTransferResponse_UnmarshalCBOR(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucherResult := testutil.NewFakeDTType()
-	response, err := NewResponse(id, true, false, voucherResult.Type(), voucherResult) // accepted
+	response, err := NewResponse(id, true, false, false, voucherResult.Type(), voucherResult) // accepted
 	require.NoError(t, err)
 
 	wbuf := new(bytes.Buffer)
@@ -115,12 +117,14 @@ func TestTransferResponse_UnmarshalCBOR(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, desMsg.IsRequest())
 	assert.False(t, desMsg.IsUpdate())
+	assert.False(t, desMsg.IsPaused())
 	assert.Equal(t, id, desMsg.TransferID())
 
 	desResp, ok := desMsg.(DataTransferResponse)
 	require.True(t, ok)
 	assert.True(t, desResp.Accepted())
 	assert.False(t, desResp.IsUpdate())
+	assert.False(t, desMsg.IsPaused())
 	testutil.AssertFakeDTVoucherResult(t, desResp, voucherResult)
 }
 
@@ -149,12 +153,13 @@ func TestRequestCancel(t *testing.T) {
 func TestRequestUpdate(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucher := testutil.NewFakeDTType()
-	req, err := UpdateRequest(id, voucher.Type(), voucher)
+	req, err := UpdateRequest(id, true, voucher.Type(), voucher)
 	require.NoError(t, err)
 	require.Equal(t, req.TransferID(), id)
 	require.True(t, req.IsRequest())
 	require.False(t, req.IsCancel())
 	require.True(t, req.IsUpdate())
+	require.True(t, req.IsPaused())
 	testutil.AssertFakeDTVoucher(t, req, voucher)
 
 	wbuf := new(bytes.Buffer)
@@ -169,6 +174,7 @@ func TestRequestUpdate(t *testing.T) {
 	require.Equal(t, deserializedRequest.IsCancel(), req.IsCancel())
 	require.Equal(t, deserializedRequest.IsRequest(), req.IsRequest())
 	require.Equal(t, deserializedRequest.IsUpdate(), req.IsUpdate())
+	require.Equal(t, deserializedRequest.IsPaused(), req.IsPaused())
 	testutil.AssertEqualFakeDTVoucher(t, req, deserializedRequest)
 }
 
@@ -200,7 +206,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 	testutil.AssertEqualFakeDTVoucher(t, request, deserializedRequest)
 	testutil.AssertEqualSelector(t, request, deserializedRequest)
 
-	response, err := NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
+	response, err := NewResponse(id, accepted, false, false, voucherResult.Type(), voucherResult)
 	require.NoError(t, err)
 	err = response.ToNet(buf)
 	require.NoError(t, err)
@@ -214,6 +220,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 	require.Equal(t, deserializedResponse.Accepted(), response.Accepted())
 	require.Equal(t, deserializedResponse.IsRequest(), response.IsRequest())
 	require.Equal(t, deserializedResponse.IsUpdate(), response.IsUpdate())
+	require.Equal(t, deserializedResponse.IsPaused(), response.IsPaused())
 	testutil.AssertEqualFakeDTVoucherResult(t, response, deserializedResponse)
 
 	request = CancelRequest(id)

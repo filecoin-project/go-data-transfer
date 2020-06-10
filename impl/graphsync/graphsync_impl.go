@@ -231,7 +231,7 @@ func (impl *graphsyncImpl) SendVoucher(ctx context.Context, channelID datatransf
 	if channelID.Initiator != impl.peerID {
 		return errors.New("cannot send voucher for request we did not initiate")
 	}
-	updateRequest, err := message.UpdateRequest(channelID.ID, voucher.Type(), voucher)
+	updateRequest, err := message.UpdateRequest(channelID.ID, false, voucher.Type(), voucher)
 	if err != nil {
 		return err
 	}
@@ -261,7 +261,7 @@ func (impl *graphsyncImpl) sendResponse(ctx context.Context, isAccepted bool, to
 	if voucherResult != nil {
 		resultType = voucherResult.Type()
 	}
-	resp, err := message.NewResponse(tid, isAccepted, false, resultType, voucherResult)
+	resp, err := message.NewResponse(tid, isAccepted, false, false, resultType, voucherResult)
 	if err != nil {
 		log.Error(err)
 		return

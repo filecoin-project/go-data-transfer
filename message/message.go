@@ -21,6 +21,7 @@ import (
 type DataTransferMessage interface {
 	IsRequest() bool
 	IsUpdate() bool
+	IsPaused() bool
 	TransferID() datatransfer.TransferID
 	cborgen.CBORMarshaler
 	cborgen.CBORUnmarshaler
@@ -78,13 +79,14 @@ func CancelRequest(id datatransfer.TransferID) DataTransferRequest {
 }
 
 // UpdateRequest generates a new request update
-func UpdateRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable) (DataTransferRequest, error) {
+func UpdateRequest(id datatransfer.TransferID, isPaused bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable) (DataTransferRequest, error) {
 	vbytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
 	return &transferRequest{
 		Updt:   true,
+		Paus:   isPaused,
 		Vouch:  &cborgen.Deferred{Raw: vbytes},
 		VTyp:   vtype,
 		XferID: uint64(id),
@@ -92,12 +94,19 @@ func UpdateRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifier
 }
 
 // NewResponse builds a new Data Transfer response
-func NewResponse(id datatransfer.TransferID, accepted bool, isUpdate bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (DataTransferResponse, error) {
+func NewResponse(id datatransfer.TransferID, accepted bool, isUpdate bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (DataTransferResponse, error) {
 	vbytes, err := encoding.Encode(voucherResult)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
-	return &transferResponse{Acpt: accepted, Updt: isUpdate, XferID: uint64(id), VTyp: voucherResultType, VRes: &cborgen.Deferred{Raw: vbytes}}, nil
+	return &transferResponse{
+		Acpt:   accepted,
+		Updt:   isUpdate,
+		Paus:   isPaused,
+		XferID: uint64(id),
+		VTyp:   voucherResultType,
+		VRes:   &cborgen.Deferred{Raw: vbytes},
+	}, nil
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
