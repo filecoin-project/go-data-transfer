@@ -13,7 +13,6 @@ import (
 	"github.com/filecoin-project/go-data-transfer/testutil"
 	"github.com/ipfs/go-graphsync"
 	ipld "github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/traversal"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 )
@@ -561,12 +560,12 @@ func TestManager(t *testing.T) {
 				response:                    response,
 				updatedRequest:              updatedRequest,
 				block:                       block,
-				outgoingRequestHookActions:  &fakeOutgoingRequestHookActions{},
-				outgoingBlockHookActions:    &fakeOutgoingBlockHookActions{},
-				incomingBlockHookActions:    &fakeIncomingBlockHookActions{},
-				incomingRequestHookActions:  &fakeIncomingRequestHookActions{},
-				requestUpdatedHookActions:   &fakeRequestUpdatedActions{},
-				incomingResponseHookActions: &fakeIncomingResponseHookActions{},
+				outgoingRequestHookActions:  &testutil.FakeOutgoingRequestHookActions{},
+				outgoingBlockHookActions:    &testutil.FakeOutgoingBlockHookActions{},
+				incomingBlockHookActions:    &testutil.FakeIncomingBlockHookActions{},
+				incomingRequestHookActions:  &testutil.FakeIncomingRequestHookActions{},
+				requestUpdatedHookActions:   &testutil.FakeRequestUpdatedActions{},
+				incomingResponseHookActions: &testutil.FakeIncomingResponseHookActions{},
 			}
 			manager := hooks.NewManager(peers[0], &data.events)
 			manager.RegisterHooks(fgs)
@@ -642,97 +641,6 @@ func (fe *fakeEvents) OnResponseCompleted(chid datatransfer.ChannelID, success b
 	return fe.OnResponseCompletedErr
 }
 
-type fakeOutgoingRequestHookActions struct{}
-
-func (fa *fakeOutgoingRequestHookActions) UsePersistenceOption(name string) {}
-func (fa *fakeOutgoingRequestHookActions) UseLinkTargetNodeStyleChooser(_ traversal.LinkTargetNodeStyleChooser) {
-}
-
-type fakeIncomingBlockHookActions struct {
-	TerminationError error
-	SentExtensions   []graphsync.ExtensionData
-}
-
-func (fa *fakeIncomingBlockHookActions) TerminateWithError(err error) {
-	fa.TerminationError = err
-}
-
-func (fa *fakeIncomingBlockHookActions) UpdateRequestWithExtensions(extensions ...graphsync.ExtensionData) {
-	fa.SentExtensions = append(fa.SentExtensions, extensions...)
-}
-
-type fakeOutgoingBlockHookActions struct {
-	TerminationError error
-	SentExtension    graphsync.ExtensionData
-	Paused           bool
-}
-
-func (fa *fakeOutgoingBlockHookActions) SendExtensionData(extension graphsync.ExtensionData) {
-	fa.SentExtension = extension
-}
-
-func (fa *fakeOutgoingBlockHookActions) TerminateWithError(err error) {
-	fa.TerminationError = err
-}
-
-func (fa *fakeOutgoingBlockHookActions) PauseResponse() {
-	fa.Paused = true
-}
-
-type fakeIncomingRequestHookActions struct {
-	TerminationError error
-	Validated        bool
-	SentExtension    graphsync.ExtensionData
-}
-
-func (fa *fakeIncomingRequestHookActions) SendExtensionData(ext graphsync.ExtensionData) {
-	fa.SentExtension = ext
-}
-
-func (fa *fakeIncomingRequestHookActions) UsePersistenceOption(name string) {}
-
-func (fa *fakeIncomingRequestHookActions) UseLinkTargetNodeStyleChooser(_ traversal.LinkTargetNodeStyleChooser) {
-}
-
-func (fa *fakeIncomingRequestHookActions) TerminateWithError(err error) {
-	fa.TerminationError = err
-}
-
-func (fa *fakeIncomingRequestHookActions) ValidateRequest() {
-	fa.Validated = true
-}
-
-type fakeRequestUpdatedActions struct {
-	TerminationError error
-	SentExtension    graphsync.ExtensionData
-	Unpaused         bool
-}
-
-func (fa *fakeRequestUpdatedActions) SendExtensionData(extension graphsync.ExtensionData) {
-	fa.SentExtension = extension
-}
-
-func (fa *fakeRequestUpdatedActions) TerminateWithError(err error) {
-	fa.TerminationError = err
-}
-
-func (fa *fakeRequestUpdatedActions) UnpauseResponse() {
-	fa.Unpaused = true
-}
-
-type fakeIncomingResponseHookActions struct {
-	TerminationError error
-	SentExtensions   []graphsync.ExtensionData
-}
-
-func (fa *fakeIncomingResponseHookActions) TerminateWithError(err error) {
-	fa.TerminationError = err
-}
-
-func (fa *fakeIncomingResponseHookActions) UpdateRequestWithExtensions(extensions ...graphsync.ExtensionData) {
-	fa.SentExtensions = append(fa.SentExtensions, extensions...)
-}
-
 type harness struct {
 	fgs                         *testutil.FakeGraphSync
 	transferID                  datatransfer.TransferID
@@ -742,12 +650,12 @@ type harness struct {
 	request                     graphsync.RequestData
 	response                    graphsync.ResponseData
 	updatedRequest              graphsync.RequestData
-	outgoingRequestHookActions  *fakeOutgoingRequestHookActions
-	incomingBlockHookActions    *fakeIncomingBlockHookActions
-	outgoingBlockHookActions    *fakeOutgoingBlockHookActions
-	incomingRequestHookActions  *fakeIncomingRequestHookActions
-	requestUpdatedHookActions   *fakeRequestUpdatedActions
-	incomingResponseHookActions *fakeIncomingResponseHookActions
+	outgoingRequestHookActions  *testutil.FakeOutgoingRequestHookActions
+	incomingBlockHookActions    *testutil.FakeIncomingBlockHookActions
+	outgoingBlockHookActions    *testutil.FakeOutgoingBlockHookActions
+	incomingRequestHookActions  *testutil.FakeIncomingRequestHookActions
+	requestUpdatedHookActions   *testutil.FakeRequestUpdatedActions
+	incomingResponseHookActions *testutil.FakeIncomingResponseHookActions
 }
 
 func (ha *harness) outgoingRequestHook() {

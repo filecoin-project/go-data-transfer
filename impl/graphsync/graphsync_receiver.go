@@ -4,11 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
-	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
@@ -24,7 +21,7 @@ func (receiver *graphsyncReceiver) ReceiveRequest(
 	ctx context.Context,
 	initiator peer.ID,
 	incoming message.DataTransferRequest) {
-	response, err := receiver.receiveRequest(initiator, incoming)
+	response, err := receiver.impl.receiveRequest(initiator, incoming)
 	if err != nil {
 		log.Error(err)
 		return
@@ -32,98 +29,12 @@ func (receiver *graphsyncReceiver) ReceiveRequest(
 	if response.Accepted() && !incoming.IsPull() {
 		stor, _ := incoming.Selector()
 		receiver.impl.sendGsRequest(ctx, initiator, initiator, cidlink.Link{Cid: incoming.BaseCid()}, stor, response)
+		return
 	}
-	receiver.impl.dataTransferNetwork.SendMessage(ctx, initiator, response)
-}
-
-func (receiver *graphsyncReceiver) receiveRequest(
-	initiator peer.ID,
-	incoming message.DataTransferRequest) (message.DataTransferResponse, error) {
-	result, err := receiver.acceptRequest(initiator, incoming)
+	err = receiver.impl.dataTransferNetwork.SendMessage(ctx, initiator, response)
 	if err != nil {
 		log.Error(err)
 	}
-	return receiver.impl.response(err == nil, incoming.TransferID(), result)
-}
-
-func (receiver *graphsyncReceiver) acceptRequest(
-	initiator peer.ID,
-	incoming message.DataTransferRequest) (datatransfer.VoucherResult, error) {
-
-	voucher, result, err := receiver.validateVoucher(initiator, incoming)
-	if err != nil {
-		return result, err
-	}
-	stor, _ := incoming.Selector()
-
-	var dataSender, dataReceiver peer.ID
-	if incoming.IsPull() {
-		dataSender = receiver.impl.peerID
-		dataReceiver = initiator
-	} else {
-		dataSender = initiator
-		dataReceiver = receiver.impl.peerID
-	}
-
-	chid, err := receiver.impl.channels.CreateNew(incoming.TransferID(), incoming.BaseCid(), stor, voucher, initiator, dataSender, dataReceiver)
-	if err != nil {
-		return result, err
-	}
-	evt := datatransfer.Event{
-		Code:      datatransfer.Open,
-		Message:   "Incoming request accepted",
-		Timestamp: time.Now(),
-	}
-	chst, err := receiver.impl.channels.GetByID(chid)
-	if err != nil {
-		return result, err
-	}
-	err = receiver.impl.pubSub.Publish(internalEvent{evt, chst})
-	if err != nil {
-		log.Warnf("err publishing DT event: %s", err.Error())
-	}
-	return result, nil
-}
-
-// validateVoucher converts a voucher in an incoming message to its appropriate
-// voucher struct, then runs the validator and returns the results.
-// returns error if:
-//   * reading voucher fails
-//   * deserialization of selector fails
-//   * validation fails
-func (receiver *graphsyncReceiver) validateVoucher(sender peer.ID, incoming message.DataTransferRequest) (datatransfer.Voucher, datatransfer.VoucherResult, error) {
-
-	vtypStr := datatransfer.TypeIdentifier(incoming.VoucherType())
-	decoder, has := receiver.impl.validatedTypes.Decoder(vtypStr)
-	if !has {
-		return nil, nil, xerrors.Errorf("unknown voucher type: %s", vtypStr)
-	}
-	encodable, err := incoming.Voucher(decoder)
-	if err != nil {
-		return nil, nil, err
-	}
-	vouch := encodable.(datatransfer.Registerable)
-
-	var validatorFunc func(peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.VoucherResult, error)
-	processor, _ := receiver.impl.validatedTypes.Processor(vtypStr)
-	validator := processor.(datatransfer.RequestValidator)
-	if incoming.IsPull() {
-		validatorFunc = validator.ValidatePull
-	} else {
-		validatorFunc = validator.ValidatePush
-	}
-
-	stor, err := incoming.Selector()
-	if err != nil {
-		return vouch, nil, err
-	}
-
-	result, err := validatorFunc(sender, vouch, incoming.BaseCid(), stor)
-	if err != nil {
-		return nil, result, err
-	}
-
-	return vouch, result, nil
 }
 
 // ReceiveResponse handles responses to our  Push or Pull data transfer request.

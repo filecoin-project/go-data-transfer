@@ -1,14 +1,18 @@
 package testutil
 
 import (
+	"bytes"
 	"context"
 	"math/rand"
 	"testing"
 
+	"github.com/filecoin-project/go-data-transfer/impl/graphsync/extension"
+	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/ipld/go-ipld-prime/traversal"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 )
@@ -19,6 +23,22 @@ type ReceivedGraphSyncRequest struct {
 	Root       ipld.Link
 	Selector   ipld.Node
 	Extensions []graphsync.ExtensionData
+}
+
+// DTMessage returns the data transfer message among the graphsync extensions sent with this request
+func (gsRequest ReceivedGraphSyncRequest) DTMessage(t *testing.T) message.DataTransferMessage {
+	var matchedExtension *graphsync.ExtensionData
+	for _, ext := range gsRequest.Extensions {
+		if ext.Name == extension.ExtensionDataTransfer {
+			matchedExtension = &ext
+			break
+		}
+	}
+	require.NotNil(t, matchedExtension)
+	buf := bytes.NewReader(matchedExtension.Data)
+	received, err := message.FromNet(buf)
+	require.NoError(t, err)
+	return received
 }
 
 // FakeGraphSync implements a GraphExchange but does nothing
@@ -229,4 +249,95 @@ func NewFakeResponse(id graphsync.RequestID, extensions map[graphsync.ExtensionN
 		status:     status,
 		extensions: extensions,
 	}
+}
+
+type FakeOutgoingRequestHookActions struct{}
+
+func (fa *FakeOutgoingRequestHookActions) UsePersistenceOption(name string) {}
+func (fa *FakeOutgoingRequestHookActions) UseLinkTargetNodeStyleChooser(_ traversal.LinkTargetNodeStyleChooser) {
+}
+
+type FakeIncomingBlockHookActions struct {
+	TerminationError error
+	SentExtensions   []graphsync.ExtensionData
+}
+
+func (fa *FakeIncomingBlockHookActions) TerminateWithError(err error) {
+	fa.TerminationError = err
+}
+
+func (fa *FakeIncomingBlockHookActions) UpdateRequestWithExtensions(extensions ...graphsync.ExtensionData) {
+	fa.SentExtensions = append(fa.SentExtensions, extensions...)
+}
+
+type FakeOutgoingBlockHookActions struct {
+	TerminationError error
+	SentExtension    graphsync.ExtensionData
+	Paused           bool
+}
+
+func (fa *FakeOutgoingBlockHookActions) SendExtensionData(extension graphsync.ExtensionData) {
+	fa.SentExtension = extension
+}
+
+func (fa *FakeOutgoingBlockHookActions) TerminateWithError(err error) {
+	fa.TerminationError = err
+}
+
+func (fa *FakeOutgoingBlockHookActions) PauseResponse() {
+	fa.Paused = true
+}
+
+type FakeIncomingRequestHookActions struct {
+	TerminationError error
+	Validated        bool
+	SentExtension    graphsync.ExtensionData
+}
+
+func (fa *FakeIncomingRequestHookActions) SendExtensionData(ext graphsync.ExtensionData) {
+	fa.SentExtension = ext
+}
+
+func (fa *FakeIncomingRequestHookActions) UsePersistenceOption(name string) {}
+
+func (fa *FakeIncomingRequestHookActions) UseLinkTargetNodeStyleChooser(_ traversal.LinkTargetNodeStyleChooser) {
+}
+
+func (fa *FakeIncomingRequestHookActions) TerminateWithError(err error) {
+	fa.TerminationError = err
+}
+
+func (fa *FakeIncomingRequestHookActions) ValidateRequest() {
+	fa.Validated = true
+}
+
+type FakeRequestUpdatedActions struct {
+	TerminationError error
+	SentExtension    graphsync.ExtensionData
+	Unpaused         bool
+}
+
+func (fa *FakeRequestUpdatedActions) SendExtensionData(extension graphsync.ExtensionData) {
+	fa.SentExtension = extension
+}
+
+func (fa *FakeRequestUpdatedActions) TerminateWithError(err error) {
+	fa.TerminationError = err
+}
+
+func (fa *FakeRequestUpdatedActions) UnpauseResponse() {
+	fa.Unpaused = true
+}
+
+type FakeIncomingResponseHookActions struct {
+	TerminationError error
+	SentExtensions   []graphsync.ExtensionData
+}
+
+func (fa *FakeIncomingResponseHookActions) TerminateWithError(err error) {
+	fa.TerminationError = err
+}
+
+func (fa *FakeIncomingResponseHookActions) UpdateRequestWithExtensions(extensions ...graphsync.ExtensionData) {
+	fa.SentExtensions = append(fa.SentExtensions, extensions...)
 }

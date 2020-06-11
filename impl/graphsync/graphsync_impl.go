@@ -127,6 +127,9 @@ func (impl *graphsyncImpl) OnDataSent(chid datatransfer.ChannelID, link ipld.Lin
 
 func (impl *graphsyncImpl) OnRequestReceived(chid datatransfer.ChannelID, request message.DataTransferRequest) (message.DataTransferResponse, error) {
 	_, err := impl.channels.GetByID(chid)
+	if err != nil {
+		return impl.receiveRequest(chid.Initiator, request)
+	}
 	return nil, err
 }
 
@@ -171,12 +174,12 @@ func (impl *graphsyncImpl) RegisterVoucherType(voucherType datatransfer.Voucher,
 // OpenPushDataChannel opens a data transfer that will send data to the recipient peer and
 // transfer parts of the piece that match the selector
 func (impl *graphsyncImpl) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.ChannelID, error) {
-	tid, err := impl.sendDtRequest(ctx, selector, false, voucher, baseCid, requestTo)
+	req, err := impl.newRequest(ctx, selector, false, voucher, baseCid, requestTo)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
 
-	chid, err := impl.channels.CreateNew(tid, baseCid, selector, voucher,
+	chid, err := impl.channels.CreateNew(req.TransferID(), baseCid, selector, voucher,
 		impl.peerID, impl.peerID, requestTo) // initiator = us, sender = us, receiver = them
 	if err != nil {
 		return chid, err
@@ -190,6 +193,13 @@ func (impl *graphsyncImpl) OpenPushDataChannel(ctx context.Context, requestTo pe
 	if err != nil {
 		return chid, err
 	}
+	if err := impl.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
+		evt = datatransfer.Event{
+			Code:      datatransfer.Error,
+			Message:   "Unable to send request",
+			Timestamp: time.Now(),
+		}
+	}
 	err = impl.pubSub.Publish(internalEvent{evt, chst})
 	if err != nil {
 		log.Warnf("err publishing DT event: %s", err.Error())
@@ -200,13 +210,12 @@ func (impl *graphsyncImpl) OpenPushDataChannel(ctx context.Context, requestTo pe
 // OpenPullDataChannel opens a data transfer that will request data from the sending peer and
 // transfer parts of the piece that match the selector
 func (impl *graphsyncImpl) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.ChannelID, error) {
-
-	tid, err := impl.sendDtRequest(ctx, selector, true, voucher, baseCid, requestTo)
+	req, err := impl.newRequest(ctx, selector, true, voucher, baseCid, requestTo)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
 	// initiator = us, sender = them, receiver = us
-	chid, err := impl.channels.CreateNew(tid, baseCid, selector, voucher,
+	chid, err := impl.channels.CreateNew(req.TransferID(), baseCid, selector, voucher,
 		impl.peerID, requestTo, impl.peerID)
 	if err != nil {
 		return chid, err
@@ -219,6 +228,13 @@ func (impl *graphsyncImpl) OpenPullDataChannel(ctx context.Context, requestTo pe
 	chst, err := impl.channels.GetByID(chid)
 	if err != nil {
 		return chid, err
+	}
+	if err := impl.sendGsRequest(ctx, impl.peerID, requestTo, cidlink.Link{Cid: baseCid}, selector, req); err != nil {
+		evt = datatransfer.Event{
+			Code:      datatransfer.Error,
+			Message:   "Unable to send request",
+			Timestamp: time.Now(),
+		}
 	}
 	err = impl.pubSub.Publish(internalEvent{evt, chst})
 	if err != nil {
@@ -244,21 +260,14 @@ func (impl *graphsyncImpl) SendVoucher(ctx context.Context, channelID datatransf
 	return nil
 }
 
-// sendDtRequest encapsulates message creation and posting to the data transfer network with the provided parameters
-func (impl *graphsyncImpl) sendDtRequest(ctx context.Context, selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid, to peer.ID) (datatransfer.TransferID, error) {
+// newRequest encapsulates message creation
+func (impl *graphsyncImpl) newRequest(ctx context.Context, selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid, to peer.ID) (message.DataTransferRequest, error) {
 	next, err := impl.storedCounter.Next()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	tid := datatransfer.TransferID(next)
-	req, err := message.NewRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
-	if err != nil {
-		return 0, err
-	}
-	if err := impl.dataTransferNetwork.SendMessage(ctx, to, req); err != nil {
-		return 0, err
-	}
-	return tid, nil
+	return message.NewRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
 }
 
 func (impl *graphsyncImpl) response(isAccepted bool, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (message.DataTransferResponse, error) {
@@ -343,4 +352,94 @@ func (impl *graphsyncImpl) RegisterRevalidator(voucherType datatransfer.Voucher,
 // so that a listener can read the metadata
 func (impl *graphsyncImpl) RegisterVoucherResultType(resultType datatransfer.VoucherResult) error {
 	panic("not implemented")
+}
+
+func (impl *graphsyncImpl) receiveRequest(
+	initiator peer.ID,
+	incoming message.DataTransferRequest) (message.DataTransferResponse, error) {
+	result, err := impl.acceptRequest(initiator, incoming)
+	if err != nil {
+		log.Error(err)
+	}
+	return impl.response(err == nil, incoming.TransferID(), result)
+}
+
+func (impl *graphsyncImpl) acceptRequest(
+	initiator peer.ID,
+	incoming message.DataTransferRequest) (datatransfer.VoucherResult, error) {
+
+	voucher, result, err := impl.validateVoucher(initiator, incoming)
+	if err != nil {
+		return result, err
+	}
+	stor, _ := incoming.Selector()
+
+	var dataSender, dataReceiver peer.ID
+	if incoming.IsPull() {
+		dataSender = impl.peerID
+		dataReceiver = initiator
+	} else {
+		dataSender = initiator
+		dataReceiver = impl.peerID
+	}
+
+	chid, err := impl.channels.CreateNew(incoming.TransferID(), incoming.BaseCid(), stor, voucher, initiator, dataSender, dataReceiver)
+	if err != nil {
+		return result, err
+	}
+	evt := datatransfer.Event{
+		Code:      datatransfer.Open,
+		Message:   "Incoming request accepted",
+		Timestamp: time.Now(),
+	}
+	chst, err := impl.channels.GetByID(chid)
+	if err != nil {
+		return result, err
+	}
+	err = impl.pubSub.Publish(internalEvent{evt, chst})
+	if err != nil {
+		log.Warnf("err publishing DT event: %s", err.Error())
+	}
+	return result, nil
+}
+
+// validateVoucher converts a voucher in an incoming message to its appropriate
+// voucher struct, then runs the validator and returns the results.
+// returns error if:
+//   * reading voucher fails
+//   * deserialization of selector fails
+//   * validation fails
+func (impl *graphsyncImpl) validateVoucher(sender peer.ID, incoming message.DataTransferRequest) (datatransfer.Voucher, datatransfer.VoucherResult, error) {
+
+	vtypStr := datatransfer.TypeIdentifier(incoming.VoucherType())
+	decoder, has := impl.validatedTypes.Decoder(vtypStr)
+	if !has {
+		return nil, nil, xerrors.Errorf("unknown voucher type: %s", vtypStr)
+	}
+	encodable, err := incoming.Voucher(decoder)
+	if err != nil {
+		return nil, nil, err
+	}
+	vouch := encodable.(datatransfer.Registerable)
+
+	var validatorFunc func(peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.VoucherResult, error)
+	processor, _ := impl.validatedTypes.Processor(vtypStr)
+	validator := processor.(datatransfer.RequestValidator)
+	if incoming.IsPull() {
+		validatorFunc = validator.ValidatePull
+	} else {
+		validatorFunc = validator.ValidatePush
+	}
+
+	stor, err := incoming.Selector()
+	if err != nil {
+		return vouch, nil, err
+	}
+
+	result, err := validatorFunc(sender, vouch, incoming.BaseCid(), stor)
+	if err != nil {
+		return nil, result, err
+	}
+
+	return vouch, result, nil
 }

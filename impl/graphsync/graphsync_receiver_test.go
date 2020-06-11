@@ -52,19 +52,10 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, gsData.AllSelector)
 		require.NoError(t, err)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
-		var messageReceived receivedMessage
-		select {
-		case <-ctx.Done():
-			t.Fatal("did not receive message sent")
-		case messageReceived = <-r.messageReceived:
-		}
-
+		gsRequest := gs2.AssertRequestReceived(ctx, t)
+		received := gsRequest.DTMessage(t)
 		sv.verifyExpectations(t)
 
-		sender := messageReceived.sender
-		require.Equal(t, sender, host2.ID())
-
-		received := messageReceived.message
 		require.False(t, received.IsRequest())
 		receivedResponse, ok := received.(message.DataTransferResponse)
 		require.True(t, ok)
