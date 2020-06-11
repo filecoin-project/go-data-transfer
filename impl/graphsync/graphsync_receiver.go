@@ -24,18 +24,29 @@ func (receiver *graphsyncReceiver) ReceiveRequest(
 	ctx context.Context,
 	initiator peer.ID,
 	incoming message.DataTransferRequest) {
-	result, err := receiver.receiveRequest(initiator, incoming)
+	response, err := receiver.receiveRequest(initiator, incoming)
 	if err != nil {
 		log.Error(err)
+		return
 	}
-	if err == nil && !incoming.IsPull() {
+	if response.Accepted() && !incoming.IsPull() {
 		stor, _ := incoming.Selector()
-		receiver.impl.sendGsRequest(ctx, initiator, incoming.TransferID(), incoming.IsPull(), initiator, cidlink.Link{Cid: incoming.BaseCid()}, stor)
+		receiver.impl.sendGsRequest(ctx, initiator, initiator, cidlink.Link{Cid: incoming.BaseCid()}, stor, response)
 	}
-	receiver.impl.sendResponse(ctx, err == nil, initiator, incoming.TransferID(), result)
+	receiver.impl.dataTransferNetwork.SendMessage(ctx, initiator, response)
 }
 
 func (receiver *graphsyncReceiver) receiveRequest(
+	initiator peer.ID,
+	incoming message.DataTransferRequest) (message.DataTransferResponse, error) {
+	result, err := receiver.acceptRequest(initiator, incoming)
+	if err != nil {
+		log.Error(err)
+	}
+	return receiver.impl.response(err == nil, incoming.TransferID(), result)
+}
+
+func (receiver *graphsyncReceiver) acceptRequest(
 	initiator peer.ID,
 	incoming message.DataTransferRequest) (datatransfer.VoucherResult, error) {
 
@@ -140,7 +151,10 @@ func (receiver *graphsyncReceiver) ReceiveResponse(
 		if chst.Sender() == sender {
 			baseCid := chst.BaseCID()
 			root := cidlink.Link{Cid: baseCid}
-			receiver.impl.sendGsRequest(ctx, receiver.impl.peerID, incoming.TransferID(), true, sender, root, chst.Selector())
+			request, err := message.NewRequest(chid.ID, true, chst.Voucher().Type(), chst.Voucher(), baseCid, chst.Selector())
+			if err == nil {
+				receiver.impl.sendGsRequest(ctx, receiver.impl.peerID, sender, root, chst.Selector(), request)
+			}
 		}
 	}
 	err = receiver.impl.pubSub.Publish(internalEvent{evt, chst})

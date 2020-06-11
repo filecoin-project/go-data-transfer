@@ -770,7 +770,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	gsData := testutil.NewGraphsyncTestingData(ctx, t)
 	host1 := gsData.Host1 // initiator and data sender
 	host2 := gsData.Host2 // data recipient, makes graphsync request for data
-	voucher := testutil.FakeDTType{Data: "applesauce"}
+	voucher := testutil.NewFakeDTType()
 	link := gsData.LoadUnixFSFile(t, false)
 
 	// setup receiving peer to just record message coming in
@@ -789,7 +789,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	dt1 := NewGraphSyncDataTransfer(host1, gs1, gsData.StoredCounter1)
 
 	t.Run("when request is initiated", func(t *testing.T) {
-		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, link.(cidlink.Link).Cid, gsData.AllSelector)
+		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, link.(cidlink.Link).Cid, gsData.AllSelector)
 		require.NoError(t, err)
 
 		var messageReceived receivedMessage
@@ -801,8 +801,9 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		requestReceived := messageReceived.message.(message.DataTransferRequest)
 
 		var buf bytes.Buffer
-		extStruct := &extension.TransferData{TransferID: uint64(requestReceived.TransferID()), Initiator: host1.ID()}
-		err = extStruct.MarshalCBOR(&buf)
+		response, err := message.NewResponse(requestReceived.TransferID(), true, false, false, voucher.Type(), voucher)
+		require.NoError(t, err)
+		err = response.ToNet(&buf)
 		require.NoError(t, err)
 		extData := buf.Bytes()
 
@@ -820,8 +821,9 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 
 	t.Run("when no request is initiated", func(t *testing.T) {
 		var buf bytes.Buffer
-		extStruct := &extension.TransferData{TransferID: rand.Uint64(), Initiator: host1.ID()}
-		err := extStruct.MarshalCBOR(&buf)
+		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint64()), true, false, false, voucher.Type(), voucher)
+		require.NoError(t, err)
+		err = response.ToNet(&buf)
 		require.NoError(t, err)
 		extData := buf.Bytes()
 
@@ -938,16 +940,11 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		receivedResponse, ok := messageReceived.message.(message.DataTransferResponse)
 		require.True(t, ok)
 		require.True(t, receivedResponse.Accepted())
-		extStruct := &extension.TransferData{
-			TransferID: uint64(receivedResponse.TransferID()),
-			Initiator:  host1.ID(),
-			IsPull:     true,
-		}
 
-		var buf2 = bytes.Buffer{}
-		err := extStruct.MarshalCBOR(&buf2)
+		buf := new(bytes.Buffer)
+		err := request.ToNet(buf)
 		require.NoError(t, err)
-		extData := buf2.Bytes()
+		extData := buf.Bytes()
 
 		gsRequest := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 			Name: extension.ExtensionDataTransfer,
@@ -964,12 +961,12 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 
 	t.Run("When request is not initiated, graphsync response is error", func(t *testing.T) {
 		_ = NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
-		extStruct := &extension.TransferData{TransferID: rand.Uint64(), Initiator: host1.ID()}
+		_, _, dtRequest := createDTRequest(t, true, id, gsData.AllSelector)
 
-		var buf2 bytes.Buffer
-		err := extStruct.MarshalCBOR(&buf2)
+		buf := new(bytes.Buffer)
+		err := dtRequest.ToNet(buf)
 		require.NoError(t, err)
-		extData := buf2.Bytes()
+		extData := buf.Bytes()
 		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 			Name: extension.ExtensionDataTransfer,
 			Data: extData,

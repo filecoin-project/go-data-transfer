@@ -1,40 +1,54 @@
 package hooks
 
 import (
+	"errors"
 	"sync"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/impl/graphsync/extension"
+	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/ipfs/go-graphsync"
 	ipld "github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/prometheus/common/log"
 )
 
+// ErrPause is a special error that the DataReceived / DataSent hooks can
+// use to pause the channel
+var ErrPause = errors.New("pause channel")
+
+// ErrResume is a special error that the ResponseReceived / RequestReceived hooks can
+// use to unpause the channel
+var ErrResume = errors.New("resume channel")
+
 // Events are semantic data transfer events that happen as a result of graphsync hooks
 type Events interface {
-	// OnRequestSent is called when we ask the other peer to send us data on the
+	// OnChannelOpened is called when we ask the other peer to send us data on the
 	// given channel ID
 	// return values are:
-	// - nil = this request is recognized
-	// - error = ignore incoming data for this request
-	OnRequestSent(chid datatransfer.ChannelID) error
+	// - nil = this channel is recognized
+	// - error = ignore incoming data for this channel
+	OnChannelOpened(chid datatransfer.ChannelID) error
+	// OnResponseReceived is called when we receive a response to a request
+	// - nil = continue receiving data
+	// - error = cancel this request
+	OnResponseReceived(chid datatransfer.ChannelID, msg message.DataTransferResponse) error
 	// OnDataReceive is called when we receive data for the given channel ID
 	// return values are:
 	// - nil = continue receiving data
 	// - error = cancel this request
-	OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) error
+	OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error)
 	// OnDataSent is called when we send data for the given channel ID
 	// return values are:
 	// - nil = continue sending data
 	// - error = cancel this request
-	OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) error
+	OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error)
 	// OnRequestReceived is called when we receive a new request to send data
 	// for the given channel ID
 	// return values are:
 	// - nil = proceed with sending data
 	// - error = cancel this request
-	OnRequestReceived(chid datatransfer.ChannelID) error
+	OnRequestReceived(chid datatransfer.ChannelID, msg message.DataTransferRequest) (message.DataTransferResponse, error)
 	// OnResponseCompleted is called when we finish sending data for the given channel ID
 	// Error returns are logged but otherwise have not effect
 	OnResponseCompleted(chid datatransfer.ChannelID, success bool) error
@@ -70,18 +84,26 @@ func (hm *Manager) RegisterHooks(gs graphsync.GraphExchange) {
 	gs.RegisterIncomingBlockHook(hm.gsIncomingBlockHook)
 	gs.RegisterOutgoingBlockHook(hm.gsOutgoingBlockHook)
 	gs.RegisterOutgoingRequestHook(hm.gsOutgoingRequestHook)
+	gs.RegisterIncomingResponseHook(hm.gsIncomingResponseHook)
+	gs.RegisterRequestUpdatedHook(hm.gsRequestUpdatedHook)
 }
 
 func (hm *Manager) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestData, hookActions graphsync.OutgoingRequestHookActions) {
-	transferData, _ := extension.GetTransferData(request)
+	message, _ := extension.GetTransferData(request)
 
 	// extension not found; probably not our request.
-	if transferData == nil {
+	if message == nil {
 		return
 	}
 
-	chid := transferData.GetChannelID()
-	err := hm.events.OnRequestSent(chid)
+	var initiator peer.ID
+	if message.IsRequest() {
+		initiator = hm.peerID
+	} else {
+		initiator = p
+	}
+	chid := datatransfer.ChannelID{Initiator: initiator, ID: message.TransferID()}
+	err := hm.events.OnChannelOpened(chid)
 	if err != nil {
 		return
 	}
@@ -100,9 +122,24 @@ func (hm *Manager) gsIncomingBlockHook(p peer.ID, response graphsync.ResponseDat
 		return
 	}
 
-	err := hm.events.OnDataReceived(chid, block.Link(), block.BlockSize())
+	var extensions []graphsync.ExtensionData
+	msg, err := hm.events.OnDataReceived(chid, block.Link(), block.BlockSize())
 	if err != nil {
 		hookActions.TerminateWithError(err)
+		return
+	}
+
+	if msg != nil {
+		extension, err := extension.ToExtensionData(msg)
+		if err != nil {
+			hookActions.TerminateWithError(err)
+			return
+		}
+		extensions = append(extensions, extension)
+	}
+
+	if len(extensions) > 0 {
+		hookActions.UpdateRequestWithExtensions(extensions...)
 	}
 }
 
@@ -115,9 +152,23 @@ func (hm *Manager) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData,
 		return
 	}
 
-	err := hm.events.OnDataSent(chid, block.Link(), block.BlockSize())
-	if err != nil {
+	msg, err := hm.events.OnDataSent(chid, block.Link(), block.BlockSize())
+	if err != nil && err != ErrPause {
 		hookActions.TerminateWithError(err)
+		return
+	}
+
+	if err == ErrPause {
+		hookActions.PauseResponse()
+	}
+
+	if msg != nil {
+		extension, err := extension.ToExtensionData(msg)
+		if err != nil {
+			hookActions.TerminateWithError(err)
+			return
+		}
+		hookActions.SendExtensionData(extension)
 	}
 }
 
@@ -126,20 +177,40 @@ func (hm *Manager) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData,
 func (hm *Manager) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hookActions graphsync.IncomingRequestHookActions) {
 
 	// if this is a push request the sender is us.
-	transferData, err := extension.GetTransferData(request)
+	msg, err := extension.GetTransferData(request)
 	if err != nil {
 		hookActions.TerminateWithError(err)
 		return
 	}
 
 	// extension not found; probably not our request.
-	if transferData == nil {
+	if msg == nil {
 		return
 	}
 
-	chid := transferData.GetChannelID()
+	var chid datatransfer.ChannelID
+	var responseMessage message.DataTransferMessage
+	if msg.IsRequest() {
+		// when a DT request comes in on graphsync, it's a pull
+		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p}
+		request := msg.(message.DataTransferRequest)
+		responseMessage, err = hm.events.OnRequestReceived(chid, request)
+	} else {
+		// when a DT response comes in on graphsync, it's a push
+		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: hm.peerID}
+		response := msg.(message.DataTransferResponse)
+		err = hm.events.OnResponseReceived(chid, response)
+	}
 
-	err = hm.events.OnRequestReceived(chid)
+	if responseMessage != nil {
+		extension, extensionErr := extension.ToExtensionData(responseMessage)
+		if extensionErr != nil {
+			hookActions.TerminateWithError(err)
+			return
+		}
+		hookActions.SendExtensionData(extension)
+	}
+
 	if err != nil {
 		hookActions.TerminateWithError(err)
 		return
@@ -149,10 +220,7 @@ func (hm *Manager) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hookA
 	hm.graphsyncRequestMap[graphsyncKey{request.ID(), p}] = chid
 	hm.graphsyncRequestMapLk.Unlock()
 
-	raw, _ := request.Extension(extension.ExtensionDataTransfer)
-	respData := graphsync.ExtensionData{Name: extension.ExtensionDataTransfer, Data: raw}
 	hookActions.ValidateRequest()
-	hookActions.SendExtensionData(respData)
 }
 
 // gsCompletedResponseListener is a graphsync.OnCompletedResponseListener. We use it learn when the data transfer is complete
@@ -170,5 +238,123 @@ func (hm *Manager) gsCompletedResponseListener(p peer.ID, request graphsync.Requ
 	err := hm.events.OnResponseCompleted(chid, success)
 	if err != nil {
 		log.Error(err)
+	}
+}
+
+func (hm *Manager) gsRequestUpdatedHook(p peer.ID, request graphsync.RequestData, update graphsync.RequestData, hookActions graphsync.RequestUpdatedHookActions) {
+
+	hm.graphsyncRequestMapLk.RLock()
+	chid, ok := hm.graphsyncRequestMap[graphsyncKey{request.ID(), p}]
+	hm.graphsyncRequestMapLk.RUnlock()
+
+	if !ok {
+		return
+	}
+
+	msg, err := extension.GetTransferData(update)
+	if err != nil {
+		hookActions.TerminateWithError(err)
+		return
+	}
+
+	// extension not found; probably not our request.
+	if msg == nil {
+		return
+	}
+
+	var responseMessage message.DataTransferMessage
+	if msg.IsRequest() {
+		// only accept request message updates when original message was also request
+		if (chid != datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p}) {
+			err = errors.New("received request on response channel")
+		} else {
+			dtRequest := msg.(message.DataTransferRequest)
+			responseMessage, err = hm.events.OnRequestReceived(chid, dtRequest)
+		}
+	} else {
+		// only accept response message updates when original message was also response
+		if (chid != datatransfer.ChannelID{ID: msg.TransferID(), Initiator: hm.peerID}) {
+			err = errors.New("received response on request channel")
+		} else {
+			dtResponse := msg.(message.DataTransferResponse)
+			err = hm.events.OnResponseReceived(chid, dtResponse)
+		}
+	}
+
+	if responseMessage != nil {
+		extension, extensionErr := extension.ToExtensionData(responseMessage)
+		if extensionErr != nil {
+			hookActions.TerminateWithError(err)
+			return
+		}
+		hookActions.SendExtensionData(extension)
+	}
+
+	if err == ErrResume {
+		hookActions.UnpauseResponse()
+		return
+	}
+
+	if err != nil {
+		hookActions.TerminateWithError(err)
+	}
+
+}
+
+// gsIncomingResponseHook is a graphsync.OnIncomingResponseHook. We use it to pass on responses
+func (hm *Manager) gsIncomingResponseHook(p peer.ID, response graphsync.ResponseData, hookActions graphsync.IncomingResponseHookActions) {
+
+	hm.graphsyncRequestMapLk.RLock()
+	chid, ok := hm.graphsyncRequestMap[graphsyncKey{response.RequestID(), hm.peerID}]
+	hm.graphsyncRequestMapLk.RUnlock()
+
+	if !ok {
+		return
+	}
+
+	// if this is a push request the sender is us.
+	msg, err := extension.GetTransferData(response)
+	if err != nil {
+		hookActions.TerminateWithError(err)
+		return
+	}
+
+	// extension not found; probably not our request.
+	if msg == nil {
+		return
+	}
+
+	var responseMessage message.DataTransferMessage
+	if msg.IsRequest() {
+
+		// only accept request message updates when original message was also request
+		if (chid != datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p}) {
+			err = errors.New("received request on response channel")
+		} else {
+			dtRequest := msg.(message.DataTransferRequest)
+			responseMessage, err = hm.events.OnRequestReceived(chid, dtRequest)
+		}
+	} else {
+
+		// only accept response message updates when original message was also response
+		if (chid != datatransfer.ChannelID{ID: msg.TransferID(), Initiator: hm.peerID}) {
+			err = errors.New("received response on request channel")
+		} else {
+			dtResponse := msg.(message.DataTransferResponse)
+			err = hm.events.OnResponseReceived(chid, dtResponse)
+		}
+	}
+
+	if responseMessage != nil {
+		extension, extensionErr := extension.ToExtensionData(responseMessage)
+		if extensionErr != nil {
+			hookActions.TerminateWithError(err)
+			return
+		}
+		hookActions.UpdateRequestWithExtensions(extension)
+	}
+
+	if err != nil {
+		hookActions.TerminateWithError(err)
 	}
 }

@@ -29,6 +29,8 @@ type FakeGraphSync struct {
 	OutgoingBlockHook         graphsync.OnOutgoingBlockHook
 	IncomingRequestHook       graphsync.OnIncomingRequestHook
 	ResponseCompletedListener graphsync.OnResponseCompletedListener
+	RequestUpdatedHook        graphsync.OnRequestUpdatedHook
+	IncomingResponseHook      graphsync.OnIncomingResponseHook
 }
 
 // NewFakeGraphSync returns a new fake graphsync implementation
@@ -77,7 +79,8 @@ func (fgs *FakeGraphSync) RegisterIncomingRequestHook(hook graphsync.OnIncomingR
 }
 
 // RegisterIncomingResponseHook adds a hook that runs when a response is received
-func (fgs *FakeGraphSync) RegisterIncomingResponseHook(_ graphsync.OnIncomingResponseHook) graphsync.UnregisterHookFunc {
+func (fgs *FakeGraphSync) RegisterIncomingResponseHook(hook graphsync.OnIncomingResponseHook) graphsync.UnregisterHookFunc {
+	fgs.IncomingResponseHook = hook
 	return nil
 }
 
@@ -101,6 +104,7 @@ func (fgs *FakeGraphSync) RegisterIncomingBlockHook(hook graphsync.OnIncomingBlo
 
 // RegisterRequestUpdatedHook adds a hook that runs every time an update to a request is received
 func (fgs *FakeGraphSync) RegisterRequestUpdatedHook(hook graphsync.OnRequestUpdatedHook) graphsync.UnregisterHookFunc {
+	fgs.RequestUpdatedHook = hook
 	return nil
 }
 

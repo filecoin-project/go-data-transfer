@@ -78,19 +78,19 @@ func NewGraphSyncDataTransfer(host host.Host, gs graphsync.GraphExchange, stored
 	return impl
 }
 
-func (impl *graphsyncImpl) OnRequestSent(chid datatransfer.ChannelID) error {
+func (impl *graphsyncImpl) OnChannelOpened(chid datatransfer.ChannelID) error {
 	_, err := impl.channels.GetByID(chid)
 	return err
 }
 
-func (impl *graphsyncImpl) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) error {
+func (impl *graphsyncImpl) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error) {
 	_, err := impl.channels.IncrementReceived(chid, size)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	chst, err := impl.channels.GetByID(chid)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	evt := datatransfer.Event{
 		Code:      datatransfer.Progress,
@@ -101,17 +101,17 @@ func (impl *graphsyncImpl) OnDataReceived(chid datatransfer.ChannelID, link ipld
 	if err != nil {
 		log.Warnf("err publishing DT event: %s", err.Error())
 	}
-	return nil
+	return nil, nil
 }
 
-func (impl *graphsyncImpl) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) error {
+func (impl *graphsyncImpl) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error) {
 	_, err := impl.channels.IncrementSent(chid, size)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	chst, err := impl.channels.GetByID(chid)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	evt := datatransfer.Event{
 		Code:      datatransfer.Progress,
@@ -122,10 +122,15 @@ func (impl *graphsyncImpl) OnDataSent(chid datatransfer.ChannelID, link ipld.Lin
 	if err != nil {
 		log.Warnf("err publishing DT event: %s", err.Error())
 	}
-	return nil
+	return nil, nil
 }
 
-func (impl *graphsyncImpl) OnRequestReceived(chid datatransfer.ChannelID) error {
+func (impl *graphsyncImpl) OnRequestReceived(chid datatransfer.ChannelID, request message.DataTransferRequest) (message.DataTransferResponse, error) {
+	_, err := impl.channels.GetByID(chid)
+	return nil, err
+}
+
+func (impl *graphsyncImpl) OnResponseReceived(chid datatransfer.ChannelID, response message.DataTransferResponse) error {
 	_, err := impl.channels.GetByID(chid)
 	return err
 }
@@ -256,19 +261,12 @@ func (impl *graphsyncImpl) sendDtRequest(ctx context.Context, selector ipld.Node
 	return tid, nil
 }
 
-func (impl *graphsyncImpl) sendResponse(ctx context.Context, isAccepted bool, to peer.ID, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) {
+func (impl *graphsyncImpl) response(isAccepted bool, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (message.DataTransferResponse, error) {
 	var resultType datatransfer.TypeIdentifier
 	if voucherResult != nil {
 		resultType = voucherResult.Type()
 	}
-	resp, err := message.NewResponse(tid, isAccepted, false, false, resultType, voucherResult)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-	if err := impl.dataTransferNetwork.SendMessage(ctx, to, resp); err != nil {
-		log.Error(err)
-	}
+	return message.NewResponse(tid, isAccepted, false, false, resultType, voucherResult)
 }
 
 // close an open channel (effectively a cancel)
@@ -291,11 +289,11 @@ func (impl *graphsyncImpl) InProgressChannels() map[datatransfer.ChannelID]datat
 
 // sendGsRequest assembles a graphsync request and determines if the transfer was completed/successful.
 // notifies subscribers of final request status.
-func (impl *graphsyncImpl) sendGsRequest(ctx context.Context, initiator peer.ID, transferID datatransfer.TransferID, isPull bool, dataSender peer.ID, root cidlink.Link, stor ipld.Node) {
-	extDtData := extension.NewTransferData(transferID, initiator, isPull)
-	var buf bytes.Buffer
-	if err := extDtData.MarshalCBOR(&buf); err != nil {
-		log.Error(err)
+func (impl *graphsyncImpl) sendGsRequest(ctx context.Context, initiator peer.ID, dataSender peer.ID, root cidlink.Link, stor ipld.Node, msg message.DataTransferMessage) error {
+	buf := new(bytes.Buffer)
+	err := msg.ToNet(buf)
+	if err != nil {
+		return err
 	}
 	extData := buf.Bytes()
 	_, errChan := impl.gs.Request(ctx, dataSender, root, stor,
@@ -312,7 +310,7 @@ func (impl *graphsyncImpl) sendGsRequest(ctx context.Context, initiator peer.ID,
 			Code:      datatransfer.Error,
 			Timestamp: time.Now(),
 		}
-		chid := datatransfer.ChannelID{Initiator: initiator, ID: transferID}
+		chid := datatransfer.ChannelID{Initiator: initiator, ID: msg.TransferID()}
 		chst, err := impl.channels.GetByID(chid)
 		if err != nil {
 			msg := "cannot find a matching channel for this request"
@@ -329,6 +327,7 @@ func (impl *graphsyncImpl) sendGsRequest(ctx context.Context, initiator peer.ID,
 			log.Warnf("err publishing DT event: %s", err.Error())
 		}
 	}()
+	return nil
 }
 
 // RegisterRevalidator registers a revalidator for the given voucher type
