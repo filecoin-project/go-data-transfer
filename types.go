@@ -11,6 +11,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
+var ErrChannelNotFound = errors.New("channel not found")
+
 // TypeIdentifier is a unique string identifier for a type of encodable object in a
 // registry
 type TypeIdentifier string

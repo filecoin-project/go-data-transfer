@@ -12,6 +12,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/filecoin-project/go-data-transfer/transport"
+	gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
 	"github.com/filecoin-project/go-storedcounter"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-blockservice"
@@ -159,10 +161,24 @@ func (gsData *GraphsyncTestingData) SetupGraphsyncHost1() graphsync.GraphExchang
 	return gsimpl.New(gsData.Ctx, gsData.GsNet1, gsData.Loader1, gsData.Storer1)
 }
 
+// SetupGSTransportHost1 sets up a new grapshync transport over real graphsync on the first host
+func (gsData *GraphsyncTestingData) SetupGSTransportHost1() transport.Transport {
+	// setup graphsync
+	gs := gsData.SetupGraphsyncHost1()
+	return gstransport.NewTransport(gsData.Host1.ID(), gs)
+}
+
 // SetupGraphsyncHost2 sets up a new, real graphsync instance on top of the second host
 func (gsData *GraphsyncTestingData) SetupGraphsyncHost2() graphsync.GraphExchange {
 	// setup graphsync
 	return gsimpl.New(gsData.Ctx, gsData.GsNet2, gsData.Loader2, gsData.Storer2)
+}
+
+// SetupGSTransportHost2 sets up a new grapshync transport over real graphsync on the second host
+func (gsData *GraphsyncTestingData) SetupGSTransportHost2() transport.Transport {
+	// setup graphsync
+	gs := gsData.SetupGraphsyncHost2()
+	return gstransport.NewTransport(gsData.Host2.ID(), gs)
 }
 
 // LoadUnixFSFile loads a fixtures file we can test dag transfer with

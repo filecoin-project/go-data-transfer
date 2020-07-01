@@ -1,4 +1,4 @@
-package hooks_test
+package graphsync_test
 
 import (
 	"bytes"
@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/impl/graphsync/extension"
-	"github.com/filecoin-project/go-data-transfer/impl/graphsync/hooks"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/testutil"
+	"github.com/filecoin-project/go-data-transfer/transport"
+	. "github.com/filecoin-project/go-data-transfer/transport/graphsync"
+	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
 	"github.com/ipfs/go-graphsync"
 	ipld "github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -358,7 +359,7 @@ func TestManager(t *testing.T) {
 		},
 		"outgoing data send error == pause will pause request": {
 			events: fakeEvents{
-				OnDataSentError: hooks.ErrPause,
+				OnDataSentError: transport.ErrPause,
 			},
 			action: func(gsData *harness) {
 				gsData.incomingRequestHook()
@@ -482,20 +483,6 @@ func TestManager(t *testing.T) {
 					events.RequestReceivedResponse)
 			},
 		},
-		"incoming gs request with recognized dt request err = ErrResume will resume processing": {
-			events: fakeEvents{
-				OnRequestReceivedErrors: []error{nil, hooks.ErrResume},
-			},
-			action: func(gsData *harness) {
-				gsData.incomingRequestHook()
-				gsData.requestUpdatedHook()
-			},
-			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, 2, events.OnRequestReceivedCallCount)
-				require.NoError(t, gsData.requestUpdatedHookActions.TerminationError)
-				require.True(t, gsData.requestUpdatedHookActions.Unpaused)
-			},
-		},
 		"recognized incoming request will record successful request completion": {
 			responseConfig: gsResponseConfig{
 				status: graphsync.RequestCompletedFull,
@@ -567,8 +554,8 @@ func TestManager(t *testing.T) {
 				requestUpdatedHookActions:   &testutil.FakeRequestUpdatedActions{},
 				incomingResponseHookActions: &testutil.FakeIncomingResponseHookActions{},
 			}
-			manager := hooks.NewManager(peers[0], &data.events)
-			manager.RegisterHooks(fgs)
+			transport := NewTransport(peers[0], fgs)
+			transport.SetEventHandler(&data.events)
 			data.action(gsData)
 			data.check(t, &data.events, gsData)
 		})

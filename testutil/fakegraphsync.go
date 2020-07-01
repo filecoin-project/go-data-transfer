@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/filecoin-project/go-data-transfer/impl/graphsync/extension"
 	"github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipld/go-ipld-prime"
@@ -17,18 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ReceivedGraphSyncRequest contains data about a received graphsync request
-type ReceivedGraphSyncRequest struct {
-	P          peer.ID
-	Root       ipld.Link
-	Selector   ipld.Node
-	Extensions []graphsync.ExtensionData
-}
-
-// DTMessage returns the data transfer message among the graphsync extensions sent with this request
-func (gsRequest ReceivedGraphSyncRequest) DTMessage(t *testing.T) message.DataTransferMessage {
+func matchDtMessage(t *testing.T, extensions []graphsync.ExtensionData) message.DataTransferMessage {
 	var matchedExtension *graphsync.ExtensionData
-	for _, ext := range gsRequest.Extensions {
+	for _, ext := range extensions {
 		if ext.Name == extension.ExtensionDataTransfer {
 			matchedExtension = &ext
 			break
@@ -41,9 +32,62 @@ func (gsRequest ReceivedGraphSyncRequest) DTMessage(t *testing.T) message.DataTr
 	return received
 }
 
+// ReceivedGraphSyncRequest contains data about a received graphsync request
+type ReceivedGraphSyncRequest struct {
+	P          peer.ID
+	Root       ipld.Link
+	Selector   ipld.Node
+	Extensions []graphsync.ExtensionData
+}
+
+// DTMessage returns the data transfer message among the graphsync extensions sent with this request
+func (gsRequest ReceivedGraphSyncRequest) DTMessage(t *testing.T) message.DataTransferMessage {
+	return matchDtMessage(t, gsRequest.Extensions)
+}
+
+type PauseRequest struct {
+	RequestID graphsync.RequestID
+}
+
+type ResumeRequest struct {
+	RequestID  graphsync.RequestID
+	Extensions []graphsync.ExtensionData
+}
+
+// DTMessage returns the data transfer message among the graphsync extensions sent with this request
+func (resumeRequest ResumeRequest) DTMessage(t *testing.T) message.DataTransferMessage {
+	return matchDtMessage(t, resumeRequest.Extensions)
+}
+
+type PauseResponse struct {
+	P         peer.ID
+	RequestID graphsync.RequestID
+}
+
+type ResumeResponse struct {
+	P          peer.ID
+	RequestID  graphsync.RequestID
+	Extensions []graphsync.ExtensionData
+}
+
+// DTMessage returns the data transfer message among the graphsync extensions sent with this request
+func (resumeResponse ResumeResponse) DTMessage(t *testing.T) message.DataTransferMessage {
+	return matchDtMessage(t, resumeResponse.Extensions)
+}
+
+type CancelResponse struct {
+	P         peer.ID
+	RequestID graphsync.RequestID
+}
+
 // FakeGraphSync implements a GraphExchange but does nothing
 type FakeGraphSync struct {
 	requests                  chan ReceivedGraphSyncRequest // records calls to fakeGraphSync.Request
+	pauseRequests             chan PauseRequest
+	resumeRequests            chan ResumeRequest
+	pauseResponses            chan PauseResponse
+	resumeResponses           chan ResumeResponse
+	cancelResponses           chan CancelResponse
 	OutgoingRequestHook       graphsync.OnOutgoingRequestHook
 	IncomingBlockHook         graphsync.OnIncomingBlockHook
 	OutgoingBlockHook         graphsync.OnOutgoingBlockHook
@@ -56,7 +100,12 @@ type FakeGraphSync struct {
 // NewFakeGraphSync returns a new fake graphsync implementation
 func NewFakeGraphSync() *FakeGraphSync {
 	return &FakeGraphSync{
-		requests: make(chan ReceivedGraphSyncRequest, 1),
+		requests:        make(chan ReceivedGraphSyncRequest, 1),
+		pauseRequests:   make(chan PauseRequest, 1),
+		resumeRequests:  make(chan ResumeRequest, 1),
+		pauseResponses:  make(chan PauseResponse, 1),
+		resumeResponses: make(chan ResumeResponse, 1),
+		cancelResponses: make(chan CancelResponse, 1),
 	}
 }
 
@@ -74,6 +123,86 @@ func (fgs *FakeGraphSync) AssertRequestReceived(ctx context.Context, t *testing.
 	case requestReceived = <-fgs.requests:
 	}
 	return requestReceived
+}
+
+// AssertNoPauseRequestReceived asserts that no pause requests should ahve been received by this graphsync implementation
+func (fgs *FakeGraphSync) AssertNoPauseRequestReceived(t *testing.T) {
+	require.Empty(t, fgs.pauseRequests, "should not receive pause request")
+}
+
+// AssertPauseRequestReceived asserts a pause request should be received before the context closes (and returns said request)
+func (fgs *FakeGraphSync) AssertPauseRequestReceived(ctx context.Context, t *testing.T) PauseRequest {
+	var pauseRequestReceived PauseRequest
+	select {
+	case <-ctx.Done():
+		t.Fatal("did not receive message sent")
+	case pauseRequestReceived = <-fgs.pauseRequests:
+	}
+	return pauseRequestReceived
+}
+
+// AssertNoResumeRequestReceived asserts that no resume requests should ahve been received by this graphsync implementation
+func (fgs *FakeGraphSync) AssertNoResumeRequestReceived(t *testing.T) {
+	require.Empty(t, fgs.resumeRequests, "should not receive resume request")
+}
+
+// AssertResumeRequestReceived asserts a resume request should be received before the context closes (and returns said request)
+func (fgs *FakeGraphSync) AssertResumeRequestReceived(ctx context.Context, t *testing.T) ResumeRequest {
+	var resumeRequestReceived ResumeRequest
+	select {
+	case <-ctx.Done():
+		t.Fatal("did not receive message sent")
+	case resumeRequestReceived = <-fgs.resumeRequests:
+	}
+	return resumeRequestReceived
+}
+
+// AssertNoPauseResponseReceived asserts that no pause requests should ahve been received by this graphsync implementation
+func (fgs *FakeGraphSync) AssertNoPauseResponseReceived(t *testing.T) {
+	require.Empty(t, fgs.pauseResponses, "should not receive pause request")
+}
+
+// AssertPauseResponseReceived asserts a pause request should be received before the context closes (and returns said request)
+func (fgs *FakeGraphSync) AssertPauseResponseReceived(ctx context.Context, t *testing.T) PauseResponse {
+	var pauseResponseReceived PauseResponse
+	select {
+	case <-ctx.Done():
+		t.Fatal("did not receive message sent")
+	case pauseResponseReceived = <-fgs.pauseResponses:
+	}
+	return pauseResponseReceived
+}
+
+// AssertNoResumeResponseReceived asserts that no resume requests should ahve been received by this graphsync implementation
+func (fgs *FakeGraphSync) AssertNoResumeResponseReceived(t *testing.T) {
+	require.Empty(t, fgs.resumeResponses, "should not receive resume request")
+}
+
+// AssertResumeResponseReceived asserts a resume request should be received before the context closes (and returns said request)
+func (fgs *FakeGraphSync) AssertResumeResponseReceived(ctx context.Context, t *testing.T) ResumeResponse {
+	var resumeResponseReceived ResumeResponse
+	select {
+	case <-ctx.Done():
+		t.Fatal("did not receive message sent")
+	case resumeResponseReceived = <-fgs.resumeResponses:
+	}
+	return resumeResponseReceived
+}
+
+// AssertNoCancelResponseReceived asserts that no responses were cancelled by thiss graphsync implementation
+func (fgs *FakeGraphSync) AssertNoCancelResponseReceived(t *testing.T) {
+	require.Empty(t, fgs.cancelResponses, "should not cancel request")
+}
+
+// AssertCancelResponseReceived asserts a response was cancelled before the context closes (and returns said response)
+func (fgs *FakeGraphSync) AssertCancelResponseReceived(ctx context.Context, t *testing.T) CancelResponse {
+	var cancelResponseReceived CancelResponse
+	select {
+	case <-ctx.Done():
+		t.Fatal("did not receive message sent")
+	case cancelResponseReceived = <-fgs.cancelResponses:
+	}
+	return cancelResponseReceived
 }
 
 // Request initiates a new GraphSync request to the given peer using the given selector spec.
@@ -135,7 +264,32 @@ func (fgs *FakeGraphSync) RegisterCompletedResponseListener(listener graphsync.O
 }
 
 // UnpauseResponse unpauses a response that was paused in a block hook based on peer ID and request ID
-func (fgs *FakeGraphSync) UnpauseResponse(_ peer.ID, _ graphsync.RequestID) error {
+func (fgs *FakeGraphSync) UnpauseResponse(p peer.ID, requestID graphsync.RequestID, extensions ...graphsync.ExtensionData) error {
+	fgs.resumeResponses <- ResumeResponse{p, requestID, extensions}
+	return nil
+}
+
+// PauseResponse pauses a response based on peer ID and request ID
+func (fgs *FakeGraphSync) PauseResponse(p peer.ID, requestID graphsync.RequestID) error {
+	fgs.pauseResponses <- PauseResponse{p, requestID}
+	return nil
+}
+
+// UnpauseRequest unpauses a request that was paused in a block hook based on request ID
+func (fgs *FakeGraphSync) UnpauseRequest(requestID graphsync.RequestID, extensions ...graphsync.ExtensionData) error {
+	fgs.resumeRequests <- ResumeRequest{requestID, extensions}
+	return nil
+}
+
+// PauseRequest unpauses a response that was paused in a block hook based on peer ID and request ID
+func (fgs *FakeGraphSync) PauseRequest(requestID graphsync.RequestID) error {
+	fgs.pauseRequests <- PauseRequest{requestID}
+	return nil
+}
+
+// CancelResponse cancels a response in progress
+func (fgs *FakeGraphSync) CancelResponse(p peer.ID, requestID graphsync.RequestID) error {
+	fgs.cancelResponses <- CancelResponse{p, requestID}
 	return nil
 }
 
@@ -257,9 +411,12 @@ func (fa *FakeOutgoingRequestHookActions) UsePersistenceOption(name string) {}
 func (fa *FakeOutgoingRequestHookActions) UseLinkTargetNodeStyleChooser(_ traversal.LinkTargetNodeStyleChooser) {
 }
 
+var _ graphsync.OutgoingRequestHookActions = &FakeOutgoingRequestHookActions{}
+
 type FakeIncomingBlockHookActions struct {
 	TerminationError error
 	SentExtensions   []graphsync.ExtensionData
+	Paused           bool
 }
 
 func (fa *FakeIncomingBlockHookActions) TerminateWithError(err error) {
@@ -269,6 +426,12 @@ func (fa *FakeIncomingBlockHookActions) TerminateWithError(err error) {
 func (fa *FakeIncomingBlockHookActions) UpdateRequestWithExtensions(extensions ...graphsync.ExtensionData) {
 	fa.SentExtensions = append(fa.SentExtensions, extensions...)
 }
+
+func (fa *FakeIncomingBlockHookActions) PauseRequest() {
+	fa.Paused = true
+}
+
+var _ graphsync.IncomingBlockHookActions = &FakeIncomingBlockHookActions{}
 
 type FakeOutgoingBlockHookActions struct {
 	TerminationError error
@@ -288,10 +451,13 @@ func (fa *FakeOutgoingBlockHookActions) PauseResponse() {
 	fa.Paused = true
 }
 
+var _ graphsync.OutgoingBlockHookActions = &FakeOutgoingBlockHookActions{}
+
 type FakeIncomingRequestHookActions struct {
 	TerminationError error
 	Validated        bool
 	SentExtension    graphsync.ExtensionData
+	Paused           bool
 }
 
 func (fa *FakeIncomingRequestHookActions) SendExtensionData(ext graphsync.ExtensionData) {
@@ -311,6 +477,12 @@ func (fa *FakeIncomingRequestHookActions) ValidateRequest() {
 	fa.Validated = true
 }
 
+func (fa *FakeIncomingRequestHookActions) PauseResponse() {
+	fa.Paused = true
+}
+
+var _ graphsync.IncomingRequestHookActions = &FakeIncomingRequestHookActions{}
+
 type FakeRequestUpdatedActions struct {
 	TerminationError error
 	SentExtension    graphsync.ExtensionData
@@ -329,6 +501,8 @@ func (fa *FakeRequestUpdatedActions) UnpauseResponse() {
 	fa.Unpaused = true
 }
 
+var _ graphsync.RequestUpdatedHookActions = &FakeRequestUpdatedActions{}
+
 type FakeIncomingResponseHookActions struct {
 	TerminationError error
 	SentExtensions   []graphsync.ExtensionData
@@ -341,3 +515,5 @@ func (fa *FakeIncomingResponseHookActions) TerminateWithError(err error) {
 func (fa *FakeIncomingResponseHookActions) UpdateRequestWithExtensions(extensions ...graphsync.ExtensionData) {
 	fa.SentExtensions = append(fa.SentExtensions, extensions...)
 }
+
+var _ graphsync.IncomingResponseHookActions = &FakeIncomingResponseHookActions{}

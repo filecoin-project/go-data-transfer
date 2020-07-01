@@ -1,4 +1,4 @@
-package graphsyncimpl_test
+package impl_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"time"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	. "github.com/filecoin-project/go-data-transfer/impl/graphsync"
+	. "github.com/filecoin-project/go-data-transfer/impl"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/stretchr/testify/assert"
@@ -24,11 +24,11 @@ func TestDataTransferPushRoundTrip(t *testing.T) {
 
 	root := gsData.LoadUnixFSFile(t, false)
 	rootCid := root.(cidlink.Link).Cid
-	gs1 := gsData.SetupGraphsyncHost1()
-	gs2 := gsData.SetupGraphsyncHost2()
+	tp1 := gsData.SetupGSTransportHost1()
+	tp2 := gsData.SetupGSTransportHost2()
 
-	dt1 := NewGraphSyncDataTransfer(host1, gs1, gsData.StoredCounter1)
-	dt2 := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
+	dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
 
 	finished := make(chan struct{}, 2)
 	errChan := make(chan struct{}, 2)
@@ -98,11 +98,11 @@ func TestDataTransferPullRoundTrip(t *testing.T) {
 
 	root := gsData.LoadUnixFSFile(t, false)
 	rootCid := root.(cidlink.Link).Cid
-	gs1 := gsData.SetupGraphsyncHost1()
-	gs2 := gsData.SetupGraphsyncHost2()
+	tp1 := gsData.SetupGSTransportHost1()
+	tp2 := gsData.SetupGSTransportHost2()
 
-	dt1 := NewGraphSyncDataTransfer(host1, gs1, gsData.StoredCounter1)
-	dt2 := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
+	dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
 
 	finished := make(chan struct{}, 2)
 	errChan := make(chan struct{}, 2)

@@ -10,7 +10,7 @@ require (
 	github.com/ipfs/go-blockservice v0.1.3
 	github.com/ipfs/go-cid v0.0.5
 	github.com/ipfs/go-datastore v0.4.4
-	github.com/ipfs/go-graphsync v0.0.6-0.20200527235412-ea9535659648
+	github.com/ipfs/go-graphsync v0.0.6-0.20200630232645-aa09460d0637
 	github.com/ipfs/go-ipfs-blockstore v0.1.4
 	github.com/ipfs/go-ipfs-blocksutil v0.0.1
 	github.com/ipfs/go-ipfs-chunker v0.0.5
@@ -25,6 +25,7 @@ require (
 	github.com/jbenet/go-random v0.0.0-20190219211222-123a90aedc0c
 	github.com/libp2p/go-libp2p v0.6.0
 	github.com/libp2p/go-libp2p-core v0.5.0
+	github.com/libp2p/go-libp2p-peer v0.2.0
 	github.com/prometheus/common v0.10.0
 	github.com/stretchr/testify v1.5.1
 	github.com/whyrusleeping/cbor-gen v0.0.0-20200402171437-3d27c146c105

@@ -1,4 +1,4 @@
-package graphsyncimpl_test
+package impl_test
 
 import (
 	"context"
@@ -10,10 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	. "github.com/filecoin-project/go-data-transfer/impl/graphsync"
+	. "github.com/filecoin-project/go-data-transfer/impl"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/testutil"
+	tp "github.com/filecoin-project/go-data-transfer/transport/graphsync"
 )
 
 func TestSendResponseToIncomingRequest(t *testing.T) {
@@ -34,7 +35,7 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 	dtnet1.SetDelegate(r)
 
 	gs2 := testutil.NewFakeGraphSync()
-
+	tp2 := tp.NewTransport(host2.ID(), gs2)
 	voucher := testutil.NewFakeDTType()
 	baseCid := testutil.GenerateCids(1)[0]
 
@@ -43,7 +44,7 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv := newSV()
 		sv.expectSuccessPush()
 
-		dt := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
+		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
 		require.NoError(t, dt.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 		isPull := false
@@ -74,7 +75,7 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		id := datatransfer.TransferID(rand.Int31())
 		sv := newSV()
 		sv.expectErrorPush()
-		dt := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
+		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
 		err := dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
@@ -110,7 +111,7 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv := newSV()
 		sv.expectSuccessPull()
 
-		dt := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
+		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
 		err := dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
@@ -151,7 +152,7 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv := newSV()
 		sv.expectErrorPull()
 
-		dt := NewGraphSyncDataTransfer(host2, gs2, gsData.StoredCounter2)
+		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
 		err := dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
