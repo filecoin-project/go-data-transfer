@@ -77,6 +77,7 @@ func (c channel) OtherParty(thisParty peer.ID) peer.ID {
 // ChannelState is immutable channel data plus mutable state
 type ChannelState struct {
 	datatransfer.Channel
+	status datatransfer.Status
 	// total bytes sent from this node (0 if receiver)
 	sent uint64
 	// total bytes received by this node (0 if sender)
@@ -86,6 +87,9 @@ type ChannelState struct {
 // EmptyChannelState is the zero value for channel state, meaning not present
 var EmptyChannelState = ChannelState{}
 
+// Status is the current status of this channel
+func (c ChannelState) Status() datatransfer.Status { return c.status }
+
 // Sent returns the number of bytes sent
 func (c ChannelState) Sent() uint64 { return c.sent }
 
@@ -94,6 +98,7 @@ func (c ChannelState) Received() uint64 { return c.received }
 
 type internalChannel struct {
 	datatransfer.Channel
+	status   *uint64
 	sent     *uint64
 	received *uint64
 }
@@ -128,7 +133,11 @@ func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selec
 	if ok {
 		return chid, errors.New("tried to create channel but it already exists")
 	}
-	c.channels[chid] = internalChannel{Channel: NewChannel(0, baseCid, selector, voucher, dataSender, dataReceiver, 0), sent: new(uint64), received: new(uint64)}
+	c.channels[chid] = internalChannel{
+		Channel:  NewChannel(0, baseCid, selector, voucher, dataSender, dataReceiver, 0),
+		status:   new(uint64),
+		sent:     new(uint64),
+		received: new(uint64)}
 	return chid, nil
 }
 
@@ -139,7 +148,10 @@ func (c *Channels) InProgress() map[datatransfer.ChannelID]datatransfer.ChannelS
 	channelsCopy := make(map[datatransfer.ChannelID]datatransfer.ChannelState, len(c.channels))
 	for channelID, internalChannel := range c.channels {
 		channelsCopy[channelID] = ChannelState{
-			internalChannel.Channel, atomic.LoadUint64(internalChannel.sent), atomic.LoadUint64(internalChannel.received),
+			internalChannel.Channel,
+			datatransfer.Status(atomic.LoadUint64(internalChannel.status)),
+			atomic.LoadUint64(internalChannel.sent),
+			atomic.LoadUint64(internalChannel.received),
 		}
 	}
 	return channelsCopy
@@ -155,7 +167,10 @@ func (c *Channels) GetByID(chid datatransfer.ChannelID) (datatransfer.ChannelSta
 		return EmptyChannelState, ErrNotFound
 	}
 	return ChannelState{
-		internalChannel.Channel, atomic.LoadUint64(internalChannel.sent), atomic.LoadUint64(internalChannel.received),
+		internalChannel.Channel,
+		datatransfer.Status(atomic.LoadUint64(internalChannel.status)),
+		atomic.LoadUint64(internalChannel.sent),
+		atomic.LoadUint64(internalChannel.received),
 	}, nil
 }
 
@@ -181,4 +196,27 @@ func (c *Channels) IncrementReceived(chid datatransfer.ChannelID, delta uint64) 
 		return 0, ErrNotFound
 	}
 	return atomic.AddUint64(channel.received, delta), nil
+}
+
+// SetStatus sets the current status of the channel
+func (c *Channels) SetStatus(chid datatransfer.ChannelID, status datatransfer.Status) error {
+	c.channelsLk.RLock()
+	channel, ok := c.channels[chid]
+	c.channelsLk.RUnlock()
+	if !ok {
+		return ErrNotFound
+	}
+	atomic.StoreUint64(channel.status, uint64(status))
+	return nil
+}
+
+// GetStatus gets the current status of the channel
+func (c *Channels) GetStatus(chid datatransfer.ChannelID) datatransfer.Status {
+	c.channelsLk.RLock()
+	channel, ok := c.channels[chid]
+	c.channelsLk.RUnlock()
+	if !ok {
+		return datatransfer.ChannelNotFoundError
+	}
+	return datatransfer.Status(atomic.LoadUint64(channel.status))
 }

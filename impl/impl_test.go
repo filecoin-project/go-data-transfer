@@ -83,6 +83,7 @@ func TestDataTransferOneWay(t *testing.T) {
 	gs := testutil.NewFakeGraphSync()
 	tp := tp.NewTransport(host1.ID(), gs)
 	dt := NewDataTransfer(host1, tp, gsData.StoredCounter1)
+	dt.Start(ctx)
 
 	t.Run("OpenPushDataTransfer", func(t *testing.T) {
 		ssb := builder.NewSelectorSpecBuilder(basicnode.Style.Any)
@@ -276,6 +277,8 @@ func TestDataTransferValidation(t *testing.T) {
 
 	id := datatransfer.TransferID(rand.Int31())
 	dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+	dt2.Start(ctx)
+
 	err := dt2.RegisterVoucherType(&testutil.FakeDTType{}, fv)
 	require.NoError(t, err)
 
@@ -424,6 +427,7 @@ func TestGraphsyncImpl_RegisterVoucherType(t *testing.T) {
 	gs1 := testutil.NewFakeGraphSync()
 	tp1 := tp.NewTransport(host1.ID(), gs1)
 	dt := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt.Start(ctx)
 	fv := &fakeValidator{ctx, make(chan receivedValidation)}
 
 	// a voucher type can be registered
@@ -457,7 +461,7 @@ func TestDataTransferSubscribing(t *testing.T) {
 	baseCid := testutil.GenerateCids(1)[0]
 
 	dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
-
+	dt1.Start(ctx)
 	subscribe1Calls := make(chan struct{}, 1)
 	subscribe1 := func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 		if event.Code == datatransfer.Error {
@@ -552,6 +556,8 @@ func TestDataTransferInitiatingPushGraphsyncRequests(t *testing.T) {
 		sv.expectSuccessPush()
 
 		dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt2.Start(ctx)
+
 		require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
@@ -575,6 +581,8 @@ func TestDataTransferInitiatingPushGraphsyncRequests(t *testing.T) {
 		sv.expectErrorPush()
 
 		dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt2.Start(ctx)
+
 		require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
@@ -608,6 +616,7 @@ func TestDataTransferInitiatingPullGraphsyncRequests(t *testing.T) {
 		defer cancel()
 
 		dtInit := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+		dtInit.Start(ctx)
 
 		_, err := dtInit.OpenPullDataChannel(ctx, host2.ID(), &voucher, baseCid, gsData.AllSelector)
 		require.NoError(t, err)
@@ -632,6 +641,7 @@ func TestDataTransferInitiatingPullGraphsyncRequests(t *testing.T) {
 		defer cancel()
 
 		dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+		dt1.Start(ctx)
 
 		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, baseCid, gsData.AllSelector)
 		require.NoError(t, err)
@@ -704,6 +714,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 
 	tp1 := gsData.SetupGSTransportHost1()
 	dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt1.Start(ctx)
 
 	t.Run("when request is initiated", func(t *testing.T) {
 		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, link.(cidlink.Link).Cid, gsData.AllSelector)
@@ -783,6 +794,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 	gs1 := gsData.SetupGraphsyncHost1()
 	tp1 := tp.NewTransport(host1.ID(), gs1)
 	dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt1.Start(ctx)
 
 	t.Run("when it's not our extension, does not error and does not validate", func(t *testing.T) {
 		//register a hook that validates the request so we don't fail in gs because the request
@@ -837,6 +849,8 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		sv.expectSuccessPull()
 
 		dt1 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt1.Start(ctx)
+
 		require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 		_, _, request := createDTRequest(t, true, id, gsData.AllSelector)
@@ -862,6 +876,8 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		sv := newSV()
 		sv.expectErrorPull()
 		dt1 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt1.Start(ctx)
+
 		require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 		_, _, dtRequest := createDTRequest(t, true, id, gsData.AllSelector)

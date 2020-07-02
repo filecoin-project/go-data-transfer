@@ -36,17 +36,29 @@ type Voucher Registerable
 type VoucherResult Registerable
 
 // Status is the status of transfer for a given channel
-type Status int
+type Status uint64
 
 const (
+	// Requested means a data transfer was requested by has not yet been approved
+	Requested Status = iota
+
 	// Ongoing means the data transfer is in progress
-	Ongoing Status = iota
+	Ongoing
 
 	// Completed means the data transfer is completed successfully
 	Completed
 
 	// Failed means the data transfer failed
 	Failed
+
+	// PausedSender means the data sender has paused the channel (only the sender can unpause this)
+	PausedSender
+
+	// PausedReceiver means the data receiver has paused the channel (only the receiver can unpause this)
+	PausedReceiver
+
+	// PausedBoth means both sender and receiver have paused the channel seperately (both must unpause)
+	PausedBoth
 
 	// ChannelNotFoundError means the searched for data transfer does not exist
 	ChannelNotFoundError
@@ -98,6 +110,9 @@ type Channel interface {
 type ChannelState interface {
 	Channel
 
+	// Status is the current status of this channel
+	Status() Status
+
 	// Sent returns the number of bytes sent
 	Sent() uint64
 
@@ -120,6 +135,18 @@ const (
 
 	// Error is an event that emits when an error occurs in a data transfer
 	Error
+
+	// SenderPaused emits when the data sender pauses transfer
+	SenderPaused
+
+	// SenderResumed emits when the data sender resumes transfer
+	SenderResumed
+
+	// ReceiverPaused emits when the data receiver pauses transfer
+	ReceiverPaused
+
+	// ReceiverResumed emits when the data receiver resumes transfer
+	ReceiverResumed
 
 	// Complete is emitted when a data transfer is complete
 	Complete
@@ -177,6 +204,13 @@ type Revalidator interface {
 // Manager is the core interface presented by all implementations of
 // of the data transfer sub system
 type Manager interface {
+
+	// Start initializes data transfer processing
+	Start(ctx context.Context) error
+
+	// Stop terminates all data transfers and ends processing
+	Stop() error
+
 	// RegisterVoucherType registers a validator for the given voucher type
 	// will error if voucher type does not implement voucher
 	// or if there is a voucher type registered with an identical identifier

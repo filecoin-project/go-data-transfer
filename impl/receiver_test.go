@@ -45,6 +45,8 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv.expectSuccessPush()
 
 		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt.Start(ctx)
+
 		require.NoError(t, dt.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 		isPull := false
@@ -76,6 +78,8 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv := newSV()
 		sv.expectErrorPush()
 		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt.Start(ctx)
+
 		err := dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
@@ -112,6 +116,8 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv.expectSuccessPull()
 
 		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt.Start(ctx)
+
 		err := dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
@@ -153,6 +159,8 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv.expectErrorPull()
 
 		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt.Start(ctx)
+
 		err := dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 

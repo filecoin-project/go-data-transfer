@@ -99,4 +99,24 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, uint64(125), sent)
 		require.NoError(t, err)
 	})
+
+	t.Run("updating status", func(t *testing.T) {
+		state, err := channelList.GetByID(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
+		require.NoError(t, err)
+		require.NotEqual(t, channels.EmptyChannelState, state)
+		require.Equal(t, datatransfer.Requested, state.Status())
+
+		err = channelList.SetStatus(datatransfer.ChannelID{Initiator: peers[0], ID: tid1}, datatransfer.PausedReceiver)
+		require.NoError(t, err)
+		require.Equal(t, datatransfer.PausedReceiver, channelList.GetStatus(datatransfer.ChannelID{Initiator: peers[0], ID: tid1}))
+
+		state, err = channelList.GetByID(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
+		require.NoError(t, err)
+		require.Equal(t, datatransfer.PausedReceiver, state.Status())
+
+		// errors if channel does not exist
+		err = channelList.SetStatus(datatransfer.ChannelID{Initiator: peers[1], ID: tid1}, datatransfer.Completed)
+		require.EqualError(t, err, channels.ErrNotFound.Error())
+		require.Equal(t, datatransfer.ChannelNotFoundError, channelList.GetStatus(datatransfer.ChannelID{Initiator: peers[1], ID: tid1}))
+	})
 }

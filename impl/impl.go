@@ -67,10 +67,19 @@ func NewDataTransfer(host host.Host, transport transport.Transport, storedCounte
 		storedCounter:       storedCounter,
 	}
 
-	dtReceiver := &receiver{m}
-	dataTransferNetwork.SetDelegate(dtReceiver)
-	transport.SetEventHandler(m)
 	return m
+}
+
+// Start initializes data transfer processing
+func (m *manager) Start(ctx context.Context) error {
+	dtReceiver := &receiver{m}
+	m.dataTransferNetwork.SetDelegate(dtReceiver)
+	return m.transport.SetEventHandler(m)
+}
+
+// Stop terminates all data transfers and ends processing
+func (m *manager) Stop() error {
+	return nil
 }
 
 func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
@@ -277,8 +286,8 @@ func (m *manager) response(isAccepted bool, tid datatransfer.TransferID, voucher
 func (m *manager) CloseDataTransferChannel(x datatransfer.ChannelID) {}
 
 // get status of a transfer
-func (m *manager) TransferChannelStatus(x datatransfer.ChannelID) datatransfer.Status {
-	return datatransfer.ChannelNotFoundError
+func (m *manager) TransferChannelStatus(chid datatransfer.ChannelID) datatransfer.Status {
+	return m.channels.GetStatus(chid)
 }
 
 // get notified when certain types of events happen
