@@ -11,6 +11,8 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
+//go:generate cbor-gen-for channel ChannelState
+
 // channel represents all the parameters for a single data transfer
 type channel struct {
 	// an identifier for this channel shared by request and responder, set by requester through protocol
@@ -29,13 +31,13 @@ type channel struct {
 	totalSize uint64
 }
 
-// NewChannel makes a new channel
-func NewChannel(transferID datatransfer.TransferID, baseCid cid.Cid,
+// newChannel makes a new channel
+func newChannel(transferID datatransfer.TransferID, baseCid cid.Cid,
 	selector ipld.Node,
 	voucher datatransfer.Voucher,
 	sender peer.ID,
 	recipient peer.ID,
-	totalSize uint64) datatransfer.Channel {
+	totalSize uint64) channel {
 	return channel{transferID, baseCid, selector, voucher, sender, recipient, totalSize}
 }
 
@@ -76,7 +78,7 @@ func (c channel) OtherParty(thisParty peer.ID) peer.ID {
 
 // ChannelState is immutable channel data plus mutable state
 type ChannelState struct {
-	datatransfer.Channel
+	channel
 	status datatransfer.Status
 	// total bytes sent from this node (0 if receiver)
 	sent uint64
@@ -97,7 +99,7 @@ func (c ChannelState) Sent() uint64 { return c.sent }
 func (c ChannelState) Received() uint64 { return c.received }
 
 type internalChannel struct {
-	datatransfer.Channel
+	channel
 	status   *uint64
 	sent     *uint64
 	received *uint64
@@ -134,7 +136,7 @@ func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selec
 		return chid, errors.New("tried to create channel but it already exists")
 	}
 	c.channels[chid] = internalChannel{
-		Channel:  NewChannel(0, baseCid, selector, voucher, dataSender, dataReceiver, 0),
+		channel:  newChannel(0, baseCid, selector, voucher, dataSender, dataReceiver, 0),
 		status:   new(uint64),
 		sent:     new(uint64),
 		received: new(uint64)}
@@ -148,7 +150,7 @@ func (c *Channels) InProgress() map[datatransfer.ChannelID]datatransfer.ChannelS
 	channelsCopy := make(map[datatransfer.ChannelID]datatransfer.ChannelState, len(c.channels))
 	for channelID, internalChannel := range c.channels {
 		channelsCopy[channelID] = ChannelState{
-			internalChannel.Channel,
+			internalChannel.channel,
 			datatransfer.Status(atomic.LoadUint64(internalChannel.status)),
 			atomic.LoadUint64(internalChannel.sent),
 			atomic.LoadUint64(internalChannel.received),
@@ -167,7 +169,7 @@ func (c *Channels) GetByID(chid datatransfer.ChannelID) (datatransfer.ChannelSta
 		return EmptyChannelState, ErrNotFound
 	}
 	return ChannelState{
-		internalChannel.Channel,
+		internalChannel.channel,
 		datatransfer.Status(atomic.LoadUint64(internalChannel.status)),
 		atomic.LoadUint64(internalChannel.sent),
 		atomic.LoadUint64(internalChannel.received),
