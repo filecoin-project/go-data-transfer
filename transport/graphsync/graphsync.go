@@ -137,20 +137,23 @@ func (t *Transport) ResumeChannel(ctx context.Context,
 	if !ok {
 		return transport.ErrChannelNotFound
 	}
-	buf := new(bytes.Buffer)
-	err := msg.ToNet(buf)
-	if err != nil {
-		return err
-	}
-	extData := buf.Bytes()
-	extension := graphsync.ExtensionData{
-		Name: extension.ExtensionDataTransfer,
-		Data: extData,
+	var extensions []graphsync.ExtensionData
+	if msg != nil {
+		buf := new(bytes.Buffer)
+		err := msg.ToNet(buf)
+		if err != nil {
+			return err
+		}
+		extData := buf.Bytes()
+		extensions = append(extensions, graphsync.ExtensionData{
+			Name: extension.ExtensionDataTransfer,
+			Data: extData,
+		})
 	}
 	if gsKey.p == t.peerID {
-		return t.gs.UnpauseRequest(gsKey.requestID, extension)
+		return t.gs.UnpauseRequest(gsKey.requestID, extensions...)
 	}
-	return t.gs.UnpauseResponse(gsKey.p, gsKey.requestID, extension)
+	return t.gs.UnpauseResponse(gsKey.p, gsKey.requestID, extensions...)
 }
 
 // CloseChannel closes the given channel

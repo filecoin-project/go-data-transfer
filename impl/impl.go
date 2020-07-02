@@ -130,11 +130,7 @@ func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size u
 }
 
 func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request message.DataTransferRequest) (message.DataTransferResponse, error) {
-	_, err := m.channels.GetByID(chid)
-	if err != nil {
-		return m.receiveRequest(chid.Initiator, request)
-	}
-	return nil, errors.New("Channel exists")
+	return m.receiveNewRequest(chid.Initiator, request)
 }
 
 func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response message.DataTransferResponse) error {
@@ -315,14 +311,15 @@ func (m *manager) RegisterVoucherResultType(resultType datatransfer.VoucherResul
 	panic("not implemented")
 }
 
-func (m *manager) receiveRequest(
+func (m *manager) receiveNewRequest(
 	initiator peer.ID,
 	incoming message.DataTransferRequest) (message.DataTransferResponse, error) {
 	result, err := m.acceptRequest(initiator, incoming)
-	if err != nil {
-		log.Error(err)
+	msg, msgErr := m.response(err == nil, incoming.TransferID(), result)
+	if msgErr != nil {
+		return nil, msgErr
 	}
-	return m.response(err == nil, incoming.TransferID(), result)
+	return msg, err
 }
 
 func (m *manager) acceptRequest(
@@ -398,9 +395,5 @@ func (m *manager) validateVoucher(sender peer.ID, incoming message.DataTransferR
 	}
 
 	result, err := validatorFunc(sender, vouch, incoming.BaseCid(), stor)
-	if err != nil {
-		return nil, result, err
-	}
-
-	return vouch, result, nil
+	return vouch, result, err
 }

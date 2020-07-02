@@ -2,13 +2,13 @@ package impl
 
 import (
 	"context"
-	"time"
 
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/transport"
 )
 
 type receiver struct {
@@ -21,20 +21,43 @@ func (r *receiver) ReceiveRequest(
 	ctx context.Context,
 	initiator peer.ID,
 	incoming message.DataTransferRequest) {
-	response, err := r.manager.receiveRequest(initiator, incoming)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-	if response.Accepted() && !incoming.IsPull() {
-		stor, _ := incoming.Selector()
-		r.manager.transport.OpenChannel(ctx, initiator, datatransfer.ChannelID{Initiator: initiator, ID: incoming.TransferID()}, cidlink.Link{Cid: incoming.BaseCid()}, stor, response)
-		return
-	}
-	err = r.manager.dataTransferNetwork.SendMessage(ctx, initiator, response)
+	err := r.receiveRequest(ctx, initiator, incoming)
 	if err != nil {
 		log.Error(err)
 	}
+}
+
+func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incoming message.DataTransferRequest) error {
+	chid := datatransfer.ChannelID{Initiator: initiator, ID: incoming.TransferID()}
+	response, receiveErr := r.manager.OnRequestReceived(chid, incoming)
+
+	if receiveErr == transport.ErrResume {
+		return r.manager.transport.(transport.PauseableTransport).ResumeChannel(ctx, response, chid)
+	}
+
+	if response != nil {
+		if !response.IsUpdate() && response.Accepted() && !incoming.IsPull() {
+			stor, _ := incoming.Selector()
+			if err := r.manager.transport.OpenChannel(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, response); err != nil {
+				return err
+			}
+		} else {
+			if err := r.manager.dataTransferNetwork.SendMessage(ctx, initiator, response); err != nil {
+				return err
+			}
+		}
+	}
+
+	if receiveErr == transport.ErrPause {
+		return r.manager.transport.(transport.PauseableTransport).PauseChannel(ctx, chid)
+	}
+
+	if receiveErr != nil {
+		_ = r.manager.transport.CloseChannel(ctx, chid)
+		return receiveErr
+	}
+
+	return nil
 }
 
 // ReceiveResponse handles responses to our  Push or Pull data transfer request.
@@ -43,35 +66,29 @@ func (r *receiver) ReceiveResponse(
 	ctx context.Context,
 	sender peer.ID,
 	incoming message.DataTransferResponse) {
-	evt := datatransfer.Event{
-		Code:      datatransfer.Error,
-		Message:   "",
-		Timestamp: time.Now(),
+	err := r.receiveResponse(ctx, sender, incoming)
+	if err != nil {
+		log.Error(err)
 	}
+}
+func (r *receiver) receiveResponse(
+	ctx context.Context,
+	sender peer.ID,
+	incoming message.DataTransferResponse) error {
 	chid := datatransfer.ChannelID{Initiator: r.manager.peerID, ID: incoming.TransferID()}
-	chst, err := r.manager.channels.GetByID(chid)
-	if err != nil {
-		log.Warnf("received response from unknown peer %s, transfer ID %d", sender, incoming.TransferID)
-		return
-	}
+	err := r.manager.OnResponseReceived(chid, incoming)
 
-	if incoming.Accepted() {
-		evt.Code = datatransfer.Progress
-		// if we are handling a response to a pull request then they are sending data and the
-		// initiator is us
-		if chst.Sender() == sender {
-			baseCid := chst.BaseCID()
-			root := cidlink.Link{Cid: baseCid}
-			request, err := message.NewRequest(chid.ID, true, chst.Voucher().Type(), chst.Voucher(), baseCid, chst.Selector())
-			if err == nil {
-				r.manager.transport.OpenChannel(ctx, sender, chid, root, chst.Selector(), request)
-			}
-		}
+	if err == transport.ErrResume {
+		return r.manager.transport.(transport.PauseableTransport).ResumeChannel(ctx, nil, chid)
 	}
-	err = r.manager.pubSub.Publish(internalEvent{evt, chst})
+	if err == transport.ErrPause {
+		return r.manager.transport.(transport.PauseableTransport).PauseChannel(ctx, chid)
+	}
 	if err != nil {
-		log.Warnf("err publishing DT event: %s", err.Error())
+		_ = r.manager.transport.CloseChannel(ctx, chid)
+		return err
 	}
+	return nil
 }
 
 func (r *receiver) ReceiveError(err error) {

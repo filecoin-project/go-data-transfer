@@ -41,6 +41,10 @@ const ErrChannelNotFound = errorType("channel not found")
 // use to pause the channel
 const ErrPause = errorType("pause channel")
 
+// ErrResume is a special error that the RequestReceived / ResponseReceived hooks can
+// use to resume the channel
+const ErrResume = errorType("resume channel")
+
 // Events are semantic data transfer events that happen as a result of graphsync hooks
 type Events interface {
 	// OnChannelOpened is called when we ask the other peer to send us data on the
@@ -97,7 +101,7 @@ type Transport interface {
 	SetEventHandler(events Events) error
 }
 
-// PauseableTransport is a transport that can also pause and resume requests
+// PauseableTransport is a transport that can also pause and resume channels
 type PauseableTransport interface {
 	Transport
 	// PauseChannel paused the given channel ID
