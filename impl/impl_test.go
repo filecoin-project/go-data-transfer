@@ -456,6 +456,7 @@ func TestDataTransferSubscribing(t *testing.T) {
 	sv.stubErrorPull()
 	sv.stubErrorPush()
 	dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+	dt2.Start(ctx)
 	require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 	voucher := testutil.FakeDTType{Data: "applesauce"}
 	baseCid := testutil.GenerateCids(1)[0]

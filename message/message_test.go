@@ -177,6 +177,33 @@ func TestRequestUpdate(t *testing.T) {
 	require.Equal(t, deserializedRequest.IsPaused(), req.IsPaused())
 	testutil.AssertEqualFakeDTVoucher(t, req, deserializedRequest)
 }
+func TestRequestUpdateEmptyVoucher(t *testing.T) {
+
+	id := datatransfer.TransferID(rand.Int31())
+	req, err := UpdateRequest(id, true, "", nil)
+	require.NoError(t, err)
+	require.Equal(t, req.TransferID(), id)
+	require.True(t, req.IsRequest())
+	require.False(t, req.IsCancel())
+	require.True(t, req.IsUpdate())
+	require.True(t, req.IsPaused())
+	require.True(t, req.EmptyVoucher())
+
+	wbuf := new(bytes.Buffer)
+	require.NoError(t, req.ToNet(wbuf))
+
+	deserialized, err := FromNet(wbuf)
+	require.NoError(t, err)
+
+	deserializedRequest, ok := deserialized.(DataTransferRequest)
+	require.True(t, ok)
+	require.Equal(t, deserializedRequest.TransferID(), req.TransferID())
+	require.Equal(t, deserializedRequest.IsCancel(), req.IsCancel())
+	require.Equal(t, deserializedRequest.IsRequest(), req.IsRequest())
+	require.Equal(t, deserializedRequest.IsUpdate(), req.IsUpdate())
+	require.Equal(t, deserializedRequest.IsPaused(), req.IsPaused())
+	require.True(t, req.EmptyVoucher())
+}
 
 func TestToNetFromNetEquivalency(t *testing.T) {
 	baseCid := testutil.GenerateCids(1)[0]

@@ -67,6 +67,10 @@ func (trq *transferRequest) Voucher(decoder encoding.Decoder) (encoding.Encodabl
 	return decoder.DecodeFromCbor(trq.Vouch.Raw)
 }
 
+func (trq *transferRequest) EmptyVoucher() bool {
+	return trq.VTyp == datatransfer.EmptyTypeIdentifier
+}
+
 // BaseCid returns the Base CID
 func (trq *transferRequest) BaseCid() cid.Cid {
 	if trq.BCid == nil {

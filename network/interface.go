@@ -29,15 +29,6 @@ type DataTransferNetwork interface {
 
 	// ConnectTo establishes a connection to the given peer
 	ConnectTo(context.Context, peer.ID) error
-
-	NewMessageSender(context.Context, peer.ID) (MessageSender, error)
-}
-
-// MessageSender is an interface to send messages to a peer
-type MessageSender interface {
-	SendMsg(context.Context, message.DataTransferMessage) error
-	Close() error
-	Reset() error
 }
 
 // Receiver is an interface for receiving messages from the GraphSyncNetwork.

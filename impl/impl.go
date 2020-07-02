@@ -87,14 +87,14 @@ func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
 	return err
 }
 
-func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error) {
+func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) error {
 	_, err := m.channels.IncrementReceived(chid, size)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	chst, err := m.channels.GetByID(chid)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	evt := datatransfer.Event{
 		Code:      datatransfer.Progress,
@@ -105,7 +105,7 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 	if err != nil {
 		log.Warnf("err publishing DT event: %s", err.Error())
 	}
-	return nil, nil
+	return nil
 }
 
 func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error) {
@@ -134,8 +134,25 @@ func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request message
 }
 
 func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response message.DataTransferResponse) error {
-	_, err := m.channels.GetByID(chid)
-	return err
+	chst, err := m.channels.GetByID(chid)
+	if err != nil {
+		return err
+	}
+	evt := datatransfer.Event{
+		Code:      datatransfer.Error,
+		Timestamp: time.Now(),
+	}
+	if response.Accepted() {
+		evt.Code = datatransfer.Accepted
+		evt.Message = "Response accepted!"
+	} else {
+		evt.Message = "Response Rejected"
+	}
+	err = m.pubSub.Publish(internalEvent{evt, chst})
+	if err != nil {
+		log.Warnf("err publishing DT event: %s", err.Error())
+	}
+	return nil
 }
 
 func (m *manager) OnResponseCompleted(chid datatransfer.ChannelID, success bool) error {
@@ -279,7 +296,19 @@ func (m *manager) response(isAccepted bool, tid datatransfer.TransferID, voucher
 }
 
 // close an open channel (effectively a cancel)
-func (m *manager) CloseDataTransferChannel(x datatransfer.ChannelID) {}
+func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	return nil
+}
+
+// pause a running data transfer channel
+func (m *manager) PauseDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	return nil
+}
+
+// resume a running data transfer channel
+func (m *manager) ResumeDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	return nil
+}
 
 // get status of a transfer
 func (m *manager) TransferChannelStatus(chid datatransfer.ChannelID) datatransfer.Status {

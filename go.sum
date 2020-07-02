@@ -59,7 +59,6 @@ github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2/go.mod h1:SqUrOPUn
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/filecoin-project/go-storedcounter v0.0.0-20200421200003-1c99c62e8a5b h1:fkRZSPrYpk42PV3/lIXiL0LHetxde7vyYYvSsttQtfg=
 github.com/filecoin-project/go-storedcounter v0.0.0-20200421200003-1c99c62e8a5b/go.mod h1:Q0GQOBtKf1oE10eSXSlhN45kDBdGvEcVOqMiffqX+N8=
-github.com/filecoin-project/lotus v0.3.2 h1:gRmwDMLmz+5vLztExsjk3klSNQnbwctwklFmUm9kJ4o=
 github.com/fsnotify/fsnotify v1.4.7 h1:IXs+QLmnXW2CcXuY+8Mzv/fWEsPGWxqefPtCP5CnV9I=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/go-check/check v0.0.0-20180628173108-788fd7840127 h1:0gkP6mzaMqkmpcJYCFOLkIBwI7xFExG03bbkOkCvUPI=
@@ -150,10 +149,8 @@ github.com/ipfs/go-ds-badger v0.0.5/go.mod h1:g5AuuCGmr7efyzQhLL8MzwqcauPojGPUaH
 github.com/ipfs/go-ds-badger v0.2.1/go.mod h1:Tx7l3aTph3FMFrRS838dcSJh+jjA7cX9DrGVwx/NOwE=
 github.com/ipfs/go-ds-leveldb v0.0.1/go.mod h1:feO8V3kubwsEF22n0YRQCffeb79OOYIykR4L04tMOYc=
 github.com/ipfs/go-ds-leveldb v0.4.1/go.mod h1:jpbku/YqBSsBc1qgME8BkWS4AxzF2cEu1Ii2r79Hh9s=
-github.com/ipfs/go-graphsync v0.0.6-0.20200527235412-ea9535659648 h1:OEyYvBH/4gUd4Hskef1CRBqQ4fpnlwQW3pj8taPt8ko=
-github.com/ipfs/go-graphsync v0.0.6-0.20200527235412-ea9535659648/go.mod h1:jMXfqIEDFukLPZHqDPp8tJMbHO9Rmeb9CEGevngQbmE=
-github.com/ipfs/go-graphsync v0.0.6-0.20200630232645-aa09460d0637 h1:j0pGO5A/b+GOph0iEshlFYqT30890haSI74qR7SK4uQ=
-github.com/ipfs/go-graphsync v0.0.6-0.20200630232645-aa09460d0637/go.mod h1:4htIl/cpQ2vS80RlH9LPaABTp7uYjybMiv3BlytKFh4=
+github.com/ipfs/go-graphsync v0.0.6-0.20200702144636-7e942b4defc3 h1:t9Ja6b31XzpOHlKsc3ofv/SJ2k9MbKEcCtbGH5EUUY8=
+github.com/ipfs/go-graphsync v0.0.6-0.20200702144636-7e942b4defc3/go.mod h1:4htIl/cpQ2vS80RlH9LPaABTp7uYjybMiv3BlytKFh4=
 github.com/ipfs/go-ipfs-blockstore v0.0.1/go.mod h1:d3WClOmRQKFnJ0Jz/jj/zmksX0ma1gROTlovZKBmN08=
 github.com/ipfs/go-ipfs-blockstore v0.1.0/go.mod h1:5aD0AvHPi7mZc6Ci1WCAhiBQu2IsfTduLl+422H6Rqw=
 github.com/ipfs/go-ipfs-blockstore v0.1.4 h1:2SGI6U1B44aODevza8Rde3+dY30Pb+lbcObe1LETxOQ=

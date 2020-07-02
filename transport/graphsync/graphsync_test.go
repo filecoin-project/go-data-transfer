@@ -2,9 +2,11 @@ package graphsync_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"math/rand"
 	"testing"
+	"time"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
@@ -14,6 +16,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
 	"github.com/ipfs/go-graphsync"
 	ipld "github.com/ipld/go-ipld-prime"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 )
@@ -78,21 +81,6 @@ func TestManager(t *testing.T) {
 				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
 				require.False(t, events.OnDataReceivedCalled)
 				require.NoError(t, gsData.incomingBlockHookActions.TerminationError)
-			},
-		},
-		"gs incoming block will send update messages": {
-			action: func(gsData *harness) {
-				gsData.outgoingRequestHook()
-				gsData.incomingBlockHook()
-			},
-			events: fakeEvents{
-				DataReceivedMessage: testutil.NewDTRequest(t, datatransfer.TransferID(rand.Uint64())),
-			},
-			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
-				require.True(t, events.OnDataReceivedCalled)
-				require.NoError(t, gsData.incomingBlockHookActions.TerminationError)
-				assertHasOutgoingMessage(t, gsData.incomingBlockHookActions.SentExtensions, events.DataReceivedMessage)
 			},
 		},
 		"gs incoming block with data receive error will halt request": {
@@ -527,9 +515,46 @@ func TestManager(t *testing.T) {
 				require.False(t, events.OnResponseCompletedCalled)
 			},
 		},
+		"request pause works even if called when request is still pending": {
+			action: func(gsData *harness) {
+				gsData.fgs.LeaveRequestsOpen()
+				stor, _ := gsData.outgoing.Selector()
+				gsData.transport.OpenChannel(
+					gsData.ctx,
+					gsData.other,
+					datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self},
+					cidlink.Link{Cid: gsData.outgoing.BaseCid()},
+					stor,
+					gsData.outgoing)
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				requestReceived := gsData.fgs.AssertRequestReceived(gsData.ctx, t)
+				assertHasOutgoingMessage(t, requestReceived.Extensions, gsData.outgoing)
+				completed := make(chan struct{})
+				go func() {
+					gsData.transport.PauseChannel(context.Background(), datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
+					close(completed)
+				}()
+				time.Sleep(100 * time.Millisecond)
+				extensions := make(map[graphsync.ExtensionName][]byte)
+				for _, ext := range requestReceived.Extensions {
+					extensions[ext.Name] = ext.Data
+				}
+				request := testutil.NewFakeRequest(graphsync.RequestID(rand.Int31()), extensions)
+				gsData.fgs.OutgoingRequestHook(gsData.other, request, gsData.outgoingRequestHookActions)
+				select {
+				case <-gsData.ctx.Done():
+					t.Fatal("never paused channel")
+				case <-completed:
+				}
+			},
+		},
 	}
+	ctx := context.Background()
 	for testCase, data := range testCases {
 		t.Run(testCase, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
 			peers := testutil.GeneratePeers(2)
 			transferID := datatransfer.TransferID(rand.Uint64())
 			requestID := graphsync.RequestID(rand.Int31())
@@ -538,7 +563,12 @@ func TestManager(t *testing.T) {
 			updatedRequest := data.updatedConfig.makeRequest(t, transferID, requestID)
 			block := testutil.NewFakeBlockData()
 			fgs := testutil.NewFakeGraphSync()
+			outgoing := testutil.NewDTRequest(t, transferID)
+			transport := NewTransport(peers[0], fgs)
 			gsData := &harness{
+				ctx:                         ctx,
+				outgoing:                    outgoing,
+				transport:                   transport,
 				fgs:                         fgs,
 				self:                        peers[0],
 				transferID:                  transferID,
@@ -554,7 +584,6 @@ func TestManager(t *testing.T) {
 				requestUpdatedHookActions:   &testutil.FakeRequestUpdatedActions{},
 				incomingResponseHookActions: &testutil.FakeIncomingResponseHookActions{},
 			}
-			transport := NewTransport(peers[0], fgs)
 			transport.SetEventHandler(&data.events)
 			data.action(gsData)
 			data.check(t, &data.events, gsData)
@@ -578,7 +607,6 @@ type fakeEvents struct {
 	OnResponseCompletedCalled   bool
 	OnResponseCompletedErr      error
 	ResponseSuccess             bool
-	DataReceivedMessage         message.DataTransferMessage
 	DataSentMessage             message.DataTransferMessage
 	RequestReceivedRequest      message.DataTransferRequest
 	RequestReceivedResponse     message.DataTransferResponse
@@ -590,9 +618,9 @@ func (fe *fakeEvents) OnChannelOpened(chid datatransfer.ChannelID) error {
 	return fe.OnChannelOpenedError
 }
 
-func (fe *fakeEvents) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error) {
+func (fe *fakeEvents) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) error {
 	fe.OnDataReceivedCalled = true
-	return fe.DataReceivedMessage, fe.OnDataReceivedError
+	return fe.OnDataReceivedError
 }
 
 func (fe *fakeEvents) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error) {
@@ -629,6 +657,9 @@ func (fe *fakeEvents) OnResponseCompleted(chid datatransfer.ChannelID, success b
 }
 
 type harness struct {
+	outgoing                    message.DataTransferRequest
+	ctx                         context.Context
+	transport                   *Transport
 	fgs                         *testutil.FakeGraphSync
 	transferID                  datatransfer.TransferID
 	self                        peer.ID

@@ -34,6 +34,7 @@ type DataTransferRequest interface {
 	IsPull() bool
 	VoucherType() datatransfer.TypeIdentifier
 	Voucher(decoder encoding.Decoder) (encoding.Encodable, error)
+	EmptyVoucher() bool
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
 	IsCancel() bool

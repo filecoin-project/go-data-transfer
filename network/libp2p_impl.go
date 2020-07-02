@@ -81,15 +81,6 @@ func msgToStream(ctx context.Context, s network.Stream, msg message.DataTransfer
 	return nil
 }
 
-func (dtnet *libp2pDataTransferNetwork) NewMessageSender(ctx context.Context, p peer.ID) (MessageSender, error) {
-	s, err := dtnet.newStreamToPeer(ctx, p)
-	if err != nil {
-		return nil, err
-	}
-
-	return &streamMessageSender{s: s}, nil
-}
-
 func (dtnet *libp2pDataTransferNetwork) newStreamToPeer(ctx context.Context, p peer.ID) (network.Stream, error) {
 	return dtnet.host.NewStream(ctx, p, ProtocolDataTransfer)
 }
@@ -162,4 +153,8 @@ func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 			}
 		}
 	}
+}
+
+func (dtnet *libp2pDataTransferNetwork) ID() peer.ID {
+	return dtnet.host.ID()
 }

@@ -88,6 +88,7 @@ type FakeGraphSync struct {
 	pauseResponses            chan PauseResponse
 	resumeResponses           chan ResumeResponse
 	cancelResponses           chan CancelResponse
+	leaveRequestsOpen         bool
 	OutgoingRequestHook       graphsync.OnOutgoingRequestHook
 	IncomingBlockHook         graphsync.OnIncomingBlockHook
 	OutgoingBlockHook         graphsync.OnOutgoingBlockHook
@@ -107,6 +108,10 @@ func NewFakeGraphSync() *FakeGraphSync {
 		resumeResponses: make(chan ResumeResponse, 1),
 		cancelResponses: make(chan CancelResponse, 1),
 	}
+}
+
+func (fgs *FakeGraphSync) LeaveRequestsOpen() {
+	fgs.leaveRequestsOpen = true
 }
 
 // AssertNoRequestReceived asserts that no requests should ahve been received by this graphsync implementation
@@ -211,8 +216,10 @@ func (fgs *FakeGraphSync) Request(ctx context.Context, p peer.ID, root ipld.Link
 	fgs.requests <- ReceivedGraphSyncRequest{p, root, selector, extensions}
 	responses := make(chan graphsync.ResponseProgress)
 	errors := make(chan error)
-	close(responses)
-	close(errors)
+	if !fgs.leaveRequestsOpen {
+		close(responses)
+		close(errors)
+	}
 	return responses, errors
 }
 

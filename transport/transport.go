@@ -59,19 +59,27 @@ type Events interface {
 	OnResponseReceived(chid datatransfer.ChannelID, msg message.DataTransferResponse) error
 	// OnDataReceive is called when we receive data for the given channel ID
 	// return values are:
-	// - nil = continue receiving data
+	// - nil = proceed with sending data
 	// - error = cancel this request
-	OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error)
+	// - err == ErrPause - pause this request
+	OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) error
 	// OnDataSent is called when we send data for the given channel ID
 	// return values are:
-	// - nil = continue sending data
+	// message = data transfer message along with data
+	// err = error
+	// - nil = proceed with sending data
 	// - error = cancel this request
+	// - err == ErrPause - pause this request
 	OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error)
 	// OnRequestReceived is called when we receive a new request to send data
 	// for the given channel ID
 	// return values are:
+	// message = data transfer message along with reply
+	// err = error
 	// - nil = proceed with sending data
 	// - error = cancel this request
+	// - err == ErrPause - pause this request (only for new requests)
+	// - err == ErrResume - resume this request (only for update requests)
 	OnRequestReceived(chid datatransfer.ChannelID, msg message.DataTransferRequest) (message.DataTransferResponse, error)
 	// OnResponseCompleted is called when we finish sending data for the given channel ID
 	// Error returns are logged but otherwise have not effect

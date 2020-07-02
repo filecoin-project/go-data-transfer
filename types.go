@@ -17,6 +17,9 @@ var ErrChannelNotFound = errors.New("channel not found")
 // registry
 type TypeIdentifier string
 
+// EmptyTypeIdentifier means there is no voucher present
+const EmptyTypeIdentifier = TypeIdentifier("")
+
 // Registerable is a type of object in a registry. It must be encodable and must
 // have a single method that uniquely identifies its type
 type Registerable interface {
@@ -50,6 +53,9 @@ const (
 
 	// Failed means the data transfer failed
 	Failed
+
+	// Cancelled means the data transfer ended prematurely
+	Cancelled
 
 	// PausedSender means the data sender has paused the channel (only the sender can unpause this)
 	PausedSender
@@ -236,10 +242,16 @@ type Manager interface {
 	OpenPullDataChannel(ctx context.Context, to peer.ID, voucher Voucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
 
 	// send an intermediate voucher as needed when the receiver sends a request for revalidation
-	SendVoucher(ctx context.Context, x ChannelID, voucher Voucher) error
+	SendVoucher(ctx context.Context, chid ChannelID, voucher Voucher) error
 
 	// close an open channel (effectively a cancel)
-	CloseDataTransferChannel(x ChannelID)
+	CloseDataTransferChannel(ctx context.Context, chid ChannelID) error
+
+	// pause a data transfer channel (only allowed if transport supports it)
+	PauseDataTransferChannel(ctx context.Context, chid ChannelID) error
+
+	// resume a data transfer channel (only allowed if transport supports it)
+	ResumeDataTransferChannel(ctx context.Context, chid ChannelID) error
 
 	// get status of a transfer
 	TransferChannelStatus(x ChannelID) Status

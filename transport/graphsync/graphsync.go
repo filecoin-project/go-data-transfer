@@ -37,6 +37,7 @@ type Transport struct {
 	graphsyncRequestMap map[graphsyncKey]datatransfer.ChannelID
 	channelIDMap        map[datatransfer.ChannelID]graphsyncKey
 	contextCancelMap    map[datatransfer.ChannelID]func()
+	pending             map[datatransfer.ChannelID]chan struct{}
 	responseProgressMap map[datatransfer.ChannelID]*responseProgress
 }
 
@@ -49,6 +50,7 @@ func NewTransport(peerID peer.ID, gs graphsync.GraphExchange) *Transport {
 		contextCancelMap:    make(map[datatransfer.ChannelID]func()),
 		channelIDMap:        make(map[datatransfer.ChannelID]graphsyncKey),
 		responseProgressMap: make(map[datatransfer.ChannelID]*responseProgress),
+		pending:             make(map[datatransfer.ChannelID]chan struct{}),
 	}
 }
 
@@ -74,6 +76,7 @@ func (t *Transport) OpenChannel(ctx context.Context,
 	extData := buf.Bytes()
 	internalCtx, internalCancel := context.WithCancel(ctx)
 	t.dataLock.Lock()
+	t.pending[channelID] = make(chan struct{})
 	t.contextCancelMap[channelID] = internalCancel
 	t.dataLock.Unlock()
 	_, errChan := t.gs.Request(internalCtx, dataSender, root, stor,
@@ -81,15 +84,27 @@ func (t *Transport) OpenChannel(ctx context.Context,
 			Name: extension.ExtensionDataTransfer,
 			Data: extData,
 		})
-	go t.executeGsRequest(channelID, errChan)
+	go t.executeGsRequest(ctx, channelID, errChan)
 	return nil
 }
 
-func (t *Transport) executeGsRequest(channelID datatransfer.ChannelID, errChan <-chan error) {
+func (t *Transport) consumeResponses(ctx context.Context, errChan <-chan error) error {
 	var lastError error
-	for err := range errChan {
-		lastError = err
+	for {
+		select {
+		case <-ctx.Done():
+			return errors.New("context cancelled")
+		case err, ok := <-errChan:
+			if !ok {
+				return lastError
+			}
+			lastError = err
+		}
 	}
+}
+
+func (t *Transport) executeGsRequest(ctx context.Context, channelID datatransfer.ChannelID, errChan <-chan error) {
+	lastError := t.consumeResponses(ctx, errChan)
 	err := t.events.OnResponseCompleted(channelID, lastError == nil)
 	if err != nil {
 		log.Error(err)
@@ -98,10 +113,32 @@ func (t *Transport) executeGsRequest(channelID datatransfer.ChannelID, errChan <
 	gsKey, ok := t.channelIDMap[channelID]
 	delete(t.channelIDMap, channelID)
 	delete(t.contextCancelMap, channelID)
+	delete(t.pending, channelID)
 	if ok {
 		delete(t.graphsyncRequestMap, gsKey)
 	}
 	t.dataLock.Unlock()
+}
+
+func (t *Transport) gsKeyFromChannelID(ctx context.Context, chid datatransfer.ChannelID) (graphsyncKey, error) {
+	for {
+		t.dataLock.RLock()
+		gsKey, ok := t.channelIDMap[chid]
+		if ok {
+			t.dataLock.RUnlock()
+			return gsKey, nil
+		}
+		pending, hasPending := t.pending[chid]
+		t.dataLock.RUnlock()
+		if !hasPending {
+			return graphsyncKey{}, transport.ErrChannelNotFound
+		}
+		select {
+		case <-ctx.Done():
+			return graphsyncKey{}, transport.ErrChannelNotFound
+		case <-pending:
+		}
+	}
 }
 
 // PauseChannel paused the given channel ID
@@ -111,11 +148,9 @@ func (t *Transport) PauseChannel(ctx context.Context,
 	if t.events == nil {
 		return transport.ErrHandlerNotSet
 	}
-	t.dataLock.RLock()
-	gsKey, ok := t.channelIDMap[chid]
-	t.dataLock.RUnlock()
-	if !ok {
-		return transport.ErrChannelNotFound
+	gsKey, err := t.gsKeyFromChannelID(ctx, chid)
+	if err != nil {
+		return err
 	}
 	if gsKey.p == t.peerID {
 		return t.gs.PauseRequest(gsKey.requestID)
@@ -131,11 +166,9 @@ func (t *Transport) ResumeChannel(ctx context.Context,
 	if t.events == nil {
 		return transport.ErrHandlerNotSet
 	}
-	t.dataLock.RLock()
-	gsKey, ok := t.channelIDMap[chid]
-	t.dataLock.RUnlock()
-	if !ok {
-		return transport.ErrChannelNotFound
+	gsKey, err := t.gsKeyFromChannelID(ctx, chid)
+	if err != nil {
+		return err
 	}
 	var extensions []graphsync.ExtensionData
 	if msg != nil {
@@ -161,14 +194,14 @@ func (t *Transport) CloseChannel(ctx context.Context, chid datatransfer.ChannelI
 	if t.events == nil {
 		return transport.ErrHandlerNotSet
 	}
-	t.dataLock.RLock()
-	defer t.dataLock.RUnlock()
-	gsKey, ok := t.channelIDMap[chid]
-	if !ok {
-		return transport.ErrChannelNotFound
+	gsKey, err := t.gsKeyFromChannelID(ctx, chid)
+	if err != nil {
+		return err
 	}
 	if gsKey.p == t.peerID {
+		t.dataLock.RLock()
 		cancelFn, ok := t.contextCancelMap[chid]
+		t.dataLock.RUnlock()
 		if !ok {
 			return transport.ErrChannelNotFound
 		}
@@ -211,13 +244,17 @@ func (t *Transport) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestDa
 	}
 	chid := datatransfer.ChannelID{Initiator: initiator, ID: message.TransferID()}
 	err := t.events.OnChannelOpened(chid)
-	if err != nil {
-		return
-	}
 	// record the outgoing graphsync request to map it to channel ID going forward
 	t.dataLock.Lock()
-	t.graphsyncRequestMap[graphsyncKey{request.ID(), t.peerID}] = chid
-	t.channelIDMap[chid] = graphsyncKey{request.ID(), t.peerID}
+	if err == nil {
+		t.graphsyncRequestMap[graphsyncKey{request.ID(), t.peerID}] = chid
+		t.channelIDMap[chid] = graphsyncKey{request.ID(), t.peerID}
+	}
+	pending, hasPending := t.pending[chid]
+	if hasPending {
+		close(pending)
+		delete(t.pending, chid)
+	}
 	t.dataLock.Unlock()
 }
 
@@ -230,8 +267,7 @@ func (t *Transport) gsIncomingBlockHook(p peer.ID, response graphsync.ResponseDa
 		return
 	}
 
-	var extensions []graphsync.ExtensionData
-	msg, err := t.events.OnDataReceived(chid, block.Link(), block.BlockSize())
+	err := t.events.OnDataReceived(chid, block.Link(), block.BlockSize())
 	if err != nil && err != transport.ErrPause {
 		hookActions.TerminateWithError(err)
 		return
@@ -239,19 +275,6 @@ func (t *Transport) gsIncomingBlockHook(p peer.ID, response graphsync.ResponseDa
 
 	if err == transport.ErrPause {
 		hookActions.PauseRequest()
-	}
-
-	if msg != nil {
-		extension, err := extension.ToExtensionData(msg)
-		if err != nil {
-			hookActions.TerminateWithError(err)
-			return
-		}
-		extensions = append(extensions, extension)
-	}
-
-	if len(extensions) > 0 {
-		hookActions.UpdateRequestWithExtensions(extensions...)
 	}
 }
 
