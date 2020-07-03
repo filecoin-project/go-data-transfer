@@ -46,6 +46,7 @@ type DataTransferResponse interface {
 	Accepted() bool
 	VoucherResultType() datatransfer.TypeIdentifier
 	VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error)
+	EmptyVoucherResult() bool
 }
 
 // NewRequest generates a new request for the data transfer protocol

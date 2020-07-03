@@ -3,6 +3,7 @@ package datatransfer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/filecoin-project/go-data-transfer/encoding"
@@ -57,14 +58,14 @@ const (
 	// Cancelled means the data transfer ended prematurely
 	Cancelled
 
-	// PausedSender means the data sender has paused the channel (only the sender can unpause this)
-	PausedSender
+	// SenderPaused means the data sender has paused the channel (only the sender can unpause this)
+	SenderPaused
 
-	// PausedReceiver means the data receiver has paused the channel (only the receiver can unpause this)
-	PausedReceiver
+	// ReceiverPaused means the data receiver has paused the channel (only the receiver can unpause this)
+	ReceiverPaused
 
-	// PausedBoth means both sender and receiver have paused the channel seperately (both must unpause)
-	PausedBoth
+	// BothPaused means both sender and receiver have paused the channel seperately (both must unpause)
+	BothPaused
 
 	// ChannelNotFoundError means the searched for data transfer does not exist
 	ChannelNotFoundError
@@ -79,6 +80,10 @@ type TransferID uint64
 type ChannelID struct {
 	Initiator peer.ID
 	ID        TransferID
+}
+
+func (c ChannelID) String() string {
+	return fmt.Sprintf("%s-%d", c.Initiator, c.ID)
 }
 
 // Channel represents all the parameters for a single data transfer
@@ -124,6 +129,21 @@ type ChannelState interface {
 
 	// Received returns the number of bytes received
 	Received() uint64
+
+	// Message offers additional information about the current status
+	Message() string
+
+	// Vouchers returns all vouchers sent on this channel
+	Vouchers() []Voucher
+
+	// VoucherResults are results of vouchers sent on the channel
+	VoucherResults() []VoucherResult
+
+	// LastVoucher returns the last voucher sent on the channel
+	LastVoucher() Voucher
+
+	// LastVoucherResult returns the last voucher result sent on the channel
+	LastVoucherResult() VoucherResult
 }
 
 // EventCode is a name for an event that occurs on a data transfer channel
@@ -133,26 +153,35 @@ const (
 	// Open is an event occurs when a channel is first opened
 	Open EventCode = iota
 
-	// Accepted is an event that occurs when the data transfer is first accepted
-	Accepted
+	// Accept is an event that emits when the data transfer is first accepted
+	Accept
 
 	// Progress is an event that gets emitted every time more data is transferred
 	Progress
 
+	// Cancel indicates one side has cancelled the transfer
+	Cancel
+
 	// Error is an event that emits when an error occurs in a data transfer
 	Error
 
-	// SenderPaused emits when the data sender pauses transfer
-	SenderPaused
+	// NewVoucher means we have a new voucher on this channel
+	NewVoucher
 
-	// SenderResumed emits when the data sender resumes transfer
-	SenderResumed
+	// NewVoucherResult means we have a new voucher result on this channel
+	NewVoucherResult
 
-	// ReceiverPaused emits when the data receiver pauses transfer
-	ReceiverPaused
+	// PauseSender emits when the data sender pauses transfer
+	PauseSender
 
-	// ReceiverResumed emits when the data receiver resumes transfer
-	ReceiverResumed
+	// ResumeSender emits when the data sender resumes transfer
+	ResumeSender
+
+	// PauseReceiver emits when the data receiver pauses transfer
+	PauseReceiver
+
+	// ResumeReceiver emits when the data receiver resumes transfer
+	ResumeReceiver
 
 	// Complete is emitted when a data transfer is complete
 	Complete

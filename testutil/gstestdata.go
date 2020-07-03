@@ -59,6 +59,8 @@ type GraphsyncTestingData struct {
 	Ctx            context.Context
 	StoredCounter1 *storedcounter.StoredCounter
 	StoredCounter2 *storedcounter.StoredCounter
+	DtDs1          datastore.Datastore
+	DtDs2          datastore.Datastore
 	Bs1            bstore.Blockstore
 	Bs2            bstore.Blockstore
 	DagService1    ipldformat.DAGService
@@ -114,6 +116,10 @@ func NewGraphsyncTestingData(ctx context.Context, t *testing.T) *GraphsyncTestin
 	}
 	ds1 := dss.MutexWrap(datastore.NewMapDatastore())
 	ds2 := dss.MutexWrap(datastore.NewMapDatastore())
+
+	gsData.DtDs1 = namespace.Wrap(ds1, datastore.NewKey("datatransfer"))
+	gsData.DtDs2 = namespace.Wrap(ds2, datastore.NewKey("datatransfer"))
+
 	// make a blockstore and dag service
 	gsData.Bs1 = bstore.NewBlockstore(namespace.Wrap(ds1, datastore.NewKey("blockstore")))
 	gsData.Bs2 = bstore.NewBlockstore(namespace.Wrap(ds2, datastore.NewKey("blockstore")))

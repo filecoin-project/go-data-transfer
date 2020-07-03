@@ -44,13 +44,14 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv := newSV()
 		sv.expectSuccessPush()
 
-		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+		require.NoError(t, err)
 		dt.Start(ctx)
 
 		require.NoError(t, dt.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 		isPull := false
-		_, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, gsData.AllSelector)
+		_, err = message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, gsData.AllSelector)
 		require.NoError(t, err)
 		request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, gsData.AllSelector)
 		require.NoError(t, err)
@@ -77,10 +78,11 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		id := datatransfer.TransferID(rand.Int31())
 		sv := newSV()
 		sv.expectErrorPush()
-		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+		require.NoError(t, err)
 		dt.Start(ctx)
 
-		err := dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
+		err = dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
 		isPull := false
@@ -115,10 +117,11 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv := newSV()
 		sv.expectSuccessPull()
 
-		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+		require.NoError(t, err)
 		dt.Start(ctx)
 
-		err := dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
+		err = dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
 		isPull := true
@@ -158,10 +161,11 @@ func TestSendResponseToIncomingRequest(t *testing.T) {
 		sv := newSV()
 		sv.expectErrorPull()
 
-		dt := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+		require.NoError(t, err)
 		dt.Start(ctx)
 
-		err := dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
+		err = dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
 		require.NoError(t, err)
 
 		isPull := true

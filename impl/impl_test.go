@@ -81,8 +81,10 @@ func TestDataTransferOneWay(t *testing.T) {
 	dtnet2.SetDelegate(r)
 
 	gs := testutil.NewFakeGraphSync()
+	gs.LeaveRequestsOpen()
 	tp := tp.NewTransport(host1.ID(), gs)
-	dt := NewDataTransfer(host1, tp, gsData.StoredCounter1)
+	dt, err := NewDataTransfer(gsData.DtDs1, host1, tp, gsData.StoredCounter1)
+	require.NoError(t, err)
 	dt.Start(ctx)
 
 	t.Run("OpenPushDataTransfer", func(t *testing.T) {
@@ -193,6 +195,7 @@ func TestDataTransferOneWay(t *testing.T) {
 			})
 
 			t.Run("pull succeeds", func(t *testing.T) {
+
 				channelID, err := dt.OpenPullDataChannel(ctx, host2.ID(), baseVoucher, baseCid, gsData.AllSelector)
 				require.NoError(t, err)
 				gsRequest := gs.AssertRequestReceived(ctx, t)
@@ -276,10 +279,11 @@ func TestDataTransferValidation(t *testing.T) {
 	fv := &fakeValidator{ctx, make(chan receivedValidation)}
 
 	id := datatransfer.TransferID(rand.Int31())
-	dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+	dt2, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+	require.NoError(t, err)
 	dt2.Start(ctx)
 
-	err := dt2.RegisterVoucherType(&testutil.FakeDTType{}, fv)
+	err = dt2.RegisterVoucherType(&testutil.FakeDTType{}, fv)
 	require.NoError(t, err)
 
 	t.Run("ValidatePush", func(t *testing.T) {
@@ -426,7 +430,8 @@ func TestGraphsyncImpl_RegisterVoucherType(t *testing.T) {
 
 	gs1 := testutil.NewFakeGraphSync()
 	tp1 := tp.NewTransport(host1.ID(), gs1)
-	dt := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt, err := NewDataTransfer(gsData.DtDs1, host1, tp1, gsData.StoredCounter1)
+	require.NoError(t, err)
 	dt.Start(ctx)
 	fv := &fakeValidator{ctx, make(chan receivedValidation)}
 
@@ -455,13 +460,15 @@ func TestDataTransferSubscribing(t *testing.T) {
 	sv := newSV()
 	sv.stubErrorPull()
 	sv.stubErrorPush()
-	dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+	dt2, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+	require.NoError(t, err)
 	dt2.Start(ctx)
 	require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 	voucher := testutil.FakeDTType{Data: "applesauce"}
 	baseCid := testutil.GenerateCids(1)[0]
 
-	dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt1, err := NewDataTransfer(gsData.DtDs1, host1, tp1, gsData.StoredCounter1)
+	require.NoError(t, err)
 	dt1.Start(ctx)
 	subscribe1Calls := make(chan struct{}, 1)
 	subscribe1 := func(event datatransfer.Event, channelState datatransfer.ChannelState) {
@@ -477,7 +484,7 @@ func TestDataTransferSubscribing(t *testing.T) {
 	}
 	unsub1 := dt1.SubscribeToEvents(subscribe1)
 	unsub2 := dt1.SubscribeToEvents(subscribe2)
-	_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, baseCid, gsData.AllSelector)
+	_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, baseCid, gsData.AllSelector)
 	require.NoError(t, err)
 	select {
 	case <-ctx.Done():
@@ -556,7 +563,8 @@ func TestDataTransferInitiatingPushGraphsyncRequests(t *testing.T) {
 		sv := newSV()
 		sv.expectSuccessPush()
 
-		dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt2, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+		require.NoError(t, err)
 		dt2.Start(ctx)
 
 		require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
@@ -581,7 +589,8 @@ func TestDataTransferInitiatingPushGraphsyncRequests(t *testing.T) {
 		sv := newSV()
 		sv.expectErrorPush()
 
-		dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt2, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+		require.NoError(t, err)
 		dt2.Start(ctx)
 
 		require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
@@ -616,10 +625,11 @@ func TestDataTransferInitiatingPullGraphsyncRequests(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 
-		dtInit := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+		dtInit, err := NewDataTransfer(gsData.DtDs1, host1, tp1, gsData.StoredCounter1)
+		require.NoError(t, err)
 		dtInit.Start(ctx)
 
-		_, err := dtInit.OpenPullDataChannel(ctx, host2.ID(), &voucher, baseCid, gsData.AllSelector)
+		_, err = dtInit.OpenPullDataChannel(ctx, host2.ID(), &voucher, baseCid, gsData.AllSelector)
 		require.NoError(t, err)
 		requestReceived := gs1Init.AssertRequestReceived(ctx, t)
 
@@ -635,16 +645,24 @@ func TestDataTransferInitiatingPullGraphsyncRequests(t *testing.T) {
 	})
 
 	t.Run("does not schedule graphsync request if is push request", func(t *testing.T) {
+
+		dtnet2 := network.NewFromLibp2pHost(host2)
+		r := &receiver{
+			messageReceived: make(chan receivedMessage),
+		}
+		dtnet2.SetDelegate(r)
+
 		gs1 := testutil.NewFakeGraphSync()
 		tp1 := tp.NewTransport(host1.ID(), gs1)
 
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 
-		dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+		dt1, err := NewDataTransfer(gsData.DtDs1, host1, tp1, gsData.StoredCounter1)
+		require.NoError(t, err)
 		dt1.Start(ctx)
 
-		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, baseCid, gsData.AllSelector)
+		_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, baseCid, gsData.AllSelector)
 		require.NoError(t, err)
 
 		// no graphsync request should be scheduled
@@ -714,7 +732,8 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	gsData.GsNet2.SetDelegate(gsr)
 
 	tp1 := gsData.SetupGSTransportHost1()
-	dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt1, err := NewDataTransfer(gsData.DtDs1, host1, tp1, gsData.StoredCounter1)
+	require.NoError(t, err)
 	dt1.Start(ctx)
 
 	t.Run("when request is initiated", func(t *testing.T) {
@@ -794,7 +813,8 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 
 	gs1 := gsData.SetupGraphsyncHost1()
 	tp1 := tp.NewTransport(host1.ID(), gs1)
-	dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt1, err := NewDataTransfer(gsData.DtDs1, host1, tp1, gsData.StoredCounter1)
+	require.NoError(t, err)
 	dt1.Start(ctx)
 
 	t.Run("when it's not our extension, does not error and does not validate", func(t *testing.T) {
@@ -849,14 +869,15 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		sv := newSV()
 		sv.expectSuccessPull()
 
-		dt1 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt1, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+		require.NoError(t, err)
 		dt1.Start(ctx)
 
 		require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 		_, _, request := createDTRequest(t, true, id, gsData.AllSelector)
 		buf := new(bytes.Buffer)
-		err := request.ToNet(buf)
+		err = request.ToNet(buf)
 		require.NoError(t, err)
 		extData := buf.Bytes()
 
@@ -876,7 +897,8 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 	t.Run("When request is initiated, but fails validation", func(t *testing.T) {
 		sv := newSV()
 		sv.expectErrorPull()
-		dt1 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+		dt1, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+		require.NoError(t, err)
 		dt1.Start(ctx)
 
 		require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
@@ -884,7 +906,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		_, _, dtRequest := createDTRequest(t, true, id, gsData.AllSelector)
 
 		buf := new(bytes.Buffer)
-		err := dtRequest.ToNet(buf)
+		err = dtRequest.ToNet(buf)
 		require.NoError(t, err)
 		extData := buf.Bytes()
 		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{

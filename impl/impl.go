@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -55,19 +55,30 @@ func dispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
 }
 
 // NewDataTransfer initializes a new instance of a data transfer manager
-func NewDataTransfer(host host.Host, transport transport.Transport, storedCounter *storedcounter.StoredCounter) datatransfer.Manager {
+func NewDataTransfer(ds datastore.Datastore, host host.Host, transport transport.Transport, storedCounter *storedcounter.StoredCounter) (datatransfer.Manager, error) {
 	dataTransferNetwork := network.NewFromLibp2pHost(host)
+	validatedTypes := registry.NewRegistry()
 	m := &manager{
 		dataTransferNetwork: dataTransferNetwork,
-		validatedTypes:      registry.NewRegistry(),
+		validatedTypes:      validatedTypes,
 		pubSub:              pubsub.New(dispatcher),
-		channels:            channels.New(),
 		peerID:              host.ID(),
 		transport:           transport,
 		storedCounter:       storedCounter,
 	}
+	channels, err := channels.New(ds, m.notifier, validatedTypes.Decoder, nil)
+	if err != nil {
+		return nil, err
+	}
+	m.channels = channels
+	return m, nil
+}
 
-	return m
+func (m *manager) notifier(evt datatransfer.Event, chst datatransfer.ChannelState) {
+	err := m.pubSub.Publish(internalEvent{evt, chst})
+	if err != nil {
+		log.Warnf("err publishing DT event: %s", err.Error())
+	}
 }
 
 // Start initializes data transfer processing
@@ -88,43 +99,13 @@ func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
 }
 
 func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) error {
-	_, err := m.channels.IncrementReceived(chid, size)
-	if err != nil {
-		return err
-	}
-	chst, err := m.channels.GetByID(chid)
-	if err != nil {
-		return err
-	}
-	evt := datatransfer.Event{
-		Code:      datatransfer.Progress,
-		Message:   fmt.Sprintf("Received %d more bytes", size),
-		Timestamp: time.Now(),
-	}
-	err = m.pubSub.Publish(internalEvent{evt, chst})
-	if err != nil {
-		log.Warnf("err publishing DT event: %s", err.Error())
-	}
-	return nil
+	return m.channels.IncrementReceived(chid, size)
 }
 
 func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error) {
-	_, err := m.channels.IncrementSent(chid, size)
+	err := m.channels.IncrementSent(chid, size)
 	if err != nil {
 		return nil, err
-	}
-	chst, err := m.channels.GetByID(chid)
-	if err != nil {
-		return nil, err
-	}
-	evt := datatransfer.Event{
-		Code:      datatransfer.Progress,
-		Message:   fmt.Sprintf("Sent %d more bytes", size),
-		Timestamp: time.Now(),
-	}
-	err = m.pubSub.Publish(internalEvent{evt, chst})
-	if err != nil {
-		log.Warnf("err publishing DT event: %s", err.Error())
 	}
 	return nil, nil
 }
@@ -134,45 +115,17 @@ func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request message
 }
 
 func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response message.DataTransferResponse) error {
-	chst, err := m.channels.GetByID(chid)
-	if err != nil {
-		return err
-	}
-	evt := datatransfer.Event{
-		Code:      datatransfer.Error,
-		Timestamp: time.Now(),
-	}
 	if response.Accepted() {
-		evt.Code = datatransfer.Accepted
-		evt.Message = "Response accepted!"
-	} else {
-		evt.Message = "Response Rejected"
+		return m.channels.Accept(chid)
 	}
-	err = m.pubSub.Publish(internalEvent{evt, chst})
-	if err != nil {
-		log.Warnf("err publishing DT event: %s", err.Error())
-	}
-	return nil
+	return m.channels.Error(chid, errors.New("Response Rejected"))
 }
 
 func (m *manager) OnResponseCompleted(chid datatransfer.ChannelID, success bool) error {
-	chst, err := m.channels.GetByID(chid)
-	if err != nil {
-		return err
-	}
-
-	evt := datatransfer.Event{
-		Code:      datatransfer.Error,
-		Timestamp: time.Now(),
-	}
 	if success {
-		evt.Code = datatransfer.Complete
+		return m.channels.Complete(chid)
 	}
-	err = m.pubSub.Publish(internalEvent{evt, chst})
-	if err != nil {
-		log.Warnf("err publishing DT event: %s", err.Error())
-	}
-	return nil
+	return m.channels.Error(chid, errors.New("incomplete response"))
 }
 
 // RegisterVoucherType registers a validator for the given voucher type
@@ -201,25 +154,10 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 	if err != nil {
 		return chid, err
 	}
-	evt := datatransfer.Event{
-		Code:      datatransfer.Open,
-		Message:   "New Request Initiated",
-		Timestamp: time.Now(),
-	}
-	chst, err := m.channels.GetByID(chid)
-	if err != nil {
-		return chid, err
-	}
 	if err := m.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
-		evt = datatransfer.Event{
-			Code:      datatransfer.Error,
-			Message:   "Unable to send request",
-			Timestamp: time.Now(),
-		}
-	}
-	err = m.pubSub.Publish(internalEvent{evt, chst})
-	if err != nil {
-		log.Warnf("err publishing DT event: %s", err.Error())
+		err = fmt.Errorf("Unable to send request: %w", err)
+		_ = m.channels.Error(chid, err)
+		return chid, err
 	}
 	return chid, nil
 }
@@ -237,25 +175,10 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 	if err != nil {
 		return chid, err
 	}
-	evt := datatransfer.Event{
-		Code:      datatransfer.Open,
-		Message:   "New Request Initiated",
-		Timestamp: time.Now(),
-	}
-	chst, err := m.channels.GetByID(chid)
-	if err != nil {
-		return chid, err
-	}
 	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, req); err != nil {
-		evt = datatransfer.Event{
-			Code:      datatransfer.Error,
-			Message:   "Unable to send request",
-			Timestamp: time.Now(),
-		}
-	}
-	err = m.pubSub.Publish(internalEvent{evt, chst})
-	if err != nil {
-		log.Warnf("err publishing DT event: %s", err.Error())
+		err = fmt.Errorf("Unable to send request: %w", err)
+		_ = m.channels.Error(chid, err)
+		return chid, err
 	}
 	return chid, nil
 }
@@ -273,8 +196,12 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 	if err != nil {
 		return err
 	}
-	m.dataTransferNetwork.SendMessage(ctx, chst.OtherParty(m.peerID), updateRequest)
-	return nil
+	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherParty(m.peerID), updateRequest); err != nil {
+		err = fmt.Errorf("Unable to send request: %w", err)
+		_ = m.channels.Error(channelID, err)
+		return err
+	}
+	return m.channels.NewVoucher(channelID, voucher)
 }
 
 // newRequest encapsulates message creation
@@ -312,7 +239,11 @@ func (m *manager) ResumeDataTransferChannel(ctx context.Context, chid datatransf
 
 // get status of a transfer
 func (m *manager) TransferChannelStatus(chid datatransfer.ChannelID) datatransfer.Status {
-	return m.channels.GetStatus(chid)
+	chst, err := m.channels.GetByID(chid)
+	if err != nil {
+		return datatransfer.ChannelNotFoundError
+	}
+	return chst.Status()
 }
 
 // get notified when certain types of events happen
@@ -374,20 +305,7 @@ func (m *manager) acceptRequest(
 	if err != nil {
 		return result, err
 	}
-	evt := datatransfer.Event{
-		Code:      datatransfer.Open,
-		Message:   "Incoming request accepted",
-		Timestamp: time.Now(),
-	}
-	chst, err := m.channels.GetByID(chid)
-	if err != nil {
-		return result, err
-	}
-	err = m.pubSub.Publish(internalEvent{evt, chst})
-	if err != nil {
-		log.Warnf("err publishing DT event: %s", err.Error())
-	}
-	return result, nil
+	return result, m.channels.Accept(chid)
 }
 
 // validateVoucher converts a voucher in an incoming message to its appropriate

@@ -27,10 +27,12 @@ func TestDataTransferPushRoundTrip(t *testing.T) {
 	tp1 := gsData.SetupGSTransportHost1()
 	tp2 := gsData.SetupGSTransportHost2()
 
-	dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt1, err := NewDataTransfer(gsData.DtDs1, host1, tp1, gsData.StoredCounter1)
+	require.NoError(t, err)
 	dt1.Start(ctx)
 
-	dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+	dt2, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+	require.NoError(t, err)
 	dt2.Start(ctx)
 
 	finished := make(chan struct{}, 2)
@@ -104,10 +106,12 @@ func TestDataTransferPullRoundTrip(t *testing.T) {
 	tp1 := gsData.SetupGSTransportHost1()
 	tp2 := gsData.SetupGSTransportHost2()
 
-	dt1 := NewDataTransfer(host1, tp1, gsData.StoredCounter1)
+	dt1, err := NewDataTransfer(gsData.DtDs1, host1, tp1, gsData.StoredCounter1)
+	require.NoError(t, err)
 	dt1.Start(ctx)
 
-	dt2 := NewDataTransfer(host2, tp2, gsData.StoredCounter2)
+	dt2, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
+	require.NoError(t, err)
 	dt2.Start(ctx)
 
 	finished := make(chan struct{}, 2)
@@ -140,7 +144,7 @@ func TestDataTransferPullRoundTrip(t *testing.T) {
 	sv.expectSuccessPull()
 	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
-	_, err := dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
+	_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
 	require.NoError(t, err)
 	opens := 0
 	completes := 0

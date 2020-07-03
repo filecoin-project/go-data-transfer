@@ -2,108 +2,21 @@ package channels
 
 import (
 	"errors"
-	"sync"
-	"sync/atomic"
+	"time"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/encoding"
+	"github.com/filecoin-project/go-statemachine/fsm"
 	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-datastore"
 	"github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
-//go:generate cbor-gen-for channel ChannelState
+type DecoderByTypeFunc func(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool)
 
-// channel represents all the parameters for a single data transfer
-type channel struct {
-	// an identifier for this channel shared by request and responder, set by requester through protocol
-	transferID datatransfer.TransferID
-	// base CID for the piece being transferred
-	baseCid cid.Cid
-	// portion of Piece to return, specified by an IPLD selector
-	selector ipld.Node
-	// used to verify this channel
-	voucher datatransfer.Voucher
-	// the party that is sending the data (not who initiated the request)
-	sender peer.ID
-	// the party that is receiving the data (not who initiated the request)
-	recipient peer.ID
-	// expected amount of data to be transferred
-	totalSize uint64
-}
-
-// newChannel makes a new channel
-func newChannel(transferID datatransfer.TransferID, baseCid cid.Cid,
-	selector ipld.Node,
-	voucher datatransfer.Voucher,
-	sender peer.ID,
-	recipient peer.ID,
-	totalSize uint64) channel {
-	return channel{transferID, baseCid, selector, voucher, sender, recipient, totalSize}
-}
-
-// TransferID returns the transfer id for this channel
-func (c channel) TransferID() datatransfer.TransferID { return c.transferID }
-
-// BaseCID returns the CID that is at the root of this data transfer
-func (c channel) BaseCID() cid.Cid { return c.baseCid }
-
-// Selector returns the IPLD selector for this data transfer (represented as
-// an IPLD node)
-func (c channel) Selector() ipld.Node { return c.selector }
-
-// Voucher returns the voucher for this data transfer
-func (c channel) Voucher() datatransfer.Voucher { return c.voucher }
-
-// Sender returns the peer id for the node that is sending data
-func (c channel) Sender() peer.ID { return c.sender }
-
-// Recipient returns the peer id for the node that is receiving data
-func (c channel) Recipient() peer.ID { return c.recipient }
-
-// TotalSize returns the total size for the data being transferred
-func (c channel) TotalSize() uint64 { return c.totalSize }
-
-// IsPull returns whether this is a pull request based on who initiated it
-func (c channel) IsPull(initiator peer.ID) bool {
-	return initiator == c.recipient
-}
-
-// OtherParty returns the opposite party in the channel to the passed in party
-func (c channel) OtherParty(thisParty peer.ID) peer.ID {
-	if thisParty == c.sender {
-		return c.recipient
-	}
-	return c.sender
-}
-
-// ChannelState is immutable channel data plus mutable state
-type ChannelState struct {
-	channel
-	status datatransfer.Status
-	// total bytes sent from this node (0 if receiver)
-	sent uint64
-	// total bytes received by this node (0 if sender)
-	received uint64
-}
-
-// EmptyChannelState is the zero value for channel state, meaning not present
-var EmptyChannelState = ChannelState{}
-
-// Status is the current status of this channel
-func (c ChannelState) Status() datatransfer.Status { return c.status }
-
-// Sent returns the number of bytes sent
-func (c ChannelState) Sent() uint64 { return c.sent }
-
-// Received returns the number of bytes received
-func (c ChannelState) Received() uint64 { return c.received }
-
-type internalChannel struct {
-	channel
-	status   *uint64
-	sent     *uint64
-	received *uint64
-}
+type Notifier func(datatransfer.Event, datatransfer.ChannelState)
 
 // ErrNotFound is returned when a channel cannot be found with a given channel ID
 var ErrNotFound = errors.New("No channel for this channel ID")
@@ -113,112 +26,191 @@ var ErrWrongType = errors.New("Cannot change type of implementation specific dat
 
 // Channels is a thread safe list of channels
 type Channels struct {
-	channelsLk sync.RWMutex
-	channels   map[datatransfer.ChannelID]internalChannel
+	notifier             Notifier
+	voucherDecoder       DecoderByTypeFunc
+	voucherResultDecoder DecoderByTypeFunc
+	statemachines        fsm.Group
 }
 
 // New returns a new thread safe list of channels
-func New() *Channels {
-	return &Channels{
-		sync.RWMutex{},
-		make(map[datatransfer.ChannelID]internalChannel),
+func New(ds datastore.Datastore,
+	notifier Notifier,
+	voucherDecoder DecoderByTypeFunc,
+	voucherResultDecoder DecoderByTypeFunc) (*Channels, error) {
+	c := &Channels{
+		notifier:             notifier,
+		voucherDecoder:       voucherDecoder,
+		voucherResultDecoder: voucherResultDecoder,
 	}
+	statemachines, err := fsm.New(ds, fsm.Parameters{
+		Environment:     c,
+		StateType:       internalChannelState{},
+		StateKeyField:   "Status",
+		Events:          ChannelEvents,
+		StateEntryFuncs: ChannelStateEntryFuncs,
+		Notifier:        c.dispatch,
+		FinalityStates:  ChannelFinalityStates,
+	})
+	if err != nil {
+		return nil, err
+	}
+	c.statemachines = statemachines
+	return c, nil
+}
+
+func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
+	evtCode, ok := eventName.(datatransfer.EventCode)
+	if !ok {
+		log.Errorf("dropped bad event %v", eventName)
+	}
+	realChannel, ok := channel.(internalChannelState)
+	if !ok {
+		log.Errorf("not a ClientDeal %v", channel)
+	}
+	evt := datatransfer.Event{
+		Code:      evtCode,
+		Message:   realChannel.Message,
+		Timestamp: time.Now(),
+	}
+
+	c.notifier(evt, realChannel.ToChannelState(c.voucherDecoder, c.voucherResultDecoder))
 }
 
 // CreateNew creates a new channel id and channel state and saves to channels.
 // returns error if the channel exists already.
 func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selector ipld.Node, voucher datatransfer.Voucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
 	chid := datatransfer.ChannelID{Initiator: initiator, ID: tid}
-	c.channelsLk.Lock()
-	defer c.channelsLk.Unlock()
-	_, ok := c.channels[chid]
-	if ok {
-		return chid, errors.New("tried to create channel but it already exists")
+	voucherBytes, err := encoding.Encode(voucher)
+	if err != nil {
+		return datatransfer.ChannelID{}, err
 	}
-	c.channels[chid] = internalChannel{
-		channel:  newChannel(0, baseCid, selector, voucher, dataSender, dataReceiver, 0),
-		status:   new(uint64),
-		sent:     new(uint64),
-		received: new(uint64)}
-	return chid, nil
+	selBytes, err := encoding.Encode(selector)
+	if err != nil {
+		return datatransfer.ChannelID{}, err
+	}
+	err = c.statemachines.Begin(chid, &internalChannelState{
+		TransferID: tid,
+		Initiator:  initiator,
+		BaseCid:    baseCid,
+		Selector:   &cbg.Deferred{Raw: selBytes},
+		Sender:     dataSender,
+		Recipient:  dataReceiver,
+		Vouchers: []encodedVoucher{
+			{
+				Type: voucher.Type(),
+				Voucher: &cbg.Deferred{
+					Raw: voucherBytes,
+				},
+			},
+		},
+		Status: datatransfer.Requested,
+	})
+	if err != nil {
+		return datatransfer.ChannelID{}, err
+	}
+	return chid, c.statemachines.Send(chid, datatransfer.Open)
 }
 
 // InProgress returns a list of in progress channels
 func (c *Channels) InProgress() map[datatransfer.ChannelID]datatransfer.ChannelState {
-	c.channelsLk.RLock()
-	defer c.channelsLk.RUnlock()
-	channelsCopy := make(map[datatransfer.ChannelID]datatransfer.ChannelState, len(c.channels))
-	for channelID, internalChannel := range c.channels {
-		channelsCopy[channelID] = ChannelState{
-			internalChannel.channel,
-			datatransfer.Status(atomic.LoadUint64(internalChannel.status)),
-			atomic.LoadUint64(internalChannel.sent),
-			atomic.LoadUint64(internalChannel.received),
-		}
+	var internalChannels []internalChannelState
+	c.statemachines.List(&internalChannels)
+	channels := make(map[datatransfer.ChannelID]datatransfer.ChannelState, len(internalChannels))
+	for _, internalChannel := range internalChannels {
+		channels[datatransfer.ChannelID{ID: internalChannel.TransferID, Initiator: internalChannel.Initiator}] =
+			internalChannel.ToChannelState(c.voucherDecoder, c.voucherResultDecoder)
 	}
-	return channelsCopy
+	return channels
 }
 
 // GetByID searches for a channel in the slice of channels with id `chid`.
 // Returns datatransfer.EmptyChannelState if there is no channel with that id
 func (c *Channels) GetByID(chid datatransfer.ChannelID) (datatransfer.ChannelState, error) {
-	c.channelsLk.RLock()
-	internalChannel, ok := c.channels[chid]
-	c.channelsLk.RUnlock()
-	if !ok {
-		return EmptyChannelState, ErrNotFound
+	var internalChannel internalChannelState
+	err := c.statemachines.Get(chid).Get(&internalChannel)
+	if err != nil {
+		return nil, ErrNotFound
 	}
-	return ChannelState{
-		internalChannel.channel,
-		datatransfer.Status(atomic.LoadUint64(internalChannel.status)),
-		atomic.LoadUint64(internalChannel.sent),
-		atomic.LoadUint64(internalChannel.received),
-	}, nil
+	return internalChannel.ToChannelState(c.voucherDecoder, c.voucherResultDecoder), nil
+}
+
+// Accept marks a data transfer as accepted
+func (c *Channels) Accept(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.Accept)
 }
 
 // IncrementSent increments the total sent on the given channel by the given amount (returning
 // the new total)
-func (c *Channels) IncrementSent(chid datatransfer.ChannelID, delta uint64) (uint64, error) {
-	c.channelsLk.RLock()
-	channel, ok := c.channels[chid]
-	c.channelsLk.RUnlock()
-	if !ok {
-		return 0, ErrNotFound
-	}
-	return atomic.AddUint64(channel.sent, delta), nil
+func (c *Channels) IncrementSent(chid datatransfer.ChannelID, delta uint64) error {
+	return c.send(chid, datatransfer.Progress, delta, uint64(0))
 }
 
 // IncrementReceived increments the total received on the given channel by the given amount (returning
 // the new total)
-func (c *Channels) IncrementReceived(chid datatransfer.ChannelID, delta uint64) (uint64, error) {
-	c.channelsLk.RLock()
-	channel, ok := c.channels[chid]
-	c.channelsLk.RUnlock()
-	if !ok {
-		return 0, ErrNotFound
-	}
-	return atomic.AddUint64(channel.received, delta), nil
+func (c *Channels) IncrementReceived(chid datatransfer.ChannelID, delta uint64) error {
+	return c.send(chid, datatransfer.Progress, uint64(0), delta)
 }
 
-// SetStatus sets the current status of the channel
-func (c *Channels) SetStatus(chid datatransfer.ChannelID, status datatransfer.Status) error {
-	c.channelsLk.RLock()
-	channel, ok := c.channels[chid]
-	c.channelsLk.RUnlock()
-	if !ok {
+// PauseSender pauses the sender of this channel
+func (c *Channels) PauseSender(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.PauseSender)
+}
+
+// PauseReceiver pauses the receiver of this channel
+func (c *Channels) PauseReceiver(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.PauseReceiver)
+}
+
+// ResumeSender resumes the sender of this channel
+func (c *Channels) ResumeSender(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.ResumeSender)
+}
+
+// ResumeReceiver resumes the receiver of this channel
+func (c *Channels) ResumeReceiver(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.ResumeReceiver)
+}
+
+// NewVoucher records a new voucher for this channel
+func (c *Channels) NewVoucher(chid datatransfer.ChannelID, voucher datatransfer.Voucher) error {
+	voucherBytes, err := encoding.Encode(voucher)
+	if err != nil {
+		return err
+	}
+	return c.send(chid, datatransfer.NewVoucher, voucher.Type(), voucherBytes)
+}
+
+// NewVoucherResult records a new voucher result for this channel
+func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResult datatransfer.VoucherResult) error {
+	voucherResultBytes, err := encoding.Encode(voucherResult)
+	if err != nil {
+		return err
+	}
+	return c.send(chid, datatransfer.NewVoucherResult, voucherResult.Type(), voucherResultBytes)
+}
+
+// Complete indicates a channel has completed its data transfer
+func (c *Channels) Complete(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.Complete)
+}
+
+// Cancel indicates a channel was cancelled prematurely
+func (c *Channels) Cancel(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.Cancel)
+}
+
+// Error indicates something that went wrong on a channel
+func (c *Channels) Error(chid datatransfer.ChannelID, err error) error {
+	return c.send(chid, datatransfer.Error, err)
+}
+
+func (c *Channels) send(chid datatransfer.ChannelID, code datatransfer.EventCode, args ...interface{}) error {
+	has, err := c.statemachines.Has(chid)
+	if err != nil {
+		return err
+	}
+	if !has {
 		return ErrNotFound
 	}
-	atomic.StoreUint64(channel.status, uint64(status))
-	return nil
-}
-
-// GetStatus gets the current status of the channel
-func (c *Channels) GetStatus(chid datatransfer.ChannelID) datatransfer.Status {
-	c.channelsLk.RLock()
-	channel, ok := c.channels[chid]
-	c.channelsLk.RUnlock()
-	if !ok {
-		return datatransfer.ChannelNotFoundError
-	}
-	return datatransfer.Status(atomic.LoadUint64(channel.status))
+	return c.statemachines.Send(chid, code, args...)
 }

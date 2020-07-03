@@ -56,6 +56,10 @@ func (trsp *transferResponse) VoucherResult(decoder encoding.Decoder) (encoding.
 	return decoder.DecodeFromCbor(trsp.VRes.Raw)
 }
 
+func (trsp *transferResponse) EmptyVoucherResult() bool {
+	return trsp.VTyp == datatransfer.EmptyTypeIdentifier
+}
+
 // ToNet serializes a transfer response. It's a wrapper for MarshalCBOR to provide
 // symmetry with FromNet
 func (trsp *transferResponse) ToNet(w io.Writer) error {
