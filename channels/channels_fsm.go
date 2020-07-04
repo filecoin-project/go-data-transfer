@@ -39,6 +39,7 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.ResumeSender).FromMany(datatransfer.SenderPaused).To(datatransfer.Ongoing).From(datatransfer.BothPaused).To(datatransfer.ReceiverPaused),
 	fsm.Event(datatransfer.ResumeReceiver).FromMany(datatransfer.ReceiverPaused).To(datatransfer.Ongoing).From(datatransfer.BothPaused).To(datatransfer.SenderPaused),
 	fsm.Event(datatransfer.Complete).FromAny().To(datatransfer.Completed),
+	fsm.Event(noopSynchronize).FromAny().ToNoChange(),
 }
 
 // ChannelStateEntryFuncs are handlers called as we enter different states

@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/transport"
 	gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
 	"github.com/filecoin-project/go-storedcounter"
@@ -73,6 +74,8 @@ type GraphsyncTestingData struct {
 	Host2          host.Host
 	GsNet1         gsnet.GraphSyncNetwork
 	GsNet2         gsnet.GraphSyncNetwork
+	DtNet1         network.DataTransferNetwork
+	DtNet2         network.DataTransferNetwork
 	AllSelector    ipld.Node
 	OrigBytes      []byte
 }
@@ -154,6 +157,9 @@ func NewGraphsyncTestingData(ctx context.Context, t *testing.T) *GraphsyncTestin
 
 	gsData.GsNet1 = gsnet.NewFromLibp2pHost(gsData.Host1)
 	gsData.GsNet2 = gsnet.NewFromLibp2pHost(gsData.Host2)
+
+	gsData.DtNet1 = network.NewFromLibp2pHost(gsData.Host1)
+	gsData.DtNet2 = network.NewFromLibp2pHost(gsData.Host2)
 
 	// create a selector for the whole UnixFS dag
 	gsData.AllSelector = allSelector

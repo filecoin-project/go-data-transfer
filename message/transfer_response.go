@@ -16,6 +16,7 @@ type transferResponse struct {
 	Acpt   bool
 	Updt   bool
 	Paus   bool
+	Canc   bool
 	XferID uint64
 	VRes   *cbg.Deferred
 	VTyp   datatransfer.TypeIdentifier
@@ -38,6 +39,11 @@ func (trsp *transferResponse) IsUpdate() bool {
 // IsPaused returns true if the responder is paused
 func (trsp *transferResponse) IsPaused() bool {
 	return trsp.Paus
+}
+
+// IsCancel returns true if the responder has cancelled this response
+func (trsp *transferResponse) IsCancel() bool {
+	return trsp.Canc
 }
 
 // 	Accepted returns true if the request is accepted in the response

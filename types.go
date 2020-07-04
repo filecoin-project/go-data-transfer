@@ -283,11 +283,11 @@ type Manager interface {
 	ResumeDataTransferChannel(ctx context.Context, chid ChannelID) error
 
 	// get status of a transfer
-	TransferChannelStatus(x ChannelID) Status
+	TransferChannelStatus(ctx context.Context, x ChannelID) Status
 
 	// get notified when certain types of events happen
 	SubscribeToEvents(subscriber Subscriber) Unsubscribe
 
 	// get all in progress transfers
-	InProgressChannels() map[ChannelID]ChannelState
+	InProgressChannels(ctx context.Context) (map[ChannelID]ChannelState, error)
 }

@@ -1,7 +1,9 @@
 package channels
 
 import (
+	"context"
 	"errors"
+	"math"
 	"time"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -13,6 +15,8 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
+
+const noopSynchronize = datatransfer.EventCode(math.MaxInt32)
 
 type DecoderByTypeFunc func(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool)
 
@@ -63,6 +67,9 @@ func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 	if !ok {
 		log.Errorf("dropped bad event %v", eventName)
 	}
+	if evtCode == noopSynchronize {
+		return
+	}
 	realChannel, ok := channel.(internalChannelState)
 	if !ok {
 		log.Errorf("not a ClientDeal %v", channel)
@@ -112,22 +119,29 @@ func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selec
 }
 
 // InProgress returns a list of in progress channels
-func (c *Channels) InProgress() map[datatransfer.ChannelID]datatransfer.ChannelState {
+func (c *Channels) InProgress(ctx context.Context) (map[datatransfer.ChannelID]datatransfer.ChannelState, error) {
 	var internalChannels []internalChannelState
-	c.statemachines.List(&internalChannels)
+	err := c.statemachines.List(&internalChannels)
+	if err != nil {
+		return nil, err
+	}
 	channels := make(map[datatransfer.ChannelID]datatransfer.ChannelState, len(internalChannels))
 	for _, internalChannel := range internalChannels {
 		channels[datatransfer.ChannelID{ID: internalChannel.TransferID, Initiator: internalChannel.Initiator}] =
 			internalChannel.ToChannelState(c.voucherDecoder, c.voucherResultDecoder)
 	}
-	return channels
+	return channels, nil
 }
 
 // GetByID searches for a channel in the slice of channels with id `chid`.
 // Returns datatransfer.EmptyChannelState if there is no channel with that id
-func (c *Channels) GetByID(chid datatransfer.ChannelID) (datatransfer.ChannelState, error) {
+func (c *Channels) GetByID(ctx context.Context, chid datatransfer.ChannelID) (datatransfer.ChannelState, error) {
 	var internalChannel internalChannelState
-	err := c.statemachines.Get(chid).Get(&internalChannel)
+	err := c.sendSync(ctx, chid, noopSynchronize)
+	if err != nil {
+		return nil, err
+	}
+	err = c.statemachines.Get(chid).Get(&internalChannel)
 	if err != nil {
 		return nil, ErrNotFound
 	}
@@ -204,6 +218,11 @@ func (c *Channels) Error(chid datatransfer.ChannelID, err error) error {
 	return c.send(chid, datatransfer.Error, err)
 }
 
+// HasChannel returns true if the given channel id is being tracked
+func (c *Channels) HasChannel(chid datatransfer.ChannelID) (bool, error) {
+	return c.statemachines.Has(chid)
+}
+
 func (c *Channels) send(chid datatransfer.ChannelID, code datatransfer.EventCode, args ...interface{}) error {
 	has, err := c.statemachines.Has(chid)
 	if err != nil {
@@ -213,4 +232,15 @@ func (c *Channels) send(chid datatransfer.ChannelID, code datatransfer.EventCode
 		return ErrNotFound
 	}
 	return c.statemachines.Send(chid, code, args...)
+}
+
+func (c *Channels) sendSync(ctx context.Context, chid datatransfer.ChannelID, code datatransfer.EventCode, args ...interface{}) error {
+	has, err := c.statemachines.Has(chid)
+	if err != nil {
+		return err
+	}
+	if !has {
+		return ErrNotFound
+	}
+	return c.statemachines.SendSync(ctx, chid, code, args...)
 }

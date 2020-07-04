@@ -2,196 +2,288 @@ package impl_test
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-datastore"
+	dss "github.com/ipfs/go-datastore/sync"
+	"github.com/ipld/go-ipld-prime"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	. "github.com/filecoin-project/go-data-transfer/impl"
 	"github.com/filecoin-project/go-data-transfer/message"
-	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/testutil"
-	tp "github.com/filecoin-project/go-data-transfer/transport/graphsync"
+	"github.com/filecoin-project/go-storedcounter"
 )
 
-func TestSendResponseToIncomingRequest(t *testing.T) {
+func TestDataTransferReceiving(t *testing.T) {
 	// create network
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	testCases := map[string]struct {
+		expectedEvents     []datatransfer.EventCode
+		configureValidator func(sv *stubbedValidator)
+		verify             func(t *testing.T, h *receiverHarness)
+	}{
+		"new push request validates": {
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept},
+			configureValidator: func(sv *stubbedValidator) {
+				sv.expectSuccessPush()
+				sv.stubResult(testutil.NewFakeDTType())
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
+				require.Len(t, h.sv.validationsReceived, 1)
+				validation := h.sv.validationsReceived[0]
+				assert.False(t, validation.isPull)
+				assert.Equal(t, h.peers[1], validation.other)
+				assert.Equal(t, h.voucher, validation.voucher)
+				assert.Equal(t, h.baseCid, validation.baseCid)
+				assert.Equal(t, h.stor, validation.selector)
 
-	gsData := testutil.NewGraphsyncTestingData(ctx, t)
-	host1 := gsData.Host1
-	host2 := gsData.Host2
-
-	// setup receiving peer to just record message coming in
-	dtnet1 := network.NewFromLibp2pHost(host1)
-	r := &receiver{
-		messageReceived: make(chan receivedMessage),
+				require.Len(t, h.transport.OpenedChannels, 1)
+				openChannel := h.transport.OpenedChannels[0]
+				require.Equal(t, openChannel.ChannelID, datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]})
+				require.Equal(t, openChannel.DataSender, h.peers[1])
+				require.Equal(t, openChannel.Root, cidlink.Link{Cid: h.baseCid})
+				require.Equal(t, openChannel.Selector, h.stor)
+				require.False(t, openChannel.Message.IsRequest())
+				response, ok := openChannel.Message.(message.DataTransferResponse)
+				require.True(t, ok)
+				require.True(t, response.Accepted())
+				require.Equal(t, response.TransferID(), h.id)
+				require.False(t, response.IsUpdate())
+				require.False(t, response.IsCancel())
+				require.False(t, response.IsPaused())
+				require.False(t, response.EmptyVoucherResult())
+			},
+		},
+		"new push request errors": {
+			configureValidator: func(sv *stubbedValidator) {
+				sv.expectErrorPush()
+				sv.stubResult(testutil.NewFakeDTType())
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
+				require.Len(t, h.network.SentMessages, 1)
+				responseMessage := h.network.SentMessages[0].Message
+				require.False(t, responseMessage.IsRequest())
+				response, ok := responseMessage.(message.DataTransferResponse)
+				require.True(t, ok)
+				require.False(t, response.Accepted())
+				require.Equal(t, response.TransferID(), h.id)
+				require.False(t, response.IsUpdate())
+				require.False(t, response.IsCancel())
+				require.False(t, response.IsPaused())
+				require.False(t, response.EmptyVoucherResult())
+			},
+		},
+		"new pull request validates": {
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept},
+			configureValidator: func(sv *stubbedValidator) {
+				sv.expectSuccessPull()
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				response, err := h.transport.EventHandler.OnRequestReceived(datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.pullRequest)
+				require.NoError(t, err)
+				require.Len(t, h.sv.validationsReceived, 1)
+				validation := h.sv.validationsReceived[0]
+				assert.True(t, validation.isPull)
+				assert.Equal(t, h.peers[1], validation.other)
+				assert.Equal(t, h.voucher, validation.voucher)
+				assert.Equal(t, h.baseCid, validation.baseCid)
+				assert.Equal(t, h.stor, validation.selector)
+				require.True(t, response.Accepted())
+				require.Equal(t, response.TransferID(), h.id)
+				require.False(t, response.IsUpdate())
+				require.False(t, response.IsCancel())
+				require.False(t, response.IsPaused())
+				require.True(t, response.EmptyVoucherResult())
+			},
+		},
+		"new pull request errors": {
+			configureValidator: func(sv *stubbedValidator) {
+				sv.expectErrorPull()
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				response, err := h.transport.EventHandler.OnRequestReceived(datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.pullRequest)
+				require.Error(t, err)
+				require.False(t, response.Accepted())
+				require.Equal(t, response.TransferID(), h.id)
+				require.False(t, response.IsUpdate())
+				require.False(t, response.IsCancel())
+				require.False(t, response.IsPaused())
+				require.True(t, response.EmptyVoucherResult())
+			},
+		},
+		"send vouchers from responder fails, push request": {
+			verify: func(t *testing.T, h *receiverHarness) {
+				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
+				newVoucher := testutil.NewFakeDTType()
+				err := h.dt.SendVoucher(h.ctx, datatransfer.ChannelID{Initiator: h.peers[1], ID: h.id}, newVoucher)
+				require.EqualError(t, err, "cannot send voucher for request we did not initiate")
+			},
+		},
+		"send vouchers from responder fails, pull request": {
+			verify: func(t *testing.T, h *receiverHarness) {
+				_, _ = h.transport.EventHandler.OnRequestReceived(datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.pullRequest)
+				newVoucher := testutil.NewFakeDTType()
+				err := h.dt.SendVoucher(h.ctx, datatransfer.ChannelID{Initiator: h.peers[1], ID: h.id}, newVoucher)
+				require.EqualError(t, err, "cannot send voucher for request we did not initiate")
+			},
+		},
 	}
-	dtnet1.SetDelegate(r)
-
-	gs2 := testutil.NewFakeGraphSync()
-	tp2 := tp.NewTransport(host2.ID(), gs2)
-	voucher := testutil.NewFakeDTType()
-	baseCid := testutil.GenerateCids(1)[0]
-
-	t.Run("Response to push with successful validation", func(t *testing.T) {
-		id := datatransfer.TransferID(rand.Int31())
-		sv := newSV()
-		sv.expectSuccessPush()
-
-		dt, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
-		require.NoError(t, err)
-		dt.Start(ctx)
-
-		require.NoError(t, dt.RegisterVoucherType(&testutil.FakeDTType{}, sv))
-
-		isPull := false
-		_, err = message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, gsData.AllSelector)
-		require.NoError(t, err)
-		request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, gsData.AllSelector)
-		require.NoError(t, err)
-		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
-		gsRequest := gs2.AssertRequestReceived(ctx, t)
-		received := gsRequest.DTMessage(t)
-		sv.verifyExpectations(t)
-
-		require.False(t, received.IsRequest())
-		receivedResponse, ok := received.(message.DataTransferResponse)
-		require.True(t, ok)
-
-		assert.Equal(t, receivedResponse.TransferID(), id)
-		require.True(t, receivedResponse.Accepted())
-
-		t.Run("Sending vouchers does not work on responder", func(t *testing.T) {
-			newVoucher := testutil.NewFakeDTType()
-			err := dt.SendVoucher(ctx, datatransfer.ChannelID{Initiator: host1.ID(), ID: id}, newVoucher)
-			require.EqualError(t, err, "cannot send voucher for request we did not initiate")
+	for testCase, verify := range testCases {
+		t.Run(testCase, func(t *testing.T) {
+			h := &receiverHarness{}
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			h.ctx = ctx
+			h.peers = testutil.GeneratePeers(2)
+			h.network = testutil.NewFakeNetwork(h.peers[0])
+			h.transport = testutil.NewFakeTransport()
+			h.ds = dss.MutexWrap(datastore.NewMapDatastore())
+			h.storedCounter = storedcounter.New(h.ds, datastore.NewKey("counter"))
+			dt, err := NewDataTransfer(h.ds, h.network, h.transport, h.storedCounter)
+			require.NoError(t, err)
+			dt.Start(ctx)
+			h.dt = dt
+			ev := eventVerifier{
+				expectedEvents: verify.expectedEvents,
+				events:         make(chan datatransfer.EventCode, len(verify.expectedEvents)),
+			}
+			ev.setup(t, dt)
+			h.stor = testutil.AllSelector()
+			h.voucher = testutil.NewFakeDTType()
+			h.baseCid = testutil.GenerateCids(1)[0]
+			h.id = datatransfer.TransferID(rand.Int31())
+			h.pullRequest, err = message.NewRequest(h.id, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			require.NoError(t, err)
+			h.pushRequest, err = message.NewRequest(h.id, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			require.NoError(t, err)
+			h.sv = newSV()
+			if verify.configureValidator != nil {
+				verify.configureValidator(h.sv)
+			}
+			err = h.dt.RegisterVoucherType(h.voucher, h.sv)
+			require.NoError(t, err)
+			verify.verify(t, h)
+			h.sv.verifyExpectations(t)
+			ev.verify(ctx, t)
 		})
-	})
+	}
+}
 
-	t.Run("Response to push with error validation", func(t *testing.T) {
-		id := datatransfer.TransferID(rand.Int31())
-		sv := newSV()
-		sv.expectErrorPush()
-		dt, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
-		require.NoError(t, err)
-		dt.Start(ctx)
+type receiverHarness struct {
+	id            datatransfer.TransferID
+	pushRequest   message.DataTransferRequest
+	pullRequest   message.DataTransferRequest
+	ctx           context.Context
+	peers         []peer.ID
+	network       *testutil.FakeNetwork
+	transport     *testutil.FakeTransport
+	sv            *stubbedValidator
+	ds            datastore.Datastore
+	storedCounter *storedcounter.StoredCounter
+	dt            datatransfer.Manager
+	stor          ipld.Node
+	voucher       *testutil.FakeDTType
+	baseCid       cid.Cid
+}
 
-		err = dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
-		require.NoError(t, err)
+func newSV() *stubbedValidator {
+	return &stubbedValidator{nil, false, false, false, false, nil, nil, nil}
+}
 
-		isPull := false
+func (sv *stubbedValidator) ValidatePush(
+	sender peer.ID,
+	voucher datatransfer.Voucher,
+	baseCid cid.Cid,
+	selector ipld.Node) (datatransfer.VoucherResult, error) {
+	sv.didPush = true
+	sv.validationsReceived = append(sv.validationsReceived, receivedValidation{false, sender, voucher, baseCid, selector})
+	return sv.result, sv.pushError
+}
 
-		request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, gsData.AllSelector)
-		require.NoError(t, err)
-		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
+func (sv *stubbedValidator) ValidatePull(
+	receiver peer.ID,
+	voucher datatransfer.Voucher,
+	baseCid cid.Cid,
+	selector ipld.Node) (datatransfer.VoucherResult, error) {
+	sv.didPull = true
+	sv.validationsReceived = append(sv.validationsReceived, receivedValidation{true, receiver, voucher, baseCid, selector})
+	return sv.result, sv.pullError
+}
 
-		var messageReceived receivedMessage
-		select {
-		case <-ctx.Done():
-			t.Fatal("did not receive message sent")
-		case messageReceived = <-r.messageReceived:
-		}
+func (sv *stubbedValidator) stubResult(voucherResult datatransfer.VoucherResult) {
+	sv.result = voucherResult
+}
+func (sv *stubbedValidator) stubErrorPush() {
+	sv.pushError = errors.New("something went wrong")
+}
 
-		sv.verifyExpectations(t)
+func (sv *stubbedValidator) stubSuccessPush() {
+	sv.pullError = nil
+}
 
-		sender := messageReceived.sender
-		require.Equal(t, sender, host2.ID())
+func (sv *stubbedValidator) expectSuccessPush() {
+	sv.expectPush = true
+	sv.stubSuccessPush()
+}
 
-		received := messageReceived.message
-		require.False(t, received.IsRequest())
-		receivedResponse, ok := received.(message.DataTransferResponse)
-		require.True(t, ok)
+func (sv *stubbedValidator) expectErrorPush() {
+	sv.expectPush = true
+	sv.stubErrorPush()
+}
 
-		require.Equal(t, receivedResponse.TransferID(), id)
-		require.False(t, receivedResponse.Accepted())
-	})
+func (sv *stubbedValidator) stubErrorPull() {
+	sv.pullError = errors.New("something went wrong")
+}
 
-	t.Run("Response to pull with successful validation", func(t *testing.T) {
-		id := datatransfer.TransferID(rand.Int31())
-		sv := newSV()
-		sv.expectSuccessPull()
+func (sv *stubbedValidator) stubSuccessPull() {
+	sv.pullError = nil
+}
 
-		dt, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
-		require.NoError(t, err)
-		dt.Start(ctx)
+func (sv *stubbedValidator) expectSuccessPull() {
+	sv.expectPull = true
+	sv.stubSuccessPull()
+}
 
-		err = dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
-		require.NoError(t, err)
+func (sv *stubbedValidator) expectErrorPull() {
+	sv.expectPull = true
+	sv.stubErrorPull()
+}
 
-		isPull := true
+func (sv *stubbedValidator) verifyExpectations(t *testing.T) {
+	if sv.expectPush {
+		require.True(t, sv.didPush)
+	}
+	if sv.expectPull {
+		require.True(t, sv.didPull)
+	}
+}
 
-		request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, gsData.AllSelector)
-		require.NoError(t, err)
-		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
-		var messageReceived receivedMessage
-		select {
-		case <-ctx.Done():
-			t.Fatal("did not receive message sent")
-		case messageReceived = <-r.messageReceived:
-		}
+type receivedValidation struct {
+	isPull   bool
+	other    peer.ID
+	voucher  datatransfer.Voucher
+	baseCid  cid.Cid
+	selector ipld.Node
+}
 
-		sv.verifyExpectations(t)
-
-		sender := messageReceived.sender
-		require.Equal(t, sender, host2.ID())
-
-		received := messageReceived.message
-		require.False(t, received.IsRequest())
-		receivedResponse, ok := received.(message.DataTransferResponse)
-		require.True(t, ok)
-
-		require.Equal(t, receivedResponse.TransferID(), id)
-		require.True(t, receivedResponse.Accepted())
-
-		t.Run("Sending vouchers does not work on responder", func(t *testing.T) {
-			newVoucher := testutil.NewFakeDTType()
-			err := dt.SendVoucher(ctx, datatransfer.ChannelID{Initiator: host1.ID(), ID: id}, newVoucher)
-			require.EqualError(t, err, "cannot send voucher for request we did not initiate")
-		})
-	})
-
-	t.Run("Response to push with error validation", func(t *testing.T) {
-		id := datatransfer.TransferID(rand.Int31())
-		sv := newSV()
-		sv.expectErrorPull()
-
-		dt, err := NewDataTransfer(gsData.DtDs2, host2, tp2, gsData.StoredCounter2)
-		require.NoError(t, err)
-		dt.Start(ctx)
-
-		err = dt.RegisterVoucherType(&testutil.FakeDTType{}, sv)
-		require.NoError(t, err)
-
-		isPull := true
-
-		request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, gsData.AllSelector)
-		require.NoError(t, err)
-		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
-
-		var messageReceived receivedMessage
-		select {
-		case <-ctx.Done():
-			t.Fatal("did not receive message sent")
-		case messageReceived = <-r.messageReceived:
-		}
-
-		sv.verifyExpectations(t)
-
-		sender := messageReceived.sender
-		require.Equal(t, sender, host2.ID())
-
-		received := messageReceived.message
-		require.False(t, received.IsRequest())
-		receivedResponse, ok := received.(message.DataTransferResponse)
-		require.True(t, ok)
-
-		require.Equal(t, receivedResponse.TransferID(), id)
-		require.False(t, receivedResponse.Accepted())
-	})
+type stubbedValidator struct {
+	result              datatransfer.VoucherResult
+	didPush             bool
+	didPull             bool
+	expectPush          bool
+	expectPull          bool
+	pushError           error
+	pullError           error
+	validationsReceived []receivedValidation
 }

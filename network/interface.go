@@ -29,6 +29,9 @@ type DataTransferNetwork interface {
 
 	// ConnectTo establishes a connection to the given peer
 	ConnectTo(context.Context, peer.ID) error
+
+	// ID returns the peer id of this libp2p host
+	ID() peer.ID
 }
 
 // Receiver is an interface for receiving messages from the GraphSyncNetwork.

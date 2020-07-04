@@ -67,14 +67,15 @@ func TestChannels(t *testing.T) {
 	})
 
 	t.Run("in progress channels", func(t *testing.T) {
-		inProgress := channelList.InProgress()
+		inProgress, err := channelList.InProgress(ctx)
+		require.NoError(t, err)
 		require.Len(t, inProgress, 2)
 		require.Contains(t, inProgress, datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
 		require.Contains(t, inProgress, datatransfer.ChannelID{Initiator: peers[3], ID: tid2})
 	})
 
 	t.Run("get by id", func(t *testing.T) {
-		state, err := channelList.GetByID(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
+		state, err := channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
 		require.NoError(t, err)
 		require.NotEqual(t, channels.EmptyChannelState, state)
 		require.Equal(t, cids[0], state.BaseCID())
@@ -84,18 +85,18 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, peers[1], state.Recipient())
 
 		// empty if channel does not exist
-		state, err = channelList.GetByID(datatransfer.ChannelID{Initiator: peers[1], ID: tid1})
+		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[1], ID: tid1})
 		require.Equal(t, nil, state)
 		require.EqualError(t, err, channels.ErrNotFound.Error())
 
 		// works for other channel as well
-		state, err = channelList.GetByID(datatransfer.ChannelID{Initiator: peers[3], ID: tid2})
+		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[3], ID: tid2})
 		require.NotEqual(t, nil, state)
 		require.NoError(t, err)
 	})
 
 	t.Run("accept", func(t *testing.T) {
-		state, err := channelList.GetByID(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
+		state, err := channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
 		require.NoError(t, err)
 		require.Equal(t, state.Status(), datatransfer.Requested)
 
@@ -109,7 +110,7 @@ func TestChannels(t *testing.T) {
 	})
 
 	t.Run("updating send/receive values", func(t *testing.T) {
-		state, err := channelList.GetByID(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
+		state, err := channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), state.Received())
 		require.Equal(t, uint64(0), state.Sent())
@@ -146,7 +147,7 @@ func TestChannels(t *testing.T) {
 	})
 
 	t.Run("pause/resume", func(t *testing.T) {
-		state, err := channelList.GetByID(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
+		state, err := channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
 		require.NoError(t, err)
 		require.Equal(t, datatransfer.Ongoing, state.Status())
 
@@ -175,7 +176,7 @@ func TestChannels(t *testing.T) {
 		fv3 := testutil.NewFakeDTType()
 		fvr1 := testutil.NewFakeDTType()
 
-		state, err := channelList.GetByID(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
+		state, err := channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
 		require.NoError(t, err)
 		require.Equal(t, []datatransfer.Voucher{fv1}, state.Vouchers())
 		require.Equal(t, fv1, state.Voucher())
@@ -188,7 +189,7 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, fv1, state.Voucher())
 		require.Equal(t, fv3, state.LastVoucher())
 
-		state, err = channelList.GetByID(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
+		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
 		require.NoError(t, err)
 		require.Equal(t, []datatransfer.VoucherResult{}, state.VoucherResults())
 
@@ -200,7 +201,7 @@ func TestChannels(t *testing.T) {
 	})
 
 	t.Run("test finality", func(t *testing.T) {
-		state, err := channelList.GetByID(datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
+		state, err := channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], ID: tid1})
 		require.NoError(t, err)
 		require.Equal(t, datatransfer.Ongoing, state.Status())
 
@@ -209,7 +210,7 @@ func TestChannels(t *testing.T) {
 		state = checkEvent(ctx, t, received, datatransfer.Complete)
 		require.Equal(t, datatransfer.Completed, state.Status())
 
-		state, err = channelList.GetByID(datatransfer.ChannelID{Initiator: peers[3], ID: tid2})
+		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[3], ID: tid2})
 		require.NoError(t, err)
 		require.Equal(t, datatransfer.Requested, state.Status())
 

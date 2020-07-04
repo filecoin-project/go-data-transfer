@@ -22,6 +22,7 @@ type DataTransferMessage interface {
 	IsRequest() bool
 	IsUpdate() bool
 	IsPaused() bool
+	IsCancel() bool
 	TransferID() datatransfer.TransferID
 	cborgen.CBORMarshaler
 	cborgen.CBORUnmarshaler
@@ -37,7 +38,6 @@ type DataTransferRequest interface {
 	EmptyVoucher() bool
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
-	IsCancel() bool
 }
 
 // DataTransferResponse is a response message for the data transfer protocol
@@ -109,6 +109,14 @@ func NewResponse(id datatransfer.TransferID, accepted bool, isUpdate bool, isPau
 		VTyp:   voucherResultType,
 		VRes:   &cborgen.Deferred{Raw: vbytes},
 	}, nil
+}
+
+// CancelResponse makes a new cancel response message
+func CancelResponse(id datatransfer.TransferID) DataTransferResponse {
+	return &transferResponse{
+		Canc:   true,
+		XferID: uint64(id),
+	}
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage

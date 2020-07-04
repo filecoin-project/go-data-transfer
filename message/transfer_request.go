@@ -103,13 +103,6 @@ func (trq *transferRequest) IsPartial() bool {
 	return trq.Part
 }
 
-// Cancel cancels a transfer request
-func (trq *transferRequest) Cancel() error {
-	// do other stuff ?
-	trq.Canc = true
-	return nil
-}
-
 // ToNet serializes a transfer request. It's a wrapper for MarshalCBOR to provide
 // symmetry with FromNet
 func (trq *transferRequest) ToNet(w io.Writer) error {

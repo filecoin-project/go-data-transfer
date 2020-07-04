@@ -41,3 +41,8 @@ func (fn *FakeNetwork) SetDelegate(receiver network.Receiver) {
 func (fn *FakeNetwork) ConnectTo(_ context.Context, _ peer.ID) error {
 	panic("not implemented")
 }
+
+// ID returns a stubbed id for host of this network
+func (fn *FakeNetwork) ID() peer.ID {
+	return fn.PeerID
+}
