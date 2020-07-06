@@ -85,6 +85,33 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.EmptyVoucherResult())
 			},
 		},
+		"new push request pauses": {
+			configureValidator: func(sv *stubbedValidator) {
+				sv.expectPausePush()
+				sv.stubResult(testutil.NewFakeDTType())
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
+
+				require.Len(t, h.transport.OpenedChannels, 1)
+				openChannel := h.transport.OpenedChannels[0]
+				require.Equal(t, openChannel.ChannelID, datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]})
+				require.Equal(t, openChannel.DataSender, h.peers[1])
+				require.Equal(t, openChannel.Root, cidlink.Link{Cid: h.baseCid})
+				require.Equal(t, openChannel.Selector, h.stor)
+				require.False(t, openChannel.Message.IsRequest())
+				response, ok := openChannel.Message.(message.DataTransferResponse)
+				require.True(t, ok)
+				require.True(t, response.Accepted())
+				require.Equal(t, response.TransferID(), h.id)
+				require.False(t, response.IsUpdate())
+				require.False(t, response.IsCancel())
+				require.True(t, response.IsPaused())
+				require.False(t, response.EmptyVoucherResult())
+				require.Len(t, h.transport.PausedChannels, 1)
+				require.Equal(t, datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.transport.PausedChannels[0])
+			},
+		},
 		"new pull request validates": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept},
 			configureValidator: func(sv *stubbedValidator) {
@@ -120,6 +147,22 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsUpdate())
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
+				require.True(t, response.EmptyVoucherResult())
+			},
+		},
+		"new pull request pauses": {
+			configureValidator: func(sv *stubbedValidator) {
+				sv.expectPausePull()
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				response, err := h.transport.EventHandler.OnRequestReceived(datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.pullRequest)
+				require.EqualError(t, err, transport.ErrPause.Error())
+
+				require.True(t, response.Accepted())
+				require.Equal(t, response.TransferID(), h.id)
+				require.False(t, response.IsUpdate())
+				require.False(t, response.IsCancel())
+				require.True(t, response.IsPaused())
 				require.True(t, response.EmptyVoucherResult())
 			},
 		},
@@ -308,7 +351,11 @@ func (sv *stubbedValidator) stubErrorPush() {
 }
 
 func (sv *stubbedValidator) stubSuccessPush() {
-	sv.pullError = nil
+	sv.pushError = nil
+}
+
+func (sv *stubbedValidator) stubPausePush() {
+	sv.pushError = datatransfer.ErrPause
 }
 
 func (sv *stubbedValidator) expectSuccessPush() {
@@ -321,12 +368,21 @@ func (sv *stubbedValidator) expectErrorPush() {
 	sv.stubErrorPush()
 }
 
+func (sv *stubbedValidator) expectPausePush() {
+	sv.expectPush = true
+	sv.stubPausePush()
+}
+
 func (sv *stubbedValidator) stubErrorPull() {
 	sv.pullError = errors.New("something went wrong")
 }
 
 func (sv *stubbedValidator) stubSuccessPull() {
 	sv.pullError = nil
+}
+
+func (sv *stubbedValidator) stubPausePull() {
+	sv.pullError = datatransfer.ErrPause
 }
 
 func (sv *stubbedValidator) expectSuccessPull() {
@@ -337,6 +393,11 @@ func (sv *stubbedValidator) expectSuccessPull() {
 func (sv *stubbedValidator) expectErrorPull() {
 	sv.expectPull = true
 	sv.stubErrorPull()
+}
+
+func (sv *stubbedValidator) expectPausePull() {
+	sv.expectPull = true
+	sv.stubPausePull()
 }
 
 func (sv *stubbedValidator) verifyExpectations(t *testing.T) {

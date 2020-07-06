@@ -264,12 +264,12 @@ func (m *manager) newRequest(ctx context.Context, selector ipld.Node, isPull boo
 	return message.NewRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
 }
 
-func (m *manager) response(isAccepted bool, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (message.DataTransferResponse, error) {
+func (m *manager) response(isAccepted bool, isPaused bool, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (message.DataTransferResponse, error) {
 	resultType := datatransfer.EmptyTypeIdentifier
 	if voucherResult != nil {
 		resultType = voucherResult.Type()
 	}
-	return message.NewResponse(tid, isAccepted, false, resultType, voucherResult)
+	return message.NewResponse(tid, isAccepted, isPaused, resultType, voucherResult)
 }
 
 // close an open channel (effectively a cancel)
@@ -398,9 +398,14 @@ func (m *manager) receiveNewRequest(
 	initiator peer.ID,
 	incoming message.DataTransferRequest) (message.DataTransferResponse, error) {
 	result, err := m.acceptRequest(initiator, incoming)
-	msg, msgErr := m.response(err == nil, incoming.TransferID(), result)
+	isAccepted := err == nil || err == datatransfer.ErrPause
+	msg, msgErr := m.response(isAccepted, err == datatransfer.ErrPause, incoming.TransferID(), result)
 	if msgErr != nil {
 		return nil, msgErr
+	}
+	// convert to the transport error for pauses
+	if err == datatransfer.ErrPause {
+		err = transport.ErrPause
 	}
 	return msg, err
 }
@@ -410,9 +415,10 @@ func (m *manager) acceptRequest(
 	incoming message.DataTransferRequest) (datatransfer.VoucherResult, error) {
 
 	voucher, result, err := m.validateVoucher(initiator, incoming)
-	if err != nil {
+	if err != nil && err != datatransfer.ErrPause {
 		return result, err
 	}
+	voucherErr := err
 	stor, _ := incoming.Selector()
 
 	var dataSender, dataReceiver peer.ID
@@ -434,7 +440,10 @@ func (m *manager) acceptRequest(
 			return result, err
 		}
 	}
-	return result, m.channels.Accept(chid)
+	if err := m.channels.Accept(chid); err != nil {
+		return result, err
+	}
+	return result, voucherErr
 }
 
 // validateVoucher converts a voucher in an incoming message to its appropriate

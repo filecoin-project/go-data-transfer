@@ -12,7 +12,17 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-var ErrChannelNotFound = errors.New("channel not found")
+type errorString string
+
+func (es errorString) Error() string {
+	return string(es)
+}
+
+// ErrChannelNotFound indicates the given channel does not exist
+const ErrChannelNotFound = errorString("channel not found")
+
+// ErrPause can be returned from validators to pause a request
+const ErrPause = errorString("data transfer pause request")
 
 // TypeIdentifier is a unique string identifier for a type of encodable object in a
 // registry
@@ -280,13 +290,15 @@ var ErrRetryValidation = errors.New("Retry Revalidation")
 type Revalidator interface {
 	RequestValidator
 	// OnPullDataSent is called on the responder side when more bytes are sent
-	// for a given pull request. It should return a RevalidationRequest or nil
-	// to continue uninterrupted, and err if the request should be terminated
-	OnPullDataSent(ChannelID, ChannelState) (VoucherResult, error)
+	// for a given pull request. It should return a VoucherResult + ErrPause to
+	// request revalidation or nil to continue uninterrupted,
+	// other errors will terminate the request
+	OnPullDataSent(chid ChannelID, additionalBytesSent uint64) (VoucherResult, error)
 	// OnPushDataReceived is called on the responder side when more bytes are received
-	// for a given push request. It should return a RevalidationRequest or nil
-	// to continue uninterrupted, and err if the request should be terminated
-	OnPushDataReceived(ChannelID, ChannelState) (VoucherResult, error)
+	// for a given push request.  It should return a VoucherResult + ErrPause to
+	// request revalidation or nil to continue uninterrupted,
+	// other errors will terminate the request
+	OnPushDataReceived(chid ChannelID, additionalBytesReceived uint64) (VoucherResult, error)
 }
 
 // Manager is the core interface presented by all implementations of
