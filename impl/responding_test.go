@@ -20,10 +20,11 @@ import (
 	. "github.com/filecoin-project/go-data-transfer/impl"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/testutil"
+	"github.com/filecoin-project/go-data-transfer/transport"
 	"github.com/filecoin-project/go-storedcounter"
 )
 
-func TestDataTransferReceiving(t *testing.T) {
+func TestDataTransferResponding(t *testing.T) {
 	// create network
 	ctx := context.Background()
 	testCases := map[string]struct {
@@ -138,6 +139,72 @@ func TestDataTransferReceiving(t *testing.T) {
 				require.EqualError(t, err, "cannot send voucher for request we did not initiate")
 			},
 		},
+		"receive voucher": {
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept, datatransfer.NewVoucher},
+			configureValidator: func(sv *stubbedValidator) {
+				sv.expectSuccessPush()
+				sv.stubResult(testutil.NewFakeDTType())
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
+				_, err := h.transport.EventHandler.OnRequestReceived(datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.voucherUpdate)
+				require.NoError(t, err)
+			},
+		},
+		"receive pause, unpause": {
+			expectedEvents: []datatransfer.EventCode{
+				datatransfer.Open,
+				datatransfer.NewVoucherResult,
+				datatransfer.Accept,
+				datatransfer.PauseSender,
+				datatransfer.ResumeSender},
+			configureValidator: func(sv *stubbedValidator) {
+				sv.expectSuccessPush()
+				sv.stubResult(testutil.NewFakeDTType())
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
+				_, err := h.transport.EventHandler.OnRequestReceived(datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.pauseUpdate)
+				require.NoError(t, err)
+				_, err = h.transport.EventHandler.OnRequestReceived(datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.resumeUpdate)
+				require.NoError(t, err)
+			},
+		},
+		"receive pause, set pause local, receive unpause": {
+			expectedEvents: []datatransfer.EventCode{
+				datatransfer.Open,
+				datatransfer.NewVoucherResult,
+				datatransfer.Accept,
+				datatransfer.PauseSender,
+				datatransfer.PauseReceiver,
+				datatransfer.ResumeSender},
+			configureValidator: func(sv *stubbedValidator) {
+				sv.expectSuccessPush()
+				sv.stubResult(testutil.NewFakeDTType())
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
+				_, err := h.transport.EventHandler.OnRequestReceived(datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.pauseUpdate)
+				require.NoError(t, err)
+				h.dt.PauseDataTransferChannel(h.ctx, datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]})
+				_, err = h.transport.EventHandler.OnRequestReceived(datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.resumeUpdate)
+				require.EqualError(t, err, transport.ErrPause.Error())
+			},
+		},
+		"receive cancel": {
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept, datatransfer.Cancel},
+			configureValidator: func(sv *stubbedValidator) {
+				sv.expectSuccessPush()
+				sv.stubResult(testutil.NewFakeDTType())
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
+				_, err := h.transport.EventHandler.OnRequestReceived(datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.cancelUpdate)
+				require.NoError(t, err)
+				require.Len(t, h.transport.CleanedUpChannels, 1)
+				require.Equal(t, datatransfer.ChannelID{ID: h.id, Initiator: h.peers[1]}, h.transport.CleanedUpChannels[0])
+			},
+		},
 	}
 	for testCase, verify := range testCases {
 		t.Run(testCase, func(t *testing.T) {
@@ -167,6 +234,14 @@ func TestDataTransferReceiving(t *testing.T) {
 			require.NoError(t, err)
 			h.pushRequest, err = message.NewRequest(h.id, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
+			h.pauseUpdate, err = message.UpdateRequest(h.id, true, datatransfer.EmptyTypeIdentifier, nil)
+			require.NoError(t, err)
+			h.resumeUpdate, err = message.UpdateRequest(h.id, false, datatransfer.EmptyTypeIdentifier, nil)
+			require.NoError(t, err)
+			updateVoucher := testutil.NewFakeDTType()
+			h.voucherUpdate, err = message.UpdateRequest(h.id, false, updateVoucher.Type(), updateVoucher)
+			h.cancelUpdate = message.CancelRequest(h.id)
+			require.NoError(t, err)
 			h.sv = newSV()
 			if verify.configureValidator != nil {
 				verify.configureValidator(h.sv)
@@ -184,6 +259,10 @@ type receiverHarness struct {
 	id            datatransfer.TransferID
 	pushRequest   message.DataTransferRequest
 	pullRequest   message.DataTransferRequest
+	voucherUpdate message.DataTransferRequest
+	pauseUpdate   message.DataTransferRequest
+	resumeUpdate  message.DataTransferRequest
+	cancelUpdate  message.DataTransferRequest
 	ctx           context.Context
 	peers         []peer.ID
 	network       *testutil.FakeNetwork

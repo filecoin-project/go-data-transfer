@@ -481,8 +481,8 @@ func TestManager(t *testing.T) {
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
-				require.True(t, events.OnResponseCompletedCalled)
-				require.True(t, events.ResponseSuccess)
+				require.True(t, events.OnChannelCompletedCalled)
+				require.True(t, events.ChannelCompletedSuccess)
 			},
 		},
 		"recognized incoming request will record unsuccessful request completion": {
@@ -495,8 +495,21 @@ func TestManager(t *testing.T) {
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
-				require.True(t, events.OnResponseCompletedCalled)
-				require.False(t, events.ResponseSuccess)
+				require.True(t, events.OnChannelCompletedCalled)
+				require.False(t, events.ChannelCompletedSuccess)
+			},
+		},
+		"recognized incoming request will not record request cancellation": {
+			responseConfig: gsResponseConfig{
+				status: graphsync.RequestCancelled,
+			},
+			action: func(gsData *harness) {
+				gsData.incomingRequestHook()
+				gsData.responseCompletedListener()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				require.Equal(t, 1, events.OnRequestReceivedCallCount)
+				require.False(t, events.OnChannelCompletedCalled)
 			},
 		},
 		"non-data-transfer request will not record request completed": {
@@ -512,7 +525,105 @@ func TestManager(t *testing.T) {
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				require.Equal(t, 0, events.OnRequestReceivedCallCount)
-				require.False(t, events.OnResponseCompletedCalled)
+				require.False(t, events.OnChannelCompletedCalled)
+			},
+		},
+		"recognized incoming request can be closed": {
+			action: func(gsData *harness) {
+				gsData.incomingRequestHook()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				err := gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.NoError(t, err)
+				require.Equal(t, 1, events.OnRequestReceivedCallCount)
+				gsData.fgs.AssertCancelResponseReceived(gsData.ctx, t)
+			},
+		},
+		"unrecognized request cannot be closed": {
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				err := gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.Error(t, err)
+			},
+		},
+		"recognized incoming request that requestor cancelled will not close via graphsync": {
+			action: func(gsData *harness) {
+				gsData.incomingRequestHook()
+				gsData.requestorCancelledListener()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				err := gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.NoError(t, err)
+				require.Equal(t, 1, events.OnRequestReceivedCallCount)
+				gsData.fgs.AssertNoCancelResponseReceived(t)
+			},
+		},
+		"recognized incoming request can be paused": {
+			action: func(gsData *harness) {
+				gsData.incomingRequestHook()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				err := gsData.transport.PauseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.NoError(t, err)
+				require.Equal(t, 1, events.OnRequestReceivedCallCount)
+				gsData.fgs.AssertPauseResponseReceived(gsData.ctx, t)
+			},
+		},
+		"unrecognized request cannot be paused": {
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				err := gsData.transport.PauseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.Error(t, err)
+			},
+		},
+		"recognized incoming request that requestor cancelled will not pause via graphsync": {
+			action: func(gsData *harness) {
+				gsData.incomingRequestHook()
+				gsData.requestorCancelledListener()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				err := gsData.transport.PauseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.NoError(t, err)
+				require.Equal(t, 1, events.OnRequestReceivedCallCount)
+				gsData.fgs.AssertNoPauseResponseReceived(t)
+			},
+		},
+		"recognized incoming request can be resumed": {
+			action: func(gsData *harness) {
+				gsData.incomingRequestHook()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				err := gsData.transport.ResumeChannel(gsData.ctx,
+					gsData.incoming,
+					datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other},
+				)
+				require.NoError(t, err)
+				require.Equal(t, 1, events.OnRequestReceivedCallCount)
+				gsData.fgs.AssertResumeResponseReceived(gsData.ctx, t)
+			},
+		},
+		"unrecognized request cannot be resumed": {
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				err := gsData.transport.ResumeChannel(gsData.ctx,
+					gsData.incoming,
+					datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other},
+				)
+				require.Error(t, err)
+			},
+		},
+		"recognized incoming request that requestor cancelled will not resume via graphsync but will resume otherwise": {
+			action: func(gsData *harness) {
+				gsData.incomingRequestHook()
+				gsData.requestorCancelledListener()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				err := gsData.transport.ResumeChannel(gsData.ctx,
+					gsData.incoming,
+					datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other},
+				)
+				require.NoError(t, err)
+				require.Equal(t, 1, events.OnRequestReceivedCallCount)
+				gsData.fgs.AssertNoResumeResponseReceived(t)
+				gsData.incomingRequestHook()
+				assertDecodesToMessage(t, gsData.incomingRequestHookActions.SentExtension.Data, gsData.incoming)
 			},
 		},
 		"request pause works even if called when request is still pending": {
@@ -564,10 +675,12 @@ func TestManager(t *testing.T) {
 			block := testutil.NewFakeBlockData()
 			fgs := testutil.NewFakeGraphSync()
 			outgoing := testutil.NewDTRequest(t, transferID)
+			incoming := testutil.NewDTResponse(t, transferID)
 			transport := NewTransport(peers[0], fgs)
 			gsData := &harness{
 				ctx:                         ctx,
 				outgoing:                    outgoing,
+				incoming:                    incoming,
 				transport:                   transport,
 				fgs:                         fgs,
 				self:                        peers[0],
@@ -585,7 +698,9 @@ func TestManager(t *testing.T) {
 				incomingResponseHookActions: &testutil.FakeIncomingResponseHookActions{},
 			}
 			transport.SetEventHandler(&data.events)
-			data.action(gsData)
+			if data.action != nil {
+				data.action(gsData)
+			}
 			data.check(t, &data.events, gsData)
 		})
 	}
@@ -604,9 +719,9 @@ type fakeEvents struct {
 	OnRequestReceivedErrors     []error
 	OnResponseReceivedCallCount int
 	OnResponseReceivedErrors    []error
-	OnResponseCompletedCalled   bool
-	OnResponseCompletedErr      error
-	ResponseSuccess             bool
+	OnChannelCompletedCalled    bool
+	OnChannelCompletedErr       error
+	ChannelCompletedSuccess     bool
 	DataSentMessage             message.DataTransferMessage
 	RequestReceivedRequest      message.DataTransferRequest
 	RequestReceivedResponse     message.DataTransferResponse
@@ -650,14 +765,15 @@ func (fe *fakeEvents) OnResponseReceived(chid datatransfer.ChannelID, response m
 	return err
 }
 
-func (fe *fakeEvents) OnResponseCompleted(chid datatransfer.ChannelID, success bool) error {
-	fe.OnResponseCompletedCalled = true
-	fe.ResponseSuccess = success
-	return fe.OnResponseCompletedErr
+func (fe *fakeEvents) OnChannelCompleted(chid datatransfer.ChannelID, success bool) error {
+	fe.OnChannelCompletedCalled = true
+	fe.ChannelCompletedSuccess = success
+	return fe.OnChannelCompletedErr
 }
 
 type harness struct {
 	outgoing                    message.DataTransferRequest
+	incoming                    message.DataTransferResponse
 	ctx                         context.Context
 	transport                   *Transport
 	fgs                         *testutil.FakeGraphSync
@@ -696,6 +812,9 @@ func (ha *harness) incomingResponseHOok() {
 }
 func (ha *harness) responseCompletedListener() {
 	ha.fgs.ResponseCompletedListener(ha.other, ha.request, ha.response.Status())
+}
+func (ha *harness) requestorCancelledListener() {
+	ha.fgs.RequestorCancelledListener(ha.other, ha.request)
 }
 
 type dtConfig struct {

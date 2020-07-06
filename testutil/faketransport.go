@@ -35,6 +35,7 @@ type FakeTransport struct {
 	PauseChannelErr    error
 	ResumedChannels    []ResumedChannel
 	ResumeChannelErr   error
+	CleanedUpChannels  []datatransfer.ChannelID
 	EventHandler       transport.Events
 	SetEventHandlerErr error
 }
@@ -76,4 +77,9 @@ func (ft *FakeTransport) PauseChannel(ctx context.Context, chid datatransfer.Cha
 func (ft *FakeTransport) ResumeChannel(ctx context.Context, msg message.DataTransferMessage, chid datatransfer.ChannelID) error {
 	ft.ResumedChannels = append(ft.ResumedChannels, ResumedChannel{chid, msg})
 	return ft.ResumeChannelErr
+}
+
+// CleanupChannel cleans up the given channel
+func (ft *FakeTransport) CleanupChannel(chid datatransfer.ChannelID) {
+	ft.CleanedUpChannels = append(ft.CleanedUpChannels, chid)
 }

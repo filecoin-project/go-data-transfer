@@ -49,6 +49,14 @@ const (
 	// Ongoing means the data transfer is in progress
 	Ongoing
 
+	// TransferFinished indicates the initiator is done sending/receiving
+	// data but is awaiting confirmation from the responder
+	TransferFinished
+
+	// ResponderCompleted indicates the initiator received a message from the
+	// responder that it's completed
+	ResponderCompleted
+
 	// Completed means the data transfer is completed successfully
 	Completed
 
@@ -67,9 +75,30 @@ const (
 	// BothPaused means both sender and receiver have paused the channel seperately (both must unpause)
 	BothPaused
 
+	// ResponderCompletedReceiverPaused is a unique state where the receiver has paused while the responder
+	// has finished sending data
+	ResponderCompletedReceiverPaused
+
 	// ChannelNotFoundError means the searched for data transfer does not exist
 	ChannelNotFoundError
 )
+
+// Statuses are human readable names for data transfer states
+var Statuses = map[Status]string{
+	// Requested means a data transfer was requested by has not yet been approved
+	Requested:                        "Requested",
+	Ongoing:                          "Ongoing",
+	TransferFinished:                 "TransferFinished",
+	ResponderCompleted:               "ResponderCompleted",
+	Completed:                        "Completed",
+	Failed:                           "Failed",
+	Cancelled:                        "Cancelled",
+	SenderPaused:                     "SenderPaused",
+	ReceiverPaused:                   "ReceiverPaused",
+	BothPaused:                       "BothPaused",
+	ResponderCompletedReceiverPaused: "ResponderCompletedReceiverPaused",
+	ChannelNotFoundError:             "ChannelNotFoundError",
+}
 
 // TransferID is an identifier for a data transfer, shared between
 // request/responder and unique to the requester
@@ -183,9 +212,33 @@ const (
 	// ResumeReceiver emits when the data receiver resumes transfer
 	ResumeReceiver
 
+	// FinishTransfer emits when the initiator has completed sending/receiving data
+	FinishTransfer
+
+	// CompleteResponder emits when the initiator receives a message that the responder is finished
+	CompleteResponder
+
 	// Complete is emitted when a data transfer is complete
 	Complete
 )
+
+// Events are human readable names for data transfer events
+var Events = map[EventCode]string{
+	Open:              "Open",
+	Accept:            "Accept",
+	Progress:          "Progress",
+	Cancel:            "Cancel",
+	Error:             "Error",
+	NewVoucher:        "NewVoucher",
+	NewVoucherResult:  "NewVoucherResult",
+	PauseSender:       "PauseSender",
+	ResumeSender:      "ResumeSender",
+	PauseReceiver:     "PauseReceiver",
+	ResumeReceiver:    "ResumeReceiver",
+	FinishTransfer:    "FinishTransfer",
+	CompleteResponder: "CompleteResponder",
+	Complete:          "Complete",
+}
 
 // Event is a struct containing information about a data transfer event
 type Event struct {

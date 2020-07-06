@@ -20,8 +20,7 @@ import (
 // its members are exported to be used by cbor-gen
 type transferRequest struct {
 	BCid   *cid.Cid
-	Canc   bool
-	Updt   bool
+	Type   uint64
 	Paus   bool
 	Part   bool
 	Pull   bool
@@ -36,8 +35,12 @@ func (trq *transferRequest) IsRequest() bool {
 	return true
 }
 
+func (trq *transferRequest) IsNew() bool {
+	return trq.Type == uint64(newMessage)
+}
+
 func (trq *transferRequest) IsUpdate() bool {
-	return trq.Updt
+	return trq.Type == uint64(updateMessage)
 }
 
 func (trq *transferRequest) IsPaused() bool {
@@ -95,7 +98,7 @@ func (trq *transferRequest) Selector() (ipld.Node, error) {
 
 // IsCancel returns true if this is a cancel request
 func (trq *transferRequest) IsCancel() bool {
-	return trq.Canc
+	return trq.Type == uint64(cancelMessage)
 }
 
 // IsPartial returns true if this is a partial request

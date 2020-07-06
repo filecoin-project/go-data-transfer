@@ -82,20 +82,21 @@ type CancelResponse struct {
 
 // FakeGraphSync implements a GraphExchange but does nothing
 type FakeGraphSync struct {
-	requests                  chan ReceivedGraphSyncRequest // records calls to fakeGraphSync.Request
-	pauseRequests             chan PauseRequest
-	resumeRequests            chan ResumeRequest
-	pauseResponses            chan PauseResponse
-	resumeResponses           chan ResumeResponse
-	cancelResponses           chan CancelResponse
-	leaveRequestsOpen         bool
-	OutgoingRequestHook       graphsync.OnOutgoingRequestHook
-	IncomingBlockHook         graphsync.OnIncomingBlockHook
-	OutgoingBlockHook         graphsync.OnOutgoingBlockHook
-	IncomingRequestHook       graphsync.OnIncomingRequestHook
-	ResponseCompletedListener graphsync.OnResponseCompletedListener
-	RequestUpdatedHook        graphsync.OnRequestUpdatedHook
-	IncomingResponseHook      graphsync.OnIncomingResponseHook
+	requests                   chan ReceivedGraphSyncRequest // records calls to fakeGraphSync.Request
+	pauseRequests              chan PauseRequest
+	resumeRequests             chan ResumeRequest
+	pauseResponses             chan PauseResponse
+	resumeResponses            chan ResumeResponse
+	cancelResponses            chan CancelResponse
+	leaveRequestsOpen          bool
+	OutgoingRequestHook        graphsync.OnOutgoingRequestHook
+	IncomingBlockHook          graphsync.OnIncomingBlockHook
+	OutgoingBlockHook          graphsync.OnOutgoingBlockHook
+	IncomingRequestHook        graphsync.OnIncomingRequestHook
+	ResponseCompletedListener  graphsync.OnResponseCompletedListener
+	RequestUpdatedHook         graphsync.OnRequestUpdatedHook
+	IncomingResponseHook       graphsync.OnIncomingResponseHook
+	RequestorCancelledListener graphsync.OnRequestorCancelledListener
 }
 
 // NewFakeGraphSync returns a new fake graphsync implementation
@@ -297,6 +298,12 @@ func (fgs *FakeGraphSync) PauseRequest(requestID graphsync.RequestID) error {
 // CancelResponse cancels a response in progress
 func (fgs *FakeGraphSync) CancelResponse(p peer.ID, requestID graphsync.RequestID) error {
 	fgs.cancelResponses <- CancelResponse{p, requestID}
+	return nil
+}
+
+// RegisterRequestorCancelledListener adds a listener on the responder for requests cancelled by the requestor
+func (fgs *FakeGraphSync) RegisterRequestorCancelledListener(listener graphsync.OnRequestorCancelledListener) graphsync.UnregisterHookFunc {
+	fgs.RequestorCancelledListener = listener
 	return nil
 }
 

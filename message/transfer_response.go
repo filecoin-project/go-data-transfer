@@ -13,10 +13,9 @@ import (
 
 // transferResponse is a private struct that satisfies the DataTransferResponse interface
 type transferResponse struct {
+	Type   uint64
 	Acpt   bool
-	Updt   bool
 	Paus   bool
-	Canc   bool
 	XferID uint64
 	VRes   *cbg.Deferred
 	VTyp   datatransfer.TypeIdentifier
@@ -31,9 +30,14 @@ func (trsp *transferResponse) IsRequest() bool {
 	return false
 }
 
-// IsRequest always returns false in this case because this is a transfer response
+// IsNew returns true if this is the first response sent
+func (trsp *transferResponse) IsNew() bool {
+	return trsp.Type == uint64(newMessage)
+}
+
+// IsUpdate returns true if this response is an update
 func (trsp *transferResponse) IsUpdate() bool {
-	return trsp.Updt
+	return trsp.Type == uint64(updateMessage)
 }
 
 // IsPaused returns true if the responder is paused
@@ -43,7 +47,12 @@ func (trsp *transferResponse) IsPaused() bool {
 
 // IsCancel returns true if the responder has cancelled this response
 func (trsp *transferResponse) IsCancel() bool {
-	return trsp.Canc
+	return trsp.Type == uint64(cancelMessage)
+}
+
+// IsComplete returns true if the responder has completed this response
+func (trsp *transferResponse) IsComplete() bool {
+	return trsp.Type == uint64(completeMessage)
 }
 
 // 	Accepted returns true if the request is accepted in the response

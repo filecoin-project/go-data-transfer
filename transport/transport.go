@@ -83,7 +83,7 @@ type Events interface {
 	OnRequestReceived(chid datatransfer.ChannelID, msg message.DataTransferRequest) (message.DataTransferResponse, error)
 	// OnResponseCompleted is called when we finish sending data for the given channel ID
 	// Error returns are logged but otherwise have not effect
-	OnResponseCompleted(chid datatransfer.ChannelID, success bool) error
+	OnChannelCompleted(chid datatransfer.ChannelID, success bool) error
 }
 
 // Transport is the minimum interface that must be satisfied to serve as a datatransfer
@@ -107,6 +107,9 @@ type Transport interface {
 	CloseChannel(ctx context.Context, chid datatransfer.ChannelID) error
 	// SetEventHandler sets the handler for events on channels
 	SetEventHandler(events Events) error
+	// CleanupChannel is called on the otherside of a cancel - removes any associated
+	// data for the channel
+	CleanupChannel(chid datatransfer.ChannelID)
 }
 
 // PauseableTransport is a transport that can also pause and resume channels

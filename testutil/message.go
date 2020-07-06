@@ -23,7 +23,7 @@ func NewDTRequest(t *testing.T, transferID datatransfer.TransferID) message.Data
 // NewDTResponse makes a new DT Request message
 func NewDTResponse(t *testing.T, transferID datatransfer.TransferID) message.DataTransferResponse {
 	vresult := NewFakeDTType()
-	r, err := message.NewResponse(transferID, false, false, false, vresult.Type(), vresult)
+	r, err := message.NewResponse(transferID, false, false, vresult.Type(), vresult)
 	require.NoError(t, err)
 	return r
 }

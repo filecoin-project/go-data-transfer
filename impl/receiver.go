@@ -77,10 +77,6 @@ func (r *receiver) receiveResponse(
 	incoming message.DataTransferResponse) error {
 	chid := datatransfer.ChannelID{Initiator: r.manager.peerID, ID: incoming.TransferID()}
 	err := r.manager.OnResponseReceived(chid, incoming)
-
-	if err == transport.ErrResume {
-		return r.manager.transport.(transport.PauseableTransport).ResumeChannel(ctx, nil, chid)
-	}
 	if err == transport.ErrPause {
 		return r.manager.transport.(transport.PauseableTransport).PauseChannel(ctx, chid)
 	}

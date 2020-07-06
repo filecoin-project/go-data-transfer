@@ -231,7 +231,6 @@ func TestChannels(t *testing.T) {
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.Cancel)
 		require.Equal(t, datatransfer.Cancelled, state.Status())
-
 	})
 }
 

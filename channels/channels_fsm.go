@@ -14,7 +14,11 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.Open).FromAny().To(datatransfer.Requested),
 	fsm.Event(datatransfer.Accept).From(datatransfer.Requested).To(datatransfer.Ongoing),
 	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelled),
-	fsm.Event(datatransfer.Progress).From(datatransfer.Ongoing).To(datatransfer.Ongoing).Action(func(chst *internalChannelState, deltaSent uint64, deltaReceived uint64) error {
+	fsm.Event(datatransfer.Progress).FromMany(
+		datatransfer.Ongoing,
+		datatransfer.SenderPaused,
+		datatransfer.ReceiverPaused,
+		datatransfer.ResponderCompleted).ToNoChange().Action(func(chst *internalChannelState, deltaSent uint64, deltaReceived uint64) error {
 		chst.Received += deltaReceived
 		chst.Sent += deltaSent
 		return nil
@@ -34,10 +38,27 @@ var ChannelEvents = fsm.Events{
 				encodedVoucherResult{Type: vtype, VoucherResult: &cbg.Deferred{Raw: voucherResultBytes}})
 			return nil
 		}),
-	fsm.Event(datatransfer.PauseSender).FromMany(datatransfer.Requested, datatransfer.Ongoing).To(datatransfer.SenderPaused).From(datatransfer.ReceiverPaused).To(datatransfer.BothPaused),
-	fsm.Event(datatransfer.PauseReceiver).FromMany(datatransfer.Requested, datatransfer.Ongoing).To(datatransfer.ReceiverPaused).From(datatransfer.SenderPaused).To(datatransfer.BothPaused),
-	fsm.Event(datatransfer.ResumeSender).FromMany(datatransfer.SenderPaused).To(datatransfer.Ongoing).From(datatransfer.BothPaused).To(datatransfer.ReceiverPaused),
-	fsm.Event(datatransfer.ResumeReceiver).FromMany(datatransfer.ReceiverPaused).To(datatransfer.Ongoing).From(datatransfer.BothPaused).To(datatransfer.SenderPaused),
+	fsm.Event(datatransfer.PauseSender).
+		FromMany(datatransfer.Requested, datatransfer.Ongoing).To(datatransfer.SenderPaused).
+		From(datatransfer.ReceiverPaused).To(datatransfer.BothPaused),
+	fsm.Event(datatransfer.PauseReceiver).
+		From(datatransfer.ResponderCompleted).To(datatransfer.ResponderCompletedReceiverPaused).
+		FromMany(datatransfer.Requested, datatransfer.Ongoing).To(datatransfer.ReceiverPaused).
+		From(datatransfer.SenderPaused).To(datatransfer.BothPaused),
+	fsm.Event(datatransfer.ResumeSender).
+		From(datatransfer.SenderPaused).To(datatransfer.Ongoing).
+		From(datatransfer.BothPaused).To(datatransfer.ReceiverPaused),
+	fsm.Event(datatransfer.ResumeReceiver).
+		From(datatransfer.ReceiverPaused).To(datatransfer.Ongoing).
+		From(datatransfer.BothPaused).To(datatransfer.SenderPaused).
+		From(datatransfer.ResponderCompletedReceiverPaused).To(datatransfer.ResponderCompleted),
+	fsm.Event(datatransfer.FinishTransfer).
+		FromAny().To(datatransfer.TransferFinished).
+		FromMany(datatransfer.ResponderCompleted, datatransfer.ResponderCompletedReceiverPaused).To(datatransfer.Completed),
+	fsm.Event(datatransfer.CompleteResponder).
+		FromAny().To(datatransfer.ResponderCompleted).
+		From(datatransfer.ReceiverPaused).To(datatransfer.ResponderCompletedReceiverPaused).
+		From(datatransfer.TransferFinished).To(datatransfer.Completed),
 	fsm.Event(datatransfer.Complete).FromAny().To(datatransfer.Completed),
 	fsm.Event(noopSynchronize).FromAny().ToNoChange(),
 }

@@ -22,160 +22,239 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDataTransferPushRoundTrip(t *testing.T) {
+func TestRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	testCases := map[string]bool{
+		"roundtrip for push requests": false,
+		"roundtrip for pull requests": true,
+	}
+	for testCase, isPull := range testCases {
+		t.Run(testCase, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
 
-	gsData := testutil.NewGraphsyncTestingData(ctx, t)
-	host1 := gsData.Host1 // initiator, data sender
-	host2 := gsData.Host2 // data recipient
+			gsData := testutil.NewGraphsyncTestingData(ctx, t)
+			host1 := gsData.Host1 // initiator, data sender
+			host2 := gsData.Host2 // data recipient
 
-	root := gsData.LoadUnixFSFile(t, false)
-	rootCid := root.(cidlink.Link).Cid
-	tp1 := gsData.SetupGSTransportHost1()
-	tp2 := gsData.SetupGSTransportHost2()
+			root := gsData.LoadUnixFSFile(t, false)
+			rootCid := root.(cidlink.Link).Cid
+			tp1 := gsData.SetupGSTransportHost1()
+			tp2 := gsData.SetupGSTransportHost2()
 
-	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
-	require.NoError(t, err)
-	dt1.Start(ctx)
+			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
+			require.NoError(t, err)
+			dt1.Start(ctx)
 
-	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
-	require.NoError(t, err)
-	dt2.Start(ctx)
+			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
+			require.NoError(t, err)
+			dt2.Start(ctx)
 
-	finished := make(chan struct{}, 2)
-	errChan := make(chan struct{}, 2)
-	opened := make(chan struct{}, 2)
-	sent := make(chan uint64, 21)
-	received := make(chan uint64, 21)
-	var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-		if event.Code == datatransfer.Progress {
-			if channelState.Received() > 0 {
-				received <- channelState.Received()
-			} else if channelState.Sent() > 0 {
-				sent <- channelState.Sent()
+			finished := make(chan struct{}, 2)
+			errChan := make(chan struct{}, 2)
+			opened := make(chan struct{}, 2)
+			sent := make(chan uint64, 21)
+			received := make(chan uint64, 21)
+			var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if event.Code == datatransfer.Progress {
+					if channelState.Received() > 0 {
+						received <- channelState.Received()
+					} else if channelState.Sent() > 0 {
+						sent <- channelState.Sent()
+					}
+				}
+				if channelState.Status() == datatransfer.Completed {
+					finished <- struct{}{}
+				}
+				if event.Code == datatransfer.Error {
+					errChan <- struct{}{}
+				}
+				if event.Code == datatransfer.Open {
+					opened <- struct{}{}
+				}
 			}
-		}
-		if event.Code == datatransfer.Complete {
-			finished <- struct{}{}
-		}
-		if event.Code == datatransfer.Error {
-			errChan <- struct{}{}
-		}
-		if event.Code == datatransfer.Open {
-			opened <- struct{}{}
-		}
-	}
-	dt1.SubscribeToEvents(subscriber)
-	dt2.SubscribeToEvents(subscriber)
-	voucher := testutil.FakeDTType{Data: "applesauce"}
-	sv := newSV()
-	sv.expectSuccessPull()
-	require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+			dt1.SubscribeToEvents(subscriber)
+			dt2.SubscribeToEvents(subscriber)
+			voucher := testutil.FakeDTType{Data: "applesauce"}
+			sv := newSV()
 
-	chid, err := dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
-	require.NoError(t, err)
-	opens := 0
-	completes := 0
-	sentIncrements := make([]uint64, 0, 21)
-	receivedIncrements := make([]uint64, 0, 21)
-	for opens < 2 || completes < 2 || len(sentIncrements) < 21 || len(receivedIncrements) < 21 {
-		select {
-		case <-ctx.Done():
-			t.Fatal("Did not complete succcessful data transfer")
-		case <-finished:
-			completes++
-		case <-opened:
-			opens++
-		case sentIncrement := <-sent:
-			sentIncrements = append(sentIncrements, sentIncrement)
-		case receivedIncrement := <-received:
-			receivedIncrements = append(receivedIncrements, receivedIncrement)
-		case <-errChan:
-			t.Fatal("received error on data transfer")
-		}
+			var chid datatransfer.ChannelID
+			if isPull {
+				sv.expectSuccessPull()
+				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
+			} else {
+				sv.expectSuccessPush()
+				require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
+			}
+			require.NoError(t, err)
+			opens := 0
+			completes := 0
+			sentIncrements := make([]uint64, 0, 21)
+			receivedIncrements := make([]uint64, 0, 21)
+			for opens < 2 || completes < 2 || len(sentIncrements) < 21 || len(receivedIncrements) < 21 {
+				select {
+				case <-ctx.Done():
+					t.Fatal("Did not complete succcessful data transfer")
+				case <-finished:
+					completes++
+				case <-opened:
+					opens++
+				case sentIncrement := <-sent:
+					sentIncrements = append(sentIncrements, sentIncrement)
+				case receivedIncrement := <-received:
+					receivedIncrements = append(receivedIncrements, receivedIncrement)
+				case <-errChan:
+					t.Fatal("received error on data transfer")
+				}
+			}
+			require.Equal(t, sentIncrements, receivedIncrements)
+			gsData.VerifyFileTransferred(t, root, true)
+			if isPull {
+				assert.Equal(t, chid.Initiator, host2.ID())
+			} else {
+				assert.Equal(t, chid.Initiator, host1.ID())
+			}
+		})
 	}
-	require.Equal(t, sentIncrements, receivedIncrements)
-	gsData.VerifyFileTransferred(t, root, true)
-	assert.Equal(t, chid.Initiator, host1.ID())
 }
 
-func TestDataTransferPullRoundTrip(t *testing.T) {
+func TestPauseAndResume(t *testing.T) {
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	testCases := map[string]bool{
+		"pause and resume works for push requests": false,
+		"pause and resume works for pull requests": true,
+	}
+	for testCase, isPull := range testCases {
+		t.Run(testCase, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
 
-	gsData := testutil.NewGraphsyncTestingData(ctx, t)
-	host1 := gsData.Host1
+			gsData := testutil.NewGraphsyncTestingData(ctx, t)
+			host1 := gsData.Host1 // initiator, data sender
+			host2 := gsData.Host2 // data recipient
 
-	root := gsData.LoadUnixFSFile(t, false)
-	rootCid := root.(cidlink.Link).Cid
-	tp1 := gsData.SetupGSTransportHost1()
-	tp2 := gsData.SetupGSTransportHost2()
+			root := gsData.LoadUnixFSFile(t, false)
+			rootCid := root.(cidlink.Link).Cid
+			tp1 := gsData.SetupGSTransportHost1()
+			tp2 := gsData.SetupGSTransportHost2()
 
-	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
-	require.NoError(t, err)
-	dt1.Start(ctx)
+			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
+			require.NoError(t, err)
+			dt1.Start(ctx)
 
-	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
-	require.NoError(t, err)
-	dt2.Start(ctx)
+			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
+			require.NoError(t, err)
+			dt2.Start(ctx)
 
-	finished := make(chan struct{}, 2)
-	errChan := make(chan struct{}, 2)
-	opened := make(chan struct{}, 2)
-	sent := make(chan uint64, 21)
-	received := make(chan uint64, 21)
-	var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-		if event.Code == datatransfer.Progress {
-			if channelState.Received() > 0 {
-				received <- channelState.Received()
-			} else if channelState.Sent() > 0 {
-				sent <- channelState.Sent()
+			finished := make(chan struct{}, 2)
+			errChan := make(chan struct{}, 2)
+			opened := make(chan struct{}, 2)
+			sent := make(chan uint64, 21)
+			received := make(chan uint64, 21)
+			pauseSender := make(chan struct{}, 2)
+			resumeSender := make(chan struct{}, 2)
+			pauseReceiver := make(chan struct{}, 2)
+			resumeReceiver := make(chan struct{}, 2)
+			var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if event.Code == datatransfer.Progress {
+					if channelState.Received() > 0 {
+						received <- channelState.Received()
+					} else if channelState.Sent() > 0 {
+						sent <- channelState.Sent()
+					}
+				}
+				if event.Code == datatransfer.PauseSender {
+					pauseSender <- struct{}{}
+				}
+				if event.Code == datatransfer.ResumeSender {
+					resumeSender <- struct{}{}
+				}
+				if event.Code == datatransfer.PauseReceiver {
+					pauseReceiver <- struct{}{}
+				}
+				if event.Code == datatransfer.ResumeReceiver {
+					resumeReceiver <- struct{}{}
+				}
+				if channelState.Status() == datatransfer.Completed {
+					finished <- struct{}{}
+				}
+				if event.Code == datatransfer.Error {
+					errChan <- struct{}{}
+				}
+				if event.Code == datatransfer.Open {
+					opened <- struct{}{}
+				}
 			}
-		}
-		if event.Code == datatransfer.Complete {
-			finished <- struct{}{}
-		}
-		if event.Code == datatransfer.Error {
-			errChan <- struct{}{}
-		}
-		if event.Code == datatransfer.Open {
-			opened <- struct{}{}
-		}
-	}
-	dt1.SubscribeToEvents(subscriber)
-	dt2.SubscribeToEvents(subscriber)
-	voucher := testutil.FakeDTType{Data: "applesauce"}
-	sv := newSV()
-	sv.expectSuccessPull()
-	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+			dt1.SubscribeToEvents(subscriber)
+			dt2.SubscribeToEvents(subscriber)
+			voucher := testutil.FakeDTType{Data: "applesauce"}
+			sv := newSV()
 
-	_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
-	require.NoError(t, err)
-	opens := 0
-	completes := 0
-	sentIncrements := make([]uint64, 0, 21)
-	receivedIncrements := make([]uint64, 0, 21)
-	for opens < 2 || completes < 2 || len(sentIncrements) < 21 || len(receivedIncrements) < 21 {
-		select {
-		case <-ctx.Done():
-			t.Fatal("Did not complete succcessful data transfer")
-		case <-finished:
-			completes++
-		case <-opened:
-			opens++
-		case sentIncrement := <-sent:
-			sentIncrements = append(sentIncrements, sentIncrement)
-		case receivedIncrement := <-received:
-			receivedIncrements = append(receivedIncrements, receivedIncrement)
-		case <-errChan:
-			t.Fatal("received error on data transfer")
-		}
+			var chid datatransfer.ChannelID
+			if isPull {
+				sv.expectSuccessPull()
+				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
+			} else {
+				sv.expectSuccessPush()
+				require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
+			}
+			require.NoError(t, err)
+			opens := 0
+			completes := 0
+			pauseSenders := 0
+			pauseReceivers := 0
+			resumeSenders := 0
+			resumeReceivers := 0
+			sentIncrements := make([]uint64, 0, 21)
+			receivedIncrements := make([]uint64, 0, 21)
+			for opens < 2 || completes < 2 || len(sentIncrements) < 21 || len(receivedIncrements) < 21 ||
+				pauseSenders < 2 || pauseReceivers < 1 || resumeSenders < 2 || resumeReceivers < 1 {
+				select {
+				case <-ctx.Done():
+					t.Fatal("Did not complete succcessful data transfer")
+				case <-finished:
+					completes++
+				case <-opened:
+					opens++
+				case <-pauseSender:
+					pauseSenders++
+				case <-resumeSender:
+					resumeSenders++
+				case <-pauseReceiver:
+					pauseReceivers++
+				case <-resumeReceiver:
+					resumeReceivers++
+				case sentIncrement := <-sent:
+					sentIncrements = append(sentIncrements, sentIncrement)
+					if len(sentIncrements) == 5 {
+						dt1.PauseDataTransferChannel(ctx, chid)
+						time.Sleep(100 * time.Millisecond)
+						dt1.ResumeDataTransferChannel(ctx, chid)
+					}
+				case receivedIncrement := <-received:
+					receivedIncrements = append(receivedIncrements, receivedIncrement)
+					if len(receivedIncrements) == 10 {
+						dt2.PauseDataTransferChannel(ctx, chid)
+						time.Sleep(100 * time.Millisecond)
+						dt2.ResumeDataTransferChannel(ctx, chid)
+					}
+				case <-errChan:
+					t.Fatal("received error on data transfer")
+				}
+			}
+			require.Equal(t, sentIncrements, receivedIncrements)
+			gsData.VerifyFileTransferred(t, root, true)
+			if isPull {
+				assert.Equal(t, chid.Initiator, host2.ID())
+			} else {
+				assert.Equal(t, chid.Initiator, host1.ID())
+			}
+		})
 	}
-	require.Equal(t, sentIncrements, receivedIncrements)
-	gsData.VerifyFileTransferred(t, root, true)
 }
 
 func TestDataTransferSubscribing(t *testing.T) {
@@ -350,7 +429,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		requestReceived := messageReceived.message.(message.DataTransferRequest)
 
 		var buf bytes.Buffer
-		response, err := message.NewResponse(requestReceived.TransferID(), true, false, false, voucherResult.Type(), voucherResult)
+		response, err := message.NewResponse(requestReceived.TransferID(), true, false, voucherResult.Type(), voucherResult)
 		require.NoError(t, err)
 		err = response.ToNet(&buf)
 		require.NoError(t, err)
@@ -370,7 +449,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 
 	t.Run("when no request is initiated", func(t *testing.T) {
 		var buf bytes.Buffer
-		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint64()), true, false, false, voucher.Type(), voucher)
+		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint64()), true, false, voucher.Type(), voucher)
 		require.NoError(t, err)
 		err = response.ToNet(&buf)
 		require.NoError(t, err)

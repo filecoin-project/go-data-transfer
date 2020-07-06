@@ -8,6 +8,7 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
+	"github.com/filecoin-project/go-statemachine"
 	"github.com/filecoin-project/go-statemachine/fsm"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
@@ -138,7 +139,7 @@ func (c *Channels) InProgress(ctx context.Context) (map[datatransfer.ChannelID]d
 func (c *Channels) GetByID(ctx context.Context, chid datatransfer.ChannelID) (datatransfer.ChannelState, error) {
 	var internalChannel internalChannelState
 	err := c.sendSync(ctx, chid, noopSynchronize)
-	if err != nil {
+	if err != nil && err != statemachine.ErrTerminated {
 		return nil, err
 	}
 	err = c.statemachines.Get(chid).Get(&internalChannel)
@@ -203,9 +204,19 @@ func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResult d
 	return c.send(chid, datatransfer.NewVoucherResult, voucherResult.Type(), voucherResultBytes)
 }
 
-// Complete indicates a channel has completed its data transfer
+// Complete indicates responder has completed sending/receiving data
 func (c *Channels) Complete(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.Complete)
+}
+
+// FinishTransfer an initiator has finished sending/receiving data
+func (c *Channels) FinishTransfer(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.FinishTransfer)
+}
+
+// CompleteResponder indicates an initator has finished receiving data from a responder
+func (c *Channels) CompleteResponder(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.CompleteResponder)
 }
 
 // Cancel indicates a channel was cancelled prematurely
