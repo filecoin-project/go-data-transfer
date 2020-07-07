@@ -3,7 +3,6 @@ package impl
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
@@ -107,15 +106,11 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response messa
 			return m.channels.ResponderCompletes(chid)
 		}
 		err := m.channels.ResponderBeginsFinalization(chid)
-		fmt.Println(err)
 		if err != nil {
 			return nil
 		}
 	}
 	if response.IsVoucherResult() {
-		if response.IsComplete() {
-			fmt.Println("got me a... voucher")
-		}
 		if !response.EmptyVoucherResult() {
 			vresult, err := m.decodeVoucherResult(response)
 			if err != nil {
@@ -220,12 +215,9 @@ func (m *manager) acceptRequest(
 	if err := m.channels.Accept(chid); err != nil {
 		return result, err
 	}
+	m.dataTransferNetwork.Protect(initiator, chid.String())
 	if voucherErr == datatransfer.ErrPause {
-		if incoming.IsPull() {
-			err = m.channels.PauseInitiator(chid)
-		} else {
-			err = m.channels.PauseResponder(chid)
-		}
+		err := m.channels.PauseResponder(chid)
 		if err != nil {
 			return result, err
 		}

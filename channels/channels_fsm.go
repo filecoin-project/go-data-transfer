@@ -13,7 +13,7 @@ var log = logging.Logger("data-transfer")
 var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.Open).FromAny().To(datatransfer.Requested),
 	fsm.Event(datatransfer.Accept).From(datatransfer.Requested).To(datatransfer.Ongoing),
-	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelled),
+	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelling),
 	fsm.Event(datatransfer.Progress).FromMany(
 		datatransfer.Ongoing,
 		datatransfer.InitiatorPaused,
@@ -25,7 +25,7 @@ var ChannelEvents = fsm.Events{
 		chst.Sent += deltaSent
 		return nil
 	}),
-	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failed).Action(func(chst *internalChannelState, err error) error {
+	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failing).Action(func(chst *internalChannelState, err error) error {
 		chst.Message = err.Error()
 		return nil
 	}),
@@ -55,13 +55,13 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.ResumeResponder).
 		From(datatransfer.ResponderPaused).To(datatransfer.Ongoing).
 		From(datatransfer.BothPaused).To(datatransfer.InitiatorPaused).
-		From(datatransfer.Finalizing).To(datatransfer.Completed).
+		From(datatransfer.Finalizing).To(datatransfer.Completing).
 		From(datatransfer.ResponderFinalizing).To(datatransfer.ResponderCompleted).
-		From(datatransfer.ResponderFinalizingTransferFinished).To(datatransfer.Completed).
+		From(datatransfer.ResponderFinalizingTransferFinished).To(datatransfer.Completing).
 		FromAny().ToNoChange(),
 	fsm.Event(datatransfer.FinishTransfer).
 		FromAny().To(datatransfer.TransferFinished).
-		From(datatransfer.ResponderCompleted).To(datatransfer.Completed).
+		From(datatransfer.ResponderCompleted).To(datatransfer.Completing).
 		From(datatransfer.ResponderFinalizing).To(datatransfer.ResponderFinalizingTransferFinished),
 	fsm.Event(datatransfer.ResponderBeginsFinalization).
 		FromAny().To(datatransfer.ResponderFinalizing).
@@ -69,15 +69,32 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.ResponderCompletes).
 		FromAny().To(datatransfer.ResponderCompleted).
 		From(datatransfer.ResponderPaused).To(datatransfer.ResponderFinalizing).
-		From(datatransfer.TransferFinished).To(datatransfer.Completed),
+		From(datatransfer.TransferFinished).To(datatransfer.Completing),
 	fsm.Event(datatransfer.BeginFinalizing).FromAny().To(datatransfer.Finalizing),
-	fsm.Event(datatransfer.Complete).FromAny().To(datatransfer.Completed),
+	fsm.Event(datatransfer.Complete).FromAny().To(datatransfer.Completing),
+	fsm.Event(datatransfer.CleanupComplete).
+		From(datatransfer.Cancelling).To(datatransfer.Cancelled).
+		From(datatransfer.Failing).To(datatransfer.Failed).
+		From(datatransfer.Completing).To(datatransfer.Completed),
 	fsm.Event(noopSynchronize).FromAny().ToNoChange(),
 }
 
 // ChannelStateEntryFuncs are handlers called as we enter different states
 // (currently unused for this fsm)
-var ChannelStateEntryFuncs = fsm.StateEntryFuncs{}
+var ChannelStateEntryFuncs = fsm.StateEntryFuncs{
+	datatransfer.Cancelling: cleanupConnection,
+	datatransfer.Failing:    cleanupConnection,
+	datatransfer.Completing: cleanupConnection,
+}
+
+func cleanupConnection(ctx fsm.Context, env ChannelEnvironment, channel internalChannelState) error {
+	otherParty := channel.Initiator
+	if otherParty == env.ID() {
+		otherParty = channel.Responder
+	}
+	env.Unprotect(otherParty, datatransfer.ChannelID{ID: channel.TransferID, Initiator: channel.Initiator, Responder: channel.Responder}.String())
+	return ctx.Trigger(datatransfer.CleanupComplete)
+}
 
 // ChannelFinalityStates are the final states for a channel
 var ChannelFinalityStates = []fsm.StateKey{

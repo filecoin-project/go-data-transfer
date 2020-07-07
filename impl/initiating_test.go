@@ -202,7 +202,7 @@ func TestDataTransferInitiating(t *testing.T) {
 			},
 		},
 		"close push request": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Cancel},
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Cancel, datatransfer.CleanupComplete},
 			verify: func(t *testing.T, h *harness) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
@@ -255,7 +255,7 @@ func TestDataTransferInitiating(t *testing.T) {
 			},
 		},
 		"close pull request": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Cancel},
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Cancel, datatransfer.CleanupComplete},
 			verify: func(t *testing.T, h *harness) {
 				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)

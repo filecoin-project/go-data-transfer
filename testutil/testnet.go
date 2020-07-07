@@ -1,23 +1,25 @@
 package testutil
 
 import (
-	"github.com/filecoin-project/go-data-transfer/network"
 	"context"
+
 	"github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 // FakeSentMessage is a recording of a message sent on the FakeNetwork
 type FakeSentMessage struct {
-	PeerID peer.ID
+	PeerID  peer.ID
 	Message message.DataTransferMessage
 }
+
 // FakeNetwork is a network that satisfies the DataTransferNetwork interface but
 // does not actually do anything
 type FakeNetwork struct {
-	PeerID peer.ID
+	PeerID       peer.ID
 	SentMessages []FakeSentMessage
-	Delegate network.Receiver
+	Delegate     network.Receiver
 }
 
 // NewFakeNetwork returns a new fake data transfer network instance
@@ -45,4 +47,13 @@ func (fn *FakeNetwork) ConnectTo(_ context.Context, _ peer.ID) error {
 // ID returns a stubbed id for host of this network
 func (fn *FakeNetwork) ID() peer.ID {
 	return fn.PeerID
+}
+
+// Protect does nothing on the fake network
+func (fn *FakeNetwork) Protect(id peer.ID, tag string) {
+}
+
+// Unprotect does nothing on the fake network
+func (fn *FakeNetwork) Unprotect(id peer.ID, tag string) bool {
+	return false
 }

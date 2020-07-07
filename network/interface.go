@@ -16,6 +16,8 @@ var (
 
 // DataTransferNetwork provides network connectivity for GraphSync.
 type DataTransferNetwork interface {
+	Protect(id peer.ID, tag string)
+	Unprotect(id peer.ID, tag string) bool
 
 	// SendMessage sends a GraphSync message to a peer.
 	SendMessage(

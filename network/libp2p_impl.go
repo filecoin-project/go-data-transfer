@@ -158,3 +158,11 @@ func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 func (dtnet *libp2pDataTransferNetwork) ID() peer.ID {
 	return dtnet.host.ID()
 }
+
+func (dtnet *libp2pDataTransferNetwork) Protect(id peer.ID, tag string) {
+	dtnet.host.ConnManager().Protect(id, tag)
+}
+
+func (dtnet *libp2pDataTransferNetwork) Unprotect(id peer.ID, tag string) bool {
+	return dtnet.host.ConnManager().Unprotect(id, tag)
+}

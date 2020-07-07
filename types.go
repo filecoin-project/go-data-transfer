@@ -71,11 +71,20 @@ const (
 	// consider the transfer done
 	Finalizing
 
+	// Completing just means we have some final cleanup for a completed request
+	Completing
+
 	// Completed means the data transfer is completed successfully
 	Completed
 
+	// Failing just means we have some final cleanup for a failed request
+	Failing
+
 	// Failed means the data transfer failed
 	Failed
+
+	// Cancelling just means we have some final cleanup for a cancelled request
+	Cancelling
 
 	// Cancelled means the data transfer ended prematurely
 	Cancelled
@@ -108,8 +117,11 @@ var Statuses = map[Status]string{
 	TransferFinished:                    "TransferFinished",
 	ResponderCompleted:                  "ResponderCompleted",
 	Finalizing:                          "Finalizing",
+	Completing:                          "Completing",
 	Completed:                           "Completed",
+	Failing:                             "Failing",
 	Failed:                              "Failed",
+	Cancelling:                          "Cancelling",
 	Cancelled:                           "Cancelled",
 	InitiatorPaused:                     "InitiatorPaused",
 	ResponderPaused:                     "ResponderPaused",
@@ -223,6 +235,9 @@ const (
 	// Error is an event that emits when an error occurs in a data transfer
 	Error
 
+	// CleanupComplete emits when a request is cleaned up
+	CleanupComplete
+
 	// NewVoucher means we have a new voucher on this channel
 	NewVoucher
 
@@ -265,6 +280,7 @@ var Events = map[EventCode]string{
 	Progress:                    "Progress",
 	Cancel:                      "Cancel",
 	Error:                       "Error",
+	CleanupComplete:             "CleanupComplete",
 	NewVoucher:                  "NewVoucher",
 	NewVoucherResult:            "NewVoucherResult",
 	PauseInitiator:              "PauseInitiator",

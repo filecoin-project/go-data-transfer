@@ -37,7 +37,7 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 			return err
 		}
 		status := chst.Status()
-		if status != datatransfer.Finalizing && status != datatransfer.Completed {
+		if status != datatransfer.Finalizing && status != datatransfer.Completing && status != datatransfer.Completed {
 			return r.manager.transport.(transport.PauseableTransport).ResumeChannel(ctx, response, chid)
 		}
 		receiveErr = nil

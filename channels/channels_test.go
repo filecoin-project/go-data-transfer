@@ -35,7 +35,8 @@ func TestChannels(t *testing.T) {
 	notifier := func(evt datatransfer.Event, chst datatransfer.ChannelState) {
 		received <- event{evt, chst}
 	}
-	channelList, err := channels.New(ds, notifier, decoderByType, decoderByType)
+	net := testutil.NewFakeNetwork(testutil.GeneratePeers(1)[0])
+	channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, net)
 	require.NoError(t, err)
 
 	tid1 := datatransfer.TransferID(0)
@@ -208,6 +209,8 @@ func TestChannels(t *testing.T) {
 		err = channelList.Complete(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.Complete)
+		require.Equal(t, datatransfer.Completing, state.Status())
+		state = checkEvent(ctx, t, received, datatransfer.CleanupComplete)
 		require.Equal(t, datatransfer.Completed, state.Status())
 
 		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[3], Responder: peers[2], ID: tid2})
@@ -217,8 +220,10 @@ func TestChannels(t *testing.T) {
 		err = channelList.Error(datatransfer.ChannelID{Initiator: peers[3], Responder: peers[2], ID: tid2}, errors.New("something went wrong"))
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.Error)
-		require.Equal(t, datatransfer.Failed, state.Status())
+		require.Equal(t, datatransfer.Failing, state.Status())
 		require.Equal(t, "something went wrong", state.Message())
+		state = checkEvent(ctx, t, received, datatransfer.CleanupComplete)
+		require.Equal(t, datatransfer.Failed, state.Status())
 
 		chid, err := channelList.CreateNew(tid2, cids[1], selector, fv2, peers[2], peers[1], peers[2])
 		require.NoError(t, err)
@@ -230,6 +235,8 @@ func TestChannels(t *testing.T) {
 		err = channelList.Cancel(datatransfer.ChannelID{Initiator: peers[2], Responder: peers[1], ID: tid2})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.Cancel)
+		require.Equal(t, datatransfer.Cancelling, state.Status())
+		state = checkEvent(ctx, t, received, datatransfer.CleanupComplete)
 		require.Equal(t, datatransfer.Cancelled, state.Status())
 	})
 }

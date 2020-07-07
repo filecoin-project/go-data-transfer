@@ -3,7 +3,6 @@ package channels
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"time"
 
@@ -38,18 +37,26 @@ type Channels struct {
 	statemachines        fsm.Group
 }
 
+// ChannelEnvironment -- just a proxy for DTNetwork for now
+type ChannelEnvironment interface {
+	Protect(id peer.ID, tag string)
+	Unprotect(id peer.ID, tag string) bool
+	ID() peer.ID
+}
+
 // New returns a new thread safe list of channels
 func New(ds datastore.Datastore,
 	notifier Notifier,
 	voucherDecoder DecoderByTypeFunc,
-	voucherResultDecoder DecoderByTypeFunc) (*Channels, error) {
+	voucherResultDecoder DecoderByTypeFunc,
+	env ChannelEnvironment) (*Channels, error) {
 	c := &Channels{
 		notifier:             notifier,
 		voucherDecoder:       voucherDecoder,
 		voucherResultDecoder: voucherResultDecoder,
 	}
 	statemachines, err := fsm.New(ds, fsm.Parameters{
-		Environment:     c,
+		Environment:     env,
 		StateType:       internalChannelState{},
 		StateKeyField:   "Status",
 		Events:          ChannelEvents,
@@ -135,7 +142,6 @@ func (c *Channels) InProgress(ctx context.Context) (map[datatransfer.ChannelID]d
 		return nil, err
 	}
 	channels := make(map[datatransfer.ChannelID]datatransfer.ChannelState, len(internalChannels))
-	fmt.Println(internalChannels)
 	for _, internalChannel := range internalChannels {
 		channels[datatransfer.ChannelID{ID: internalChannel.TransferID, Responder: internalChannel.Responder, Initiator: internalChannel.Initiator}] =
 			internalChannel.ToChannelState(c.voucherDecoder, c.voucherResultDecoder)

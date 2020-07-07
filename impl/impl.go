@@ -67,7 +67,7 @@ func NewDataTransfer(ds datastore.Datastore, dataTransferNetwork network.DataTra
 		transport:           transport,
 		storedCounter:       storedCounter,
 	}
-	channels, err := channels.New(ds, m.notifier, m.validatedTypes.Decoder, m.resultTypes.Decoder)
+	channels, err := channels.New(ds, m.notifier, m.validatedTypes.Decoder, m.resultTypes.Decoder, dataTransferNetwork)
 	if err != nil {
 		return nil, err
 	}
@@ -120,6 +120,7 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 	if err != nil {
 		return chid, err
 	}
+	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	if err := m.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.channels.Error(chid, err)
@@ -141,6 +142,7 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 	if err != nil {
 		return chid, err
 	}
+	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.channels.Error(chid, err)

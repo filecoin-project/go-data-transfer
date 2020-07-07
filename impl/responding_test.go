@@ -243,7 +243,7 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 		},
 		"receive cancel": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept, datatransfer.Cancel},
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept, datatransfer.Cancel, datatransfer.CleanupComplete},
 			configureValidator: func(sv *stubbedValidator) {
 				sv.expectSuccessPush()
 				sv.stubResult(testutil.NewFakeDTType())
@@ -449,6 +449,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.BeginFinalizing,
 				datatransfer.NewVoucher,
 				datatransfer.ResumeResponder,
+				datatransfer.CleanupComplete,
 			},
 			configureValidator: func(sv *stubbedValidator) {
 				sv.expectSuccessPull()
