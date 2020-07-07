@@ -83,7 +83,7 @@ func (v *myVoucher) Type() string {
 
 type myValidator struct {
 	ctx                 context.Context
-	validationsReceived chan receivedValidation
+	ValidationsReceived chan receivedValidation
 }
 
 func (vl *myValidator) ValidatePush(

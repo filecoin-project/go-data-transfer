@@ -127,7 +127,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"reregister voucher type again errors": {
 			verify: func(t *testing.T, h *harness) {
 				voucher := testutil.NewFakeDTType()
-				sv := newSV()
+				sv := testutil.NewStubbedValidator()
 				err := h.dt.RegisterVoucherType(h.voucher, sv)
 				require.NoError(t, err)
 				err = h.dt.RegisterVoucherType(voucher, sv)
@@ -136,7 +136,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		},
 		"reregister non pointer errors": {
 			verify: func(t *testing.T, h *harness) {
-				sv := newSV()
+				sv := testutil.NewStubbedValidator()
 				err := h.dt.RegisterVoucherType(h.voucher, sv)
 				require.NoError(t, err)
 				err = h.dt.RegisterVoucherType(testutil.FakeDTType{}, sv)

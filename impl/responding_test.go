@@ -2,7 +2,6 @@ package impl_test
 
 import (
 	"context"
-	"errors"
 	"math/rand"
 	"testing"
 	"time"
@@ -29,25 +28,25 @@ func TestDataTransferResponding(t *testing.T) {
 	ctx := context.Background()
 	testCases := map[string]struct {
 		expectedEvents       []datatransfer.EventCode
-		configureValidator   func(sv *stubbedValidator)
-		configureRevalidator func(sv *stubbedRevalidator)
+		configureValidator   func(sv *testutil.StubbedValidator)
+		configureRevalidator func(sv *testutil.StubbedRevalidator)
 		verify               func(t *testing.T, h *receiverHarness)
 	}{
 		"new push request validates": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPush()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPush()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
-				require.Len(t, h.sv.validationsReceived, 1)
-				validation := h.sv.validationsReceived[0]
-				assert.False(t, validation.isPull)
-				assert.Equal(t, h.peers[1], validation.other)
-				assert.Equal(t, h.voucher, validation.voucher)
-				assert.Equal(t, h.baseCid, validation.baseCid)
-				assert.Equal(t, h.stor, validation.selector)
+				require.Len(t, h.sv.ValidationsReceived, 1)
+				validation := h.sv.ValidationsReceived[0]
+				assert.False(t, validation.IsPull)
+				assert.Equal(t, h.peers[1], validation.Other)
+				assert.Equal(t, h.voucher, validation.Voucher)
+				assert.Equal(t, h.baseCid, validation.BaseCid)
+				assert.Equal(t, h.stor, validation.Selector)
 
 				require.Len(t, h.transport.OpenedChannels, 1)
 				openChannel := h.transport.OpenedChannels[0]
@@ -68,9 +67,9 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 		},
 		"new push request errors": {
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectErrorPush()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectErrorPush()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -89,9 +88,9 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 		},
 		"new push request pauses": {
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectPausePush()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectPausePush()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -118,19 +117,19 @@ func TestDataTransferResponding(t *testing.T) {
 		},
 		"new pull request validates": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPull()
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPull()
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				response, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
 				require.NoError(t, err)
-				require.Len(t, h.sv.validationsReceived, 1)
-				validation := h.sv.validationsReceived[0]
-				assert.True(t, validation.isPull)
-				assert.Equal(t, h.peers[1], validation.other)
-				assert.Equal(t, h.voucher, validation.voucher)
-				assert.Equal(t, h.baseCid, validation.baseCid)
-				assert.Equal(t, h.stor, validation.selector)
+				require.Len(t, h.sv.ValidationsReceived, 1)
+				validation := h.sv.ValidationsReceived[0]
+				assert.True(t, validation.IsPull)
+				assert.Equal(t, h.peers[1], validation.Other)
+				assert.Equal(t, h.voucher, validation.Voucher)
+				assert.Equal(t, h.baseCid, validation.BaseCid)
+				assert.Equal(t, h.stor, validation.Selector)
 				require.True(t, response.Accepted())
 				require.Equal(t, response.TransferID(), h.id)
 				require.False(t, response.IsUpdate())
@@ -141,8 +140,8 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 		},
 		"new pull request errors": {
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectErrorPull()
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectErrorPull()
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				response, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
@@ -157,8 +156,8 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 		},
 		"new pull request pauses": {
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectPausePull()
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectPausePull()
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				response, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
@@ -192,9 +191,9 @@ func TestDataTransferResponding(t *testing.T) {
 		},
 		"receive voucher": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept, datatransfer.NewVoucher, datatransfer.ResumeResponder},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPush()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPush()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -209,9 +208,9 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.PauseInitiator,
 				datatransfer.ResumeInitiator},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPush()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPush()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -229,9 +228,9 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.PauseInitiator,
 				datatransfer.PauseResponder,
 				datatransfer.ResumeInitiator},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPush()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPush()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -245,9 +244,9 @@ func TestDataTransferResponding(t *testing.T) {
 		},
 		"receive cancel": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept, datatransfer.Cancel, datatransfer.CleanupComplete},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPush()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPush()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -269,15 +268,15 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.NewVoucherResult,
 				datatransfer.ResumeResponder,
 			},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPush()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPush()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
-			configureRevalidator: func(srv *stubbedRevalidator) {
-				srv.expectPauseRevalidatePush()
-				srv.stubResult(testutil.NewFakeDTType())
-				srv.expectSuccessRevalidation()
-				srv.stubRevalidationResult(testutil.NewFakeDTType())
+			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
+				srv.ExpectPausePushCheck()
+				srv.StubRevalidationResult(testutil.NewFakeDTType())
+				srv.ExpectSuccessRevalidation()
+				srv.StubCheckResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -315,13 +314,13 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Progress,
 				datatransfer.NewVoucherResult,
 			},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPush()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPush()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
-			configureRevalidator: func(srv *stubbedRevalidator) {
-				srv.expectErrorRevalidatePush()
-				srv.stubResult(testutil.NewFakeDTType())
+			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
+				srv.ExpectErrorPushCheck()
+				srv.StubRevalidationResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -353,15 +352,15 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.NewVoucher,
 				datatransfer.NewVoucherResult,
 			},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPush()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPush()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
-			configureRevalidator: func(srv *stubbedRevalidator) {
-				srv.expectPauseRevalidatePush()
-				srv.stubResult(testutil.NewFakeDTType())
-				srv.expectErrorRevalidation()
-				srv.stubRevalidationResult(testutil.NewFakeDTType())
+			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
+				srv.ExpectPausePushCheck()
+				srv.StubRevalidationResult(testutil.NewFakeDTType())
+				srv.ExpectErrorRevalidation()
+				srv.StubCheckResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -403,15 +402,15 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.NewVoucherResult,
 				datatransfer.ResumeResponder,
 			},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPull()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPull()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
-			configureRevalidator: func(srv *stubbedRevalidator) {
-				srv.expectPauseRevalidatePull()
-				srv.stubResult(testutil.NewFakeDTType())
-				srv.expectSuccessRevalidation()
-				srv.stubRevalidationResult(testutil.NewFakeDTType())
+			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
+				srv.ExpectPausePullCheck()
+				srv.StubRevalidationResult(testutil.NewFakeDTType())
+				srv.ExpectSuccessRevalidation()
+				srv.StubCheckResult(testutil.NewFakeDTType())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
@@ -452,14 +451,14 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.ResumeResponder,
 				datatransfer.CleanupComplete,
 			},
-			configureValidator: func(sv *stubbedValidator) {
-				sv.expectSuccessPull()
-				sv.stubResult(testutil.NewFakeDTType())
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPull()
+				sv.StubResult(testutil.NewFakeDTType())
 			},
-			configureRevalidator: func(srv *stubbedRevalidator) {
-				srv.expectPauseComplete()
-				srv.stubResult(testutil.NewFakeDTType())
-				srv.expectSuccessRevalidation()
+			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
+				srv.ExpectPauseComplete()
+				srv.StubRevalidationResult(testutil.NewFakeDTType())
+				srv.ExpectSuccessRevalidation()
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
@@ -521,20 +520,20 @@ func TestDataTransferResponding(t *testing.T) {
 			h.voucherUpdate, err = message.VoucherRequest(h.id, updateVoucher.Type(), updateVoucher)
 			h.cancelUpdate = message.CancelRequest(h.id)
 			require.NoError(t, err)
-			h.sv = newSV()
+			h.sv = testutil.NewStubbedValidator()
 			if verify.configureValidator != nil {
 				verify.configureValidator(h.sv)
 			}
 			require.NoError(t, h.dt.RegisterVoucherType(h.voucher, h.sv))
-			h.srv = newSRV()
+			h.srv = testutil.NewStubbedRevalidator()
 			if verify.configureRevalidator != nil {
 				verify.configureRevalidator(h.srv)
 			}
 			err = h.dt.RegisterRevalidator(updateVoucher, h.srv)
 			require.NoError(t, err)
 			verify.verify(t, h)
-			h.sv.verifyExpectations(t)
-			h.srv.verifyExpectations(t)
+			h.sv.VerifyExpectations(t)
+			h.srv.VerifyExpectations(t)
 			ev.verify(ctx, t)
 		})
 	}
@@ -552,295 +551,14 @@ type receiverHarness struct {
 	peers         []peer.ID
 	network       *testutil.FakeNetwork
 	transport     *testutil.FakeTransport
-	sv            *stubbedValidator
-	srv           *stubbedRevalidator
+	sv            *testutil.StubbedValidator
+	srv           *testutil.StubbedRevalidator
 	ds            datastore.Datastore
 	storedCounter *storedcounter.StoredCounter
 	dt            datatransfer.Manager
 	stor          ipld.Node
 	voucher       *testutil.FakeDTType
 	baseCid       cid.Cid
-}
-
-func newSV() *stubbedValidator {
-	return &stubbedValidator{nil, false, false, false, false, nil, nil, nil}
-}
-
-func (sv *stubbedValidator) ValidatePush(
-	sender peer.ID,
-	voucher datatransfer.Voucher,
-	baseCid cid.Cid,
-	selector ipld.Node) (datatransfer.VoucherResult, error) {
-	sv.didPush = true
-	sv.validationsReceived = append(sv.validationsReceived, receivedValidation{false, sender, voucher, baseCid, selector})
-	return sv.result, sv.pushError
-}
-
-func (sv *stubbedValidator) ValidatePull(
-	receiver peer.ID,
-	voucher datatransfer.Voucher,
-	baseCid cid.Cid,
-	selector ipld.Node) (datatransfer.VoucherResult, error) {
-	sv.didPull = true
-	sv.validationsReceived = append(sv.validationsReceived, receivedValidation{true, receiver, voucher, baseCid, selector})
-	return sv.result, sv.pullError
-}
-
-func (sv *stubbedValidator) stubResult(voucherResult datatransfer.VoucherResult) {
-	sv.result = voucherResult
-}
-func (sv *stubbedValidator) stubErrorPush() {
-	sv.pushError = errors.New("something went wrong")
-}
-
-func (sv *stubbedValidator) stubSuccessPush() {
-	sv.pushError = nil
-}
-
-func (sv *stubbedValidator) stubPausePush() {
-	sv.pushError = datatransfer.ErrPause
-}
-
-func (sv *stubbedValidator) expectSuccessPush() {
-	sv.expectPush = true
-	sv.stubSuccessPush()
-}
-
-func (sv *stubbedValidator) expectErrorPush() {
-	sv.expectPush = true
-	sv.stubErrorPush()
-}
-
-func (sv *stubbedValidator) expectPausePush() {
-	sv.expectPush = true
-	sv.stubPausePush()
-}
-
-func (sv *stubbedValidator) stubErrorPull() {
-	sv.pullError = errors.New("something went wrong")
-}
-
-func (sv *stubbedValidator) stubSuccessPull() {
-	sv.pullError = nil
-}
-
-func (sv *stubbedValidator) stubPausePull() {
-	sv.pullError = datatransfer.ErrPause
-}
-
-func (sv *stubbedValidator) expectSuccessPull() {
-	sv.expectPull = true
-	sv.stubSuccessPull()
-}
-
-func (sv *stubbedValidator) expectErrorPull() {
-	sv.expectPull = true
-	sv.stubErrorPull()
-}
-
-func (sv *stubbedValidator) expectPausePull() {
-	sv.expectPull = true
-	sv.stubPausePull()
-}
-
-func (sv *stubbedValidator) verifyExpectations(t *testing.T) {
-	if sv.expectPush {
-		require.True(t, sv.didPush)
-	}
-	if sv.expectPull {
-		require.True(t, sv.didPull)
-	}
-}
-
-type receivedValidation struct {
-	isPull   bool
-	other    peer.ID
-	voucher  datatransfer.Voucher
-	baseCid  cid.Cid
-	selector ipld.Node
-}
-
-type stubbedValidator struct {
-	result              datatransfer.VoucherResult
-	didPush             bool
-	didPull             bool
-	expectPush          bool
-	expectPull          bool
-	pushError           error
-	pullError           error
-	validationsReceived []receivedValidation
-}
-
-type stubbedRevalidator struct {
-	result               datatransfer.VoucherResult
-	revalidationResult   datatransfer.VoucherResult
-	didRevalidate        bool
-	didRevalidatePush    bool
-	didRevalidatePull    bool
-	didComplete          bool
-	expectRevalidate     bool
-	expectRevalidatePush bool
-	expectRevalidatePull bool
-	expectComplete       bool
-	revalidationError    error
-	pushRevalidateError  error
-	pullRevalidateError  error
-	completeError        error
-}
-
-func newSRV() *stubbedRevalidator {
-	return &stubbedRevalidator{}
-}
-
-func (srv *stubbedRevalidator) OnPullDataSent(chid datatransfer.ChannelID, additionalBytesSent uint64) (datatransfer.VoucherResult, error) {
-	srv.didRevalidatePull = true
-	return srv.result, srv.pullRevalidateError
-}
-
-func (srv *stubbedRevalidator) OnPushDataReceived(chid datatransfer.ChannelID, additionalBytesReceived uint64) (datatransfer.VoucherResult, error) {
-	srv.didRevalidatePush = true
-	return srv.result, srv.pushRevalidateError
-}
-
-func (srv *stubbedRevalidator) OnComplete(chid datatransfer.ChannelID) (datatransfer.VoucherResult, error) {
-	srv.didComplete = true
-	return srv.result, srv.completeError
-}
-
-func (srv *stubbedRevalidator) Revalidate(chid datatransfer.ChannelID, voucher datatransfer.Voucher) (datatransfer.VoucherResult, error) {
-	srv.didRevalidate = true
-	return srv.revalidationResult, srv.revalidationError
-}
-
-func (srv *stubbedRevalidator) stubResult(voucherResult datatransfer.VoucherResult) {
-	srv.result = voucherResult
-}
-
-func (srv *stubbedRevalidator) stubRevalidationResult(voucherResult datatransfer.VoucherResult) {
-	srv.revalidationResult = voucherResult
-}
-
-func (srv *stubbedRevalidator) stubErrorRevalidatePush() {
-	srv.pushRevalidateError = errors.New("something went wrong")
-}
-
-func (srv *stubbedRevalidator) stubSuccessRevalidatePush() {
-	srv.pushRevalidateError = nil
-}
-
-func (srv *stubbedRevalidator) stubPauseRevalidatePush() {
-	srv.pushRevalidateError = datatransfer.ErrPause
-}
-
-func (srv *stubbedRevalidator) expectSuccessRevalidatePush() {
-	srv.expectRevalidatePush = true
-	srv.stubSuccessRevalidatePush()
-}
-
-func (srv *stubbedRevalidator) expectErrorRevalidatePush() {
-	srv.expectRevalidatePush = true
-	srv.stubErrorRevalidatePush()
-}
-
-func (srv *stubbedRevalidator) expectPauseRevalidatePush() {
-	srv.expectRevalidatePush = true
-	srv.stubPauseRevalidatePush()
-}
-
-func (srv *stubbedRevalidator) stubErrorRevalidatePull() {
-	srv.pullRevalidateError = errors.New("something went wrong")
-}
-
-func (srv *stubbedRevalidator) stubSuccessRevalidatePull() {
-	srv.pullRevalidateError = nil
-}
-
-func (srv *stubbedRevalidator) stubPauseRevalidatePull() {
-	srv.pullRevalidateError = datatransfer.ErrPause
-}
-
-func (srv *stubbedRevalidator) expectSuccessRevalidatePull() {
-	srv.expectRevalidatePull = true
-	srv.stubSuccessRevalidatePull()
-}
-
-func (srv *stubbedRevalidator) expectErrorRevalidatePull() {
-	srv.expectRevalidatePull = true
-	srv.stubErrorRevalidatePull()
-}
-
-func (srv *stubbedRevalidator) expectPauseRevalidatePull() {
-	srv.expectRevalidatePull = true
-	srv.stubPauseRevalidatePull()
-}
-
-func (srv *stubbedRevalidator) stubErrorComplete() {
-	srv.completeError = errors.New("something went wrong")
-}
-
-func (srv *stubbedRevalidator) stubSuccessComplete() {
-	srv.completeError = nil
-}
-
-func (srv *stubbedRevalidator) stubPauseComplete() {
-	srv.completeError = datatransfer.ErrPause
-}
-
-func (srv *stubbedRevalidator) expectSuccessComplete() {
-	srv.expectComplete = true
-	srv.stubSuccessComplete()
-}
-
-func (srv *stubbedRevalidator) expectErrorComplete() {
-	srv.expectComplete = true
-	srv.stubErrorComplete()
-}
-
-func (srv *stubbedRevalidator) expectPauseComplete() {
-	srv.expectComplete = true
-	srv.stubPauseComplete()
-}
-
-func (srv *stubbedRevalidator) stubErrorRevalidation() {
-	srv.revalidationError = errors.New("something went wrong")
-}
-
-func (srv *stubbedRevalidator) stubSuccessRevalidation() {
-	srv.revalidationError = nil
-}
-
-func (srv *stubbedRevalidator) stubPauseRevalidation() {
-	srv.revalidationError = datatransfer.ErrPause
-}
-
-func (srv *stubbedRevalidator) expectSuccessRevalidation() {
-	srv.expectRevalidate = true
-	srv.stubSuccessRevalidation()
-}
-
-func (srv *stubbedRevalidator) expectErrorRevalidation() {
-	srv.expectRevalidate = true
-	srv.stubErrorRevalidation()
-}
-
-func (srv *stubbedRevalidator) expectPauseRevalidation() {
-	srv.expectRevalidate = true
-	srv.stubPauseRevalidation()
-}
-
-func (srv *stubbedRevalidator) verifyExpectations(t *testing.T) {
-	if srv.expectRevalidate {
-		require.True(t, srv.didRevalidate)
-	}
-	if srv.expectRevalidatePush {
-		require.True(t, srv.didRevalidatePush)
-	}
-	if srv.expectRevalidatePull {
-		require.True(t, srv.didRevalidatePull)
-	}
-	if srv.expectComplete {
-		require.True(t, srv.didComplete)
-	}
 }
 
 func channelID(id datatransfer.TransferID, peers []peer.ID) datatransfer.ChannelID {

@@ -77,15 +77,15 @@ func TestRoundTrip(t *testing.T) {
 			dt1.SubscribeToEvents(subscriber)
 			dt2.SubscribeToEvents(subscriber)
 			voucher := testutil.FakeDTType{Data: "applesauce"}
-			sv := newSV()
+			sv := testutil.NewStubbedValidator()
 
 			var chid datatransfer.ChannelID
 			if isPull {
-				sv.expectSuccessPull()
+				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
 			} else {
-				sv.expectSuccessPush()
+				sv.ExpectSuccessPush()
 				require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
 			}
@@ -122,7 +122,7 @@ func TestRoundTrip(t *testing.T) {
 }
 
 type retrievalRevalidator struct {
-	*stubbedRevalidator
+	*testutil.StubbedRevalidator
 	dataSoFar          uint64
 	providerPausePoint int
 	pausePoints        []uint64
@@ -252,14 +252,14 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			}
 			dt1.SubscribeToEvents(providerSubscriber)
 			voucher := testutil.FakeDTType{Data: "applesauce"}
-			sv := newSV()
-			sv.expectPausePull()
+			sv := testutil.NewStubbedValidator()
+			sv.ExpectPausePull()
 			require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 			srv := &retrievalRevalidator{
-				newSRV(), 0, 0, config.pausePoints, finalVoucherResult,
+				testutil.NewStubbedRevalidator(), 0, 0, config.pausePoints, finalVoucherResult,
 			}
-			srv.expectSuccessRevalidation()
+			srv.ExpectSuccessRevalidation()
 			require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
 
 			require.NoError(t, dt2.RegisterVoucherResultType(testutil.NewFakeDTType()))
@@ -278,8 +278,8 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					t.Fatal("received unexpected error")
 				}
 			}
-			sv.verifyExpectations(t)
-			srv.verifyExpectations(t)
+			sv.VerifyExpectations(t)
+			srv.VerifyExpectations(t)
 			gsData.VerifyFileTransferred(t, root, true)
 			require.Equal(t, srv.providerPausePoint, len(config.pausePoints))
 			require.Equal(t, clientPausePoint, len(config.pausePoints))
@@ -357,15 +357,15 @@ func TestPauseAndResume(t *testing.T) {
 			dt1.SubscribeToEvents(subscriber)
 			dt2.SubscribeToEvents(subscriber)
 			voucher := testutil.FakeDTType{Data: "applesauce"}
-			sv := newSV()
+			sv := testutil.NewStubbedValidator()
 
 			var chid datatransfer.ChannelID
 			if isPull {
-				sv.expectSuccessPull()
+				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
 			} else {
-				sv.expectSuccessPush()
+				sv.ExpectSuccessPush()
 				require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
 			}
@@ -434,9 +434,9 @@ func TestDataTransferSubscribing(t *testing.T) {
 
 	tp1 := gsData.SetupGSTransportHost1()
 	tp2 := gsData.SetupGSTransportHost2()
-	sv := newSV()
-	sv.stubErrorPull()
-	sv.stubErrorPush()
+	sv := testutil.NewStubbedValidator()
+	sv.StubErrorPull()
+	sv.StubErrorPush()
 	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 	require.NoError(t, err)
 	err = dt2.Start(ctx)
@@ -716,8 +716,8 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 
 	t.Run("When a pull request is initiated and validated", func(t *testing.T) {
-		sv := newSV()
-		sv.expectSuccessPull()
+		sv := testutil.NewStubbedValidator()
+		sv.ExpectSuccessPull()
 
 		dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 		require.NoError(t, err)
@@ -747,8 +747,8 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 	})
 
 	t.Run("When request is initiated, but fails validation", func(t *testing.T) {
-		sv := newSV()
-		sv.expectErrorPull()
+		sv := testutil.NewStubbedValidator()
+		sv.ExpectErrorPull()
 		dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 		require.NoError(t, err)
 		err = dt1.Start(ctx)
