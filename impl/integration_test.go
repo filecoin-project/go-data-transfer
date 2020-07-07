@@ -13,10 +13,12 @@ import (
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/testutil"
+	"github.com/filecoin-project/go-data-transfer/transport"
 	tp "github.com/filecoin-project/go-data-transfer/transport/graphsync"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
 	"github.com/ipfs/go-graphsync"
 	gsmsg "github.com/ipfs/go-graphsync/message"
+	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/assert"
@@ -697,84 +699,96 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 	//create network
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	testCases := map[string]struct {
+		test func(*testing.T, *testutil.GraphsyncTestingData, transport.Transport, ipld.Link, datatransfer.TransferID, *fakeGraphSyncReceiver)
+	}{
+		"When a pull request is initiated and validated": {
+			test: func(t *testing.T, gsData *testutil.GraphsyncTestingData, tp2 transport.Transport, link ipld.Link, id datatransfer.TransferID, gsr *fakeGraphSyncReceiver) {
+				sv := testutil.NewStubbedValidator()
+				sv.ExpectSuccessPull()
 
-	gsData := testutil.NewGraphsyncTestingData(ctx, t)
-	host2 := gsData.Host2 // data sender
+				dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
+				require.NoError(t, err)
+				err = dt1.Start(ctx)
+				require.NoError(t, err)
+				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
-	// setup receiving peer to just record message coming in
-	gsr := &fakeGraphSyncReceiver{
-		receivedMessages: make(chan receivedGraphSyncMessage),
+				voucher := testutil.NewFakeDTType()
+				request, err := message.NewRequest(id, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
+				require.NoError(t, err)
+				buf := new(bytes.Buffer)
+				err = request.ToNet(buf)
+				require.NoError(t, err)
+				extData := buf.Bytes()
+
+				gsRequest := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
+					Name: extension.ExtensionDataTransfer,
+					Data: extData,
+				})
+
+				// initiator requests data over graphsync network
+				gsmessage := gsmsg.New()
+				gsmessage.AddRequest(gsRequest)
+				require.NoError(t, gsData.GsNet1.SendMessage(ctx, gsData.Host2.ID(), gsmessage))
+				status := gsr.consumeResponses(ctx, t)
+				require.False(t, gsmsg.IsTerminalFailureCode(status))
+			},
+		},
+		"When request is initiated, but fails validation": {
+			test: func(t *testing.T, gsData *testutil.GraphsyncTestingData, tp2 transport.Transport, link ipld.Link, id datatransfer.TransferID, gsr *fakeGraphSyncReceiver) {
+				sv := testutil.NewStubbedValidator()
+				sv.ExpectErrorPull()
+				dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
+				require.NoError(t, err)
+				err = dt1.Start(ctx)
+				require.NoError(t, err)
+				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+				voucher := testutil.NewFakeDTType()
+				dtRequest, err := message.NewRequest(id, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
+				require.NoError(t, err)
+
+				buf := new(bytes.Buffer)
+				err = dtRequest.ToNet(buf)
+				require.NoError(t, err)
+				extData := buf.Bytes()
+				request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
+					Name: extension.ExtensionDataTransfer,
+					Data: extData,
+				})
+				gsmessage := gsmsg.New()
+				gsmessage.AddRequest(request)
+
+				// non-initiator requests data over graphsync network, but should not get it
+				// because there was no previous request
+				require.NoError(t, gsData.GsNet1.SendMessage(ctx, gsData.Host2.ID(), gsmessage))
+				status := gsr.consumeResponses(ctx, t)
+				require.True(t, gsmsg.IsTerminalFailureCode(status))
+			},
+		},
 	}
-	gsData.GsNet1.SetDelegate(gsr)
 
-	tp2 := gsData.SetupGSTransportHost2()
+	for testCase, data := range testCases {
+		t.Run(testCase, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
 
-	link := gsData.LoadUnixFSFile(t, true)
+			gsData := testutil.NewGraphsyncTestingData(ctx, t)
 
-	id := datatransfer.TransferID(rand.Int31())
+			// setup receiving peer to just record message coming in
+			gsr := &fakeGraphSyncReceiver{
+				receivedMessages: make(chan receivedGraphSyncMessage),
+			}
+			gsData.GsNet1.SetDelegate(gsr)
 
-	t.Run("When a pull request is initiated and validated", func(t *testing.T) {
-		sv := testutil.NewStubbedValidator()
-		sv.ExpectSuccessPull()
+			tp2 := gsData.SetupGSTransportHost2()
 
-		dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
-		require.NoError(t, err)
-		err = dt1.Start(ctx)
-		require.NoError(t, err)
-		require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+			link := gsData.LoadUnixFSFile(t, true)
 
-		voucher := testutil.NewFakeDTType()
-		request, err := message.NewRequest(id, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
-		require.NoError(t, err)
-		buf := new(bytes.Buffer)
-		err = request.ToNet(buf)
-		require.NoError(t, err)
-		extData := buf.Bytes()
+			id := datatransfer.TransferID(rand.Int31())
 
-		gsRequest := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
-			Name: extension.ExtensionDataTransfer,
-			Data: extData,
+			data.test(t, gsData, tp2, link, id, gsr)
 		})
-
-		// initiator requests data over graphsync network
-		gsmessage := gsmsg.New()
-		gsmessage.AddRequest(gsRequest)
-		require.NoError(t, gsData.GsNet1.SendMessage(ctx, host2.ID(), gsmessage))
-		status := gsr.consumeResponses(ctx, t)
-		require.False(t, gsmsg.IsTerminalFailureCode(status))
-	})
-
-	t.Run("When request is initiated, but fails validation", func(t *testing.T) {
-		sv := testutil.NewStubbedValidator()
-		sv.ExpectErrorPull()
-		dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
-		require.NoError(t, err)
-		err = dt1.Start(ctx)
-		require.NoError(t, err)
-		require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
-		voucher := testutil.NewFakeDTType()
-		dtRequest, err := message.NewRequest(id, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
-		require.NoError(t, err)
-
-		buf := new(bytes.Buffer)
-		err = dtRequest.ToNet(buf)
-		require.NoError(t, err)
-		extData := buf.Bytes()
-		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
-			Name: extension.ExtensionDataTransfer,
-			Data: extData,
-		})
-		gsmessage := gsmsg.New()
-		gsmessage.AddRequest(request)
-
-		// non-initiator requests data over graphsync network, but should not get it
-		// because there was no previous request
-		require.NoError(t, gsData.GsNet1.SendMessage(ctx, host2.ID(), gsmessage))
-		status := gsr.consumeResponses(ctx, t)
-		require.True(t, gsmsg.IsTerminalFailureCode(status))
-	})
+	}
 }
 
 type receivedMessage struct {
