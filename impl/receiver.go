@@ -23,7 +23,7 @@ func (r *receiver) ReceiveRequest(
 	incoming message.DataTransferRequest) {
 	err := r.receiveRequest(ctx, initiator, incoming)
 	if err != nil {
-		log.Error(err)
+		log.Warn(err)
 	}
 }
 
@@ -36,8 +36,7 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 		if err != nil {
 			return err
 		}
-		status := chst.Status()
-		if status != datatransfer.Finalizing && status != datatransfer.Completing && status != datatransfer.Completed {
+		if resumeTransportStatesResponder.Contains(chst.Status()) {
 			return r.manager.transport.(transport.PauseableTransport).ResumeChannel(ctx, response, chid)
 		}
 		receiveErr = nil

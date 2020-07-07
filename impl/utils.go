@@ -12,6 +12,23 @@ import (
 	"golang.org/x/xerrors"
 )
 
+type statusList []datatransfer.Status
+
+func (sl statusList) Contains(s datatransfer.Status) bool {
+	for _, ts := range sl {
+		if ts == s {
+			return true
+		}
+	}
+	return false
+}
+
+var resumeTransportStatesResponder = statusList{
+	datatransfer.Requested,
+	datatransfer.Ongoing,
+	datatransfer.InitiatorPaused,
+}
+
 // newRequest encapsulates message creation
 func (m *manager) newRequest(ctx context.Context, selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid, to peer.ID) (message.DataTransferRequest, error) {
 	next, err := m.storedCounter.Next()

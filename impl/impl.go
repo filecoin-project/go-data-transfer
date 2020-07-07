@@ -202,7 +202,7 @@ func (m *manager) PauseDataTransferChannel(ctx context.Context, chid datatransfe
 
 	err := pausable.PauseChannel(ctx, chid)
 	if err != nil {
-		return err
+		log.Warnf("Error attempting to pause at transport level: %s", err.Error())
 	}
 
 	if err := m.dataTransferNetwork.SendMessage(ctx, chid.OtherParty(m.peerID), m.pauseMessage(chid)); err != nil {
@@ -223,7 +223,7 @@ func (m *manager) ResumeDataTransferChannel(ctx context.Context, chid datatransf
 
 	err := pausable.ResumeChannel(ctx, m.resumeMessage(chid), chid)
 	if err != nil {
-		return err
+		log.Warnf("Error attempting to pause at transport level: %s", err.Error())
 	}
 
 	return m.resume(chid)

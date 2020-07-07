@@ -219,14 +219,14 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					encodedLVR, err := encoding.Encode(lastVoucherResult)
 					require.NoError(t, err)
 					if bytes.Equal(encodedLVR, encodedFVR) {
-						require.NoError(t, dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType()))
+						_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
 					}
 				}
 
 				if event.Code == datatransfer.Progress &&
 					clientPausePoint < len(config.pausePoints) &&
 					channelState.Received() > config.pausePoints[clientPausePoint] {
-					require.NoError(t, dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType()))
+					_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
 					clientPausePoint++
 				}
 				if channelState.Status() == datatransfer.Completed {
@@ -236,12 +236,12 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			dt2.SubscribeToEvents(clientSubscriber)
 			providerFinished := make(chan struct{}, 1)
 			var providerSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-				if event.Code == datatransfer.Accept {
+				if event.Code == datatransfer.PauseResponder {
 					if !config.payForUnseal {
 						timer := time.NewTimer(config.unpauseResponderDelay)
 						go func() {
 							<-timer.C
-							require.NoError(t, dt1.ResumeDataTransferChannel(ctx, chid))
+							_ = dt1.ResumeDataTransferChannel(ctx, chid)
 						}()
 					}
 				}
