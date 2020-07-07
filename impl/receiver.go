@@ -28,15 +28,23 @@ func (r *receiver) ReceiveRequest(
 }
 
 func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incoming message.DataTransferRequest) error {
-	chid := datatransfer.ChannelID{Initiator: initiator, ID: incoming.TransferID()}
+	chid := datatransfer.ChannelID{Initiator: initiator, Responder: r.manager.peerID, ID: incoming.TransferID()}
 	response, receiveErr := r.manager.OnRequestReceived(chid, incoming)
 
 	if receiveErr == transport.ErrResume {
-		return r.manager.transport.(transport.PauseableTransport).ResumeChannel(ctx, response, chid)
+		chst, err := r.manager.channels.GetByID(ctx, chid)
+		if err != nil {
+			return err
+		}
+		status := chst.Status()
+		if status != datatransfer.Finalizing && status != datatransfer.Completed {
+			return r.manager.transport.(transport.PauseableTransport).ResumeChannel(ctx, response, chid)
+		}
+		receiveErr = nil
 	}
 
 	if response != nil {
-		if !response.IsUpdate() && response.Accepted() && !incoming.IsPull() {
+		if response.IsNew() && response.Accepted() && !incoming.IsPull() {
 			stor, _ := incoming.Selector()
 			if err := r.manager.transport.OpenChannel(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, response); err != nil {
 				return err
@@ -75,7 +83,7 @@ func (r *receiver) receiveResponse(
 	ctx context.Context,
 	sender peer.ID,
 	incoming message.DataTransferResponse) error {
-	chid := datatransfer.ChannelID{Initiator: r.manager.peerID, ID: incoming.TransferID()}
+	chid := datatransfer.ChannelID{Initiator: r.manager.peerID, Responder: sender, ID: incoming.TransferID()}
 	err := r.manager.OnResponseReceived(chid, incoming)
 	if err == transport.ErrPause {
 		return r.manager.transport.(transport.PauseableTransport).PauseChannel(ctx, chid)

@@ -28,6 +28,8 @@ type internalChannelState struct {
 	TransferID datatransfer.TransferID
 	// Initiator is the person who intiated this datatransfer request
 	Initiator peer.ID
+	// Responder is the person who is responding to this datatransfer request
+	Responder peer.ID
 	// base CID for the piece being transferred
 	BaseCid cid.Cid
 	// portion of Piece to return, specified by an IPLD selector

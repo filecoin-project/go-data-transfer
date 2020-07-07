@@ -43,6 +43,10 @@ func (trq *transferRequest) IsUpdate() bool {
 	return trq.Type == uint64(updateMessage)
 }
 
+func (trq *transferRequest) IsVoucher() bool {
+	return trq.Type == uint64(voucherMessage) || trq.Type == uint64(newMessage)
+}
+
 func (trq *transferRequest) IsPaused() bool {
 	return trq.Paus
 }

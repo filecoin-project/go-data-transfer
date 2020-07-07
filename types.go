@@ -67,6 +67,10 @@ const (
 	// responder that it's completed
 	ResponderCompleted
 
+	// Finalizing means the responder is awaiting a final message from the initator to
+	// consider the transfer done
+	Finalizing
+
 	// Completed means the data transfer is completed successfully
 	Completed
 
@@ -76,18 +80,21 @@ const (
 	// Cancelled means the data transfer ended prematurely
 	Cancelled
 
-	// SenderPaused means the data sender has paused the channel (only the sender can unpause this)
-	SenderPaused
+	// InitiatorPaused means the data sender has paused the channel (only the sender can unpause this)
+	InitiatorPaused
 
-	// ReceiverPaused means the data receiver has paused the channel (only the receiver can unpause this)
-	ReceiverPaused
+	// ResponderPaused means the data receiver has paused the channel (only the receiver can unpause this)
+	ResponderPaused
 
 	// BothPaused means both sender and receiver have paused the channel seperately (both must unpause)
 	BothPaused
 
-	// ResponderCompletedReceiverPaused is a unique state where the receiver has paused while the responder
-	// has finished sending data
-	ResponderCompletedReceiverPaused
+	// ResponderFinalizing is a unique state where the responder is awaiting a final voucher
+	ResponderFinalizing
+
+	// ResponderFinalizingTransferFinished is a unique state where the responder is awaiting a final voucher
+	// and we have received all data
+	ResponderFinalizingTransferFinished
 
 	// ChannelNotFoundError means the searched for data transfer does not exist
 	ChannelNotFoundError
@@ -96,18 +103,20 @@ const (
 // Statuses are human readable names for data transfer states
 var Statuses = map[Status]string{
 	// Requested means a data transfer was requested by has not yet been approved
-	Requested:                        "Requested",
-	Ongoing:                          "Ongoing",
-	TransferFinished:                 "TransferFinished",
-	ResponderCompleted:               "ResponderCompleted",
-	Completed:                        "Completed",
-	Failed:                           "Failed",
-	Cancelled:                        "Cancelled",
-	SenderPaused:                     "SenderPaused",
-	ReceiverPaused:                   "ReceiverPaused",
-	BothPaused:                       "BothPaused",
-	ResponderCompletedReceiverPaused: "ResponderCompletedReceiverPaused",
-	ChannelNotFoundError:             "ChannelNotFoundError",
+	Requested:                           "Requested",
+	Ongoing:                             "Ongoing",
+	TransferFinished:                    "TransferFinished",
+	ResponderCompleted:                  "ResponderCompleted",
+	Finalizing:                          "Finalizing",
+	Completed:                           "Completed",
+	Failed:                              "Failed",
+	Cancelled:                           "Cancelled",
+	InitiatorPaused:                     "InitiatorPaused",
+	ResponderPaused:                     "ResponderPaused",
+	BothPaused:                          "BothPaused",
+	ResponderFinalizing:                 "ResponderFinalizing",
+	ResponderFinalizingTransferFinished: "ResponderFinalizingTransferFinished",
+	ChannelNotFoundError:                "ChannelNotFoundError",
 }
 
 // TransferID is an identifier for a data transfer, shared between
@@ -118,11 +127,21 @@ type TransferID uint64
 // party's peer ID + the transfer ID
 type ChannelID struct {
 	Initiator peer.ID
+	Responder peer.ID
 	ID        TransferID
 }
 
 func (c ChannelID) String() string {
-	return fmt.Sprintf("%s-%d", c.Initiator, c.ID)
+	return fmt.Sprintf("%s-%s-%d", c.Initiator, c.Responder, c.ID)
+}
+
+// OtherParty returns the peer on the other side of the request, depending
+// on whether this peer is the initiator or responder
+func (c ChannelID) OtherParty(thisPeer peer.ID) peer.ID {
+	if thisPeer == c.Initiator {
+		return c.Responder
+	}
+	return c.Initiator
 }
 
 // Channel represents all the parameters for a single data transfer
@@ -210,23 +229,30 @@ const (
 	// NewVoucherResult means we have a new voucher result on this channel
 	NewVoucherResult
 
-	// PauseSender emits when the data sender pauses transfer
-	PauseSender
+	// PauseInitiator emits when the data sender pauses transfer
+	PauseInitiator
 
-	// ResumeSender emits when the data sender resumes transfer
-	ResumeSender
+	// ResumeInitiator emits when the data sender resumes transfer
+	ResumeInitiator
 
-	// PauseReceiver emits when the data receiver pauses transfer
-	PauseReceiver
+	// PauseResponder emits when the data receiver pauses transfer
+	PauseResponder
 
-	// ResumeReceiver emits when the data receiver resumes transfer
-	ResumeReceiver
+	// ResumeResponder emits when the data receiver resumes transfer
+	ResumeResponder
 
 	// FinishTransfer emits when the initiator has completed sending/receiving data
 	FinishTransfer
 
-	// CompleteResponder emits when the initiator receives a message that the responder is finished
-	CompleteResponder
+	// ResponderCompletes emits when the initiator receives a message that the responder is finished
+	ResponderCompletes
+
+	// ResponderBeginsFinalization emits when the initiator receives a message that the responder is finilizing
+	ResponderBeginsFinalization
+
+	// BeginFinalizing emits when the responder completes its operations but awaits a response from the
+	// initiator
+	BeginFinalizing
 
 	// Complete is emitted when a data transfer is complete
 	Complete
@@ -234,20 +260,22 @@ const (
 
 // Events are human readable names for data transfer events
 var Events = map[EventCode]string{
-	Open:              "Open",
-	Accept:            "Accept",
-	Progress:          "Progress",
-	Cancel:            "Cancel",
-	Error:             "Error",
-	NewVoucher:        "NewVoucher",
-	NewVoucherResult:  "NewVoucherResult",
-	PauseSender:       "PauseSender",
-	ResumeSender:      "ResumeSender",
-	PauseReceiver:     "PauseReceiver",
-	ResumeReceiver:    "ResumeReceiver",
-	FinishTransfer:    "FinishTransfer",
-	CompleteResponder: "CompleteResponder",
-	Complete:          "Complete",
+	Open:                        "Open",
+	Accept:                      "Accept",
+	Progress:                    "Progress",
+	Cancel:                      "Cancel",
+	Error:                       "Error",
+	NewVoucher:                  "NewVoucher",
+	NewVoucherResult:            "NewVoucherResult",
+	PauseInitiator:              "PauseInitiator",
+	ResumeInitiator:             "ResumeInitiator",
+	PauseResponder:              "PauseResponder",
+	ResumeResponder:             "ResumeResponder",
+	FinishTransfer:              "FinishTransfer",
+	ResponderBeginsFinalization: "ResponderBeginsFinalization",
+	ResponderCompletes:          "ResponderCompletes",
+	BeginFinalizing:             "BeginFinalizing",
+	Complete:                    "Complete",
 }
 
 // Event is a struct containing information about a data transfer event
@@ -288,7 +316,8 @@ var ErrRetryValidation = errors.New("Retry Revalidation")
 // Revalidator is a request validator revalidates in progress requests
 // by requesting request additional vouchers, and resuming when it receives them
 type Revalidator interface {
-	RequestValidator
+	// Revalidate revalidates a request with a new voucher
+	Revalidate(channelID ChannelID, voucher Voucher) (VoucherResult, error)
 	// OnPullDataSent is called on the responder side when more bytes are sent
 	// for a given pull request. It should return a VoucherResult + ErrPause to
 	// request revalidation or nil to continue uninterrupted,
@@ -299,6 +328,11 @@ type Revalidator interface {
 	// request revalidation or nil to continue uninterrupted,
 	// other errors will terminate the request
 	OnPushDataReceived(chid ChannelID, additionalBytesReceived uint64) (VoucherResult, error)
+	// OnComplete is called to make a final request for revalidation -- often for the
+	// purpose of settlement.
+	// if VoucherResult is non nil, the request will enter a settlement phase awaiting
+	// a final update
+	OnComplete(chid ChannelID) (VoucherResult, error)
 }
 
 // Manager is the core interface presented by all implementations of

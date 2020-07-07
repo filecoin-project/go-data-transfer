@@ -83,7 +83,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		},
 		"SendVoucher with no channel open": {
 			verify: func(t *testing.T, h *harness) {
-				err := h.dt.SendVoucher(h.ctx, datatransfer.ChannelID{Initiator: h.peers[1], ID: 999999}, h.voucher)
+				err := h.dt.SendVoucher(h.ctx, datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: 999999}, h.voucher)
 				require.EqualError(t, err, channels.ErrNotFound.Error())
 			},
 		},
@@ -98,9 +98,9 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 2)
 				received := h.network.SentMessages[1].Message
 				require.True(t, received.IsRequest())
-				require.True(t, received.IsUpdate())
 				receivedRequest, ok := received.(message.DataTransferRequest)
 				require.True(t, ok)
+				require.True(t, receivedRequest.IsVoucher())
 				require.False(t, receivedRequest.IsCancel())
 				testutil.AssertFakeDTVoucher(t, receivedRequest, voucher)
 			},
@@ -117,10 +117,10 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 1)
 				received := h.network.SentMessages[0].Message
 				require.True(t, received.IsRequest())
-				require.True(t, received.IsUpdate())
 				receivedRequest, ok := received.(message.DataTransferRequest)
 				require.True(t, ok)
 				require.False(t, receivedRequest.IsCancel())
+				require.True(t, receivedRequest.IsVoucher())
 				testutil.AssertFakeDTVoucher(t, receivedRequest, voucher)
 			},
 		},
@@ -144,7 +144,7 @@ func TestDataTransferInitiating(t *testing.T) {
 			},
 		},
 		"success response": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept},
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept, datatransfer.ResumeResponder},
 			verify: func(t *testing.T, h *harness) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestDataTransferInitiating(t *testing.T) {
 			},
 		},
 		"success response, w/ voucher result": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept},
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept, datatransfer.ResumeResponder},
 			verify: func(t *testing.T, h *harness) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
@@ -168,7 +168,7 @@ func TestDataTransferInitiating(t *testing.T) {
 			},
 		},
 		"push request, pause behavior": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept, datatransfer.PauseSender, datatransfer.ResumeSender},
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept, datatransfer.ResumeResponder, datatransfer.PauseInitiator, datatransfer.ResumeInitiator},
 			verify: func(t *testing.T, h *harness) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
@@ -188,9 +188,6 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.True(t, pauseMessage.IsRequest())
 				require.False(t, pauseMessage.IsCancel())
 				require.Equal(t, pauseMessage.TransferID(), channelID.ID)
-				// fails pausing again
-				err = h.dt.PauseDataTransferChannel(h.ctx, channelID)
-				require.EqualError(t, err, "Cannot pause a request that is already paused")
 				err = h.dt.ResumeDataTransferChannel(h.ctx, channelID)
 				require.NoError(t, err)
 				require.Len(t, h.transport.ResumedChannels, 1)
@@ -224,7 +221,7 @@ func TestDataTransferInitiating(t *testing.T) {
 			},
 		},
 		"pull request, pause behavior": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept, datatransfer.PauseReceiver, datatransfer.ResumeReceiver},
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept, datatransfer.ResumeResponder, datatransfer.PauseInitiator, datatransfer.ResumeInitiator},
 			verify: func(t *testing.T, h *harness) {
 				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
@@ -244,9 +241,6 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.True(t, pauseMessage.IsRequest())
 				require.False(t, pauseMessage.IsCancel())
 				require.Equal(t, pauseMessage.TransferID(), channelID.ID)
-				// fails pausing again
-				err = h.dt.PauseDataTransferChannel(h.ctx, channelID)
-				require.EqualError(t, err, "Cannot pause a request that is already paused")
 				err = h.dt.ResumeDataTransferChannel(h.ctx, channelID)
 				require.NoError(t, err)
 				require.Len(t, h.transport.ResumedChannels, 1)
@@ -338,7 +332,7 @@ func (e eventVerifier) setup(t *testing.T, dt datatransfer.Manager) {
 		dt.SubscribeToEvents(func(evt datatransfer.Event, state datatransfer.ChannelState) {
 			received++
 			if received > max {
-				t.Fatal("received too many events")
+				t.Fatalf("received too many events: %s", datatransfer.Events[evt.Code])
 			}
 			e.events <- evt.Code
 		})

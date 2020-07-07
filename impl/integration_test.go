@@ -8,6 +8,7 @@ import (
 	"time"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/encoding"
 	. "github.com/filecoin-project/go-data-transfer/impl"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
@@ -120,6 +121,176 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
+type retrievalRevalidator struct {
+	*stubbedRevalidator
+	dataSoFar          uint64
+	providerPausePoint int
+	pausePoints        []uint64
+	finalVoucher       datatransfer.VoucherResult
+}
+
+func (r *retrievalRevalidator) OnPullDataSent(chid datatransfer.ChannelID, additionalBytesSent uint64) (datatransfer.VoucherResult, error) {
+	r.dataSoFar += additionalBytesSent
+	if r.providerPausePoint < len(r.pausePoints) &&
+		r.dataSoFar >= r.pausePoints[r.providerPausePoint] {
+		r.providerPausePoint++
+		return testutil.NewFakeDTType(), datatransfer.ErrPause
+	}
+	return nil, nil
+}
+
+func (r *retrievalRevalidator) OnPushDataReceived(chid datatransfer.ChannelID, additionalBytesReceived uint64) (datatransfer.VoucherResult, error) {
+	return nil, nil
+}
+func (r *retrievalRevalidator) OnComplete(chid datatransfer.ChannelID) (datatransfer.VoucherResult, error) {
+	return r.finalVoucher, datatransfer.ErrPause
+}
+
+func TestSimulatedRetrievalFlow(t *testing.T) {
+	ctx := context.Background()
+	testCases := map[string]struct {
+		unpauseRequestorDelay time.Duration
+		unpauseResponderDelay time.Duration
+		payForUnseal          bool
+		pausePoints           []uint64
+	}{
+		"fast unseal, payment channel ready": {
+			pausePoints: []uint64{1000, 3000, 6000, 10000, 15000},
+		},
+		"fast unseal, payment channel not ready": {
+			unpauseRequestorDelay: 100 * time.Millisecond,
+			pausePoints:           []uint64{1000, 3000, 6000, 10000, 15000},
+		},
+		"slow unseal, payment channel ready": {
+			unpauseResponderDelay: 200 * time.Millisecond,
+			pausePoints:           []uint64{1000, 3000, 6000, 10000, 15000},
+		},
+	}
+	for testCase, config := range testCases {
+		t.Run(testCase, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+			defer cancel()
+
+			gsData := testutil.NewGraphsyncTestingData(ctx, t)
+			host1 := gsData.Host1 // initiator, data sender
+
+			root := gsData.LoadUnixFSFile(t, false)
+			rootCid := root.(cidlink.Link).Cid
+			tp1 := gsData.SetupGSTransportHost1()
+			tp2 := gsData.SetupGSTransportHost2()
+
+			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
+			require.NoError(t, err)
+			dt1.Start(ctx)
+
+			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
+			require.NoError(t, err)
+			dt2.Start(ctx)
+
+			var chid datatransfer.ChannelID
+			errChan := make(chan struct{}, 2)
+			clientPausePoint := 0
+			clientFinished := make(chan struct{}, 1)
+			finalVoucherResult := testutil.NewFakeDTType()
+			encodedFVR, err := encoding.Encode(finalVoucherResult)
+			var clientSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if event.Code == datatransfer.Accept {
+					dt2.PauseDataTransferChannel(ctx, chid)
+					timer := time.NewTimer(config.unpauseRequestorDelay)
+					go func() {
+						select {
+						case <-ctx.Done():
+							t.Fatal("should have unpaused")
+						case <-timer.C:
+						}
+						dt2.ResumeDataTransferChannel(ctx, chid)
+						if config.payForUnseal {
+							dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+						}
+					}()
+				}
+				if event.Code == datatransfer.Error {
+					errChan <- struct{}{}
+				}
+				if event.Code == datatransfer.NewVoucherResult {
+					lastVoucherResult := channelState.LastVoucherResult()
+					encodedLVR, err := encoding.Encode(lastVoucherResult)
+					require.NoError(t, err)
+					if bytes.Equal(encodedLVR, encodedFVR) {
+						dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+					}
+				}
+
+				if event.Code == datatransfer.Progress &&
+					clientPausePoint < len(config.pausePoints) &&
+					channelState.Received() > config.pausePoints[clientPausePoint] {
+					dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+					clientPausePoint++
+				}
+				if channelState.Status() == datatransfer.Completed {
+					clientFinished <- struct{}{}
+				}
+			}
+			dt2.SubscribeToEvents(clientSubscriber)
+			providerFinished := make(chan struct{}, 1)
+			var providerSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if event.Code == datatransfer.Accept {
+					if !config.payForUnseal {
+						timer := time.NewTimer(config.unpauseResponderDelay)
+						go func() {
+							select {
+							case <-ctx.Done():
+								t.Fatal("should have unpaused")
+							case <-timer.C:
+							}
+							dt1.ResumeDataTransferChannel(ctx, chid)
+						}()
+					}
+				}
+				if event.Code == datatransfer.Error {
+					errChan <- struct{}{}
+				}
+				if channelState.Status() == datatransfer.Completed {
+					providerFinished <- struct{}{}
+				}
+			}
+			dt1.SubscribeToEvents(providerSubscriber)
+			voucher := testutil.FakeDTType{Data: "applesauce"}
+			sv := newSV()
+			sv.expectPausePull()
+			require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+
+			srv := &retrievalRevalidator{
+				newSRV(), 0, 0, config.pausePoints, finalVoucherResult,
+			}
+			srv.expectSuccessRevalidation()
+			require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
+
+			require.NoError(t, dt2.RegisterVoucherResultType(testutil.NewFakeDTType()))
+			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
+			require.NoError(t, err)
+
+			for providerFinished != nil || clientFinished != nil {
+				select {
+				case <-ctx.Done():
+					t.Fatal("Did not complete succcessful data transfer")
+				case <-providerFinished:
+					providerFinished = nil
+				case <-clientFinished:
+					clientFinished = nil
+				case <-errChan:
+					t.Fatal("received unexpected error")
+				}
+			}
+			sv.verifyExpectations(t)
+			srv.verifyExpectations(t)
+			gsData.VerifyFileTransferred(t, root, true)
+			require.Equal(t, srv.providerPausePoint, len(config.pausePoints))
+			require.Equal(t, clientPausePoint, len(config.pausePoints))
+		})
+	}
+}
+
 func TestPauseAndResume(t *testing.T) {
 	ctx := context.Background()
 	testCases := map[string]bool{
@@ -153,10 +324,10 @@ func TestPauseAndResume(t *testing.T) {
 			opened := make(chan struct{}, 2)
 			sent := make(chan uint64, 21)
 			received := make(chan uint64, 21)
-			pauseSender := make(chan struct{}, 2)
-			resumeSender := make(chan struct{}, 2)
-			pauseReceiver := make(chan struct{}, 2)
-			resumeReceiver := make(chan struct{}, 2)
+			pauseInitiator := make(chan struct{}, 2)
+			resumeInitiator := make(chan struct{}, 2)
+			pauseResponder := make(chan struct{}, 2)
+			resumeResponder := make(chan struct{}, 2)
 			var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 				if event.Code == datatransfer.Progress {
 					if channelState.Received() > 0 {
@@ -165,17 +336,17 @@ func TestPauseAndResume(t *testing.T) {
 						sent <- channelState.Sent()
 					}
 				}
-				if event.Code == datatransfer.PauseSender {
-					pauseSender <- struct{}{}
+				if event.Code == datatransfer.PauseInitiator {
+					pauseInitiator <- struct{}{}
 				}
-				if event.Code == datatransfer.ResumeSender {
-					resumeSender <- struct{}{}
+				if event.Code == datatransfer.ResumeInitiator {
+					resumeInitiator <- struct{}{}
 				}
-				if event.Code == datatransfer.PauseReceiver {
-					pauseReceiver <- struct{}{}
+				if event.Code == datatransfer.PauseResponder {
+					pauseResponder <- struct{}{}
 				}
-				if event.Code == datatransfer.ResumeReceiver {
-					resumeReceiver <- struct{}{}
+				if event.Code == datatransfer.ResumeResponder {
+					resumeResponder <- struct{}{}
 				}
 				if channelState.Status() == datatransfer.Completed {
 					finished <- struct{}{}
@@ -205,14 +376,14 @@ func TestPauseAndResume(t *testing.T) {
 			require.NoError(t, err)
 			opens := 0
 			completes := 0
-			pauseSenders := 0
-			pauseReceivers := 0
-			resumeSenders := 0
-			resumeReceivers := 0
+			pauseInitiators := 0
+			pauseResponders := 0
+			resumeInitiators := 0
+			resumeResponders := 0
 			sentIncrements := make([]uint64, 0, 21)
 			receivedIncrements := make([]uint64, 0, 21)
 			for opens < 2 || completes < 2 || len(sentIncrements) < 21 || len(receivedIncrements) < 21 ||
-				pauseSenders < 2 || pauseReceivers < 1 || resumeSenders < 2 || resumeReceivers < 1 {
+				pauseInitiators < 2 || pauseResponders < 1 || resumeInitiators < 2 || resumeResponders < 1 {
 				select {
 				case <-ctx.Done():
 					t.Fatal("Did not complete succcessful data transfer")
@@ -220,14 +391,14 @@ func TestPauseAndResume(t *testing.T) {
 					completes++
 				case <-opened:
 					opens++
-				case <-pauseSender:
-					pauseSenders++
-				case <-resumeSender:
-					resumeSenders++
-				case <-pauseReceiver:
-					pauseReceivers++
-				case <-resumeReceiver:
-					resumeReceivers++
+				case <-pauseInitiator:
+					pauseInitiators++
+				case <-resumeInitiator:
+					resumeInitiators++
+				case <-pauseResponder:
+					pauseResponders++
+				case <-resumeResponder:
+					resumeResponders++
 				case sentIncrement := <-sent:
 					sentIncrements = append(sentIncrements, sentIncrement)
 					if len(sentIncrements) == 5 {

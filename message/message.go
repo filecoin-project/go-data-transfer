@@ -19,6 +19,8 @@ const (
 	updateMessage
 	cancelMessage
 	completeMessage
+	voucherMessage
+	voucherResultMessage
 )
 
 // Reference file: https://github.com/ipfs/go-graphsync/blob/master/message/message.go
@@ -43,9 +45,9 @@ type DataTransferMessage interface {
 type DataTransferRequest interface {
 	DataTransferMessage
 	IsPull() bool
+	IsVoucher() bool
 	VoucherType() datatransfer.TypeIdentifier
 	Voucher(decoder encoding.Decoder) (encoding.Encodable, error)
-	EmptyVoucher() bool
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
 }
@@ -53,6 +55,7 @@ type DataTransferRequest interface {
 // DataTransferResponse is a response message for the data transfer protocol
 type DataTransferResponse interface {
 	DataTransferMessage
+	IsVoucherResult() bool
 	IsComplete() bool
 	Accepted() bool
 	VoucherResultType() datatransfer.TypeIdentifier
@@ -93,14 +96,22 @@ func CancelRequest(id datatransfer.TransferID) DataTransferRequest {
 }
 
 // UpdateRequest generates a new request update
-func UpdateRequest(id datatransfer.TransferID, isPaused bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable) (DataTransferRequest, error) {
+func UpdateRequest(id datatransfer.TransferID, isPaused bool) DataTransferRequest {
+	return &transferRequest{
+		Type:   uint64(updateMessage),
+		Paus:   isPaused,
+		XferID: uint64(id),
+	}
+}
+
+// VoucherRequest generates a new request for the data transfer protocol
+func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable) (DataTransferRequest, error) {
 	vbytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
 	return &transferRequest{
-		Type:   uint64(updateMessage),
-		Paus:   isPaused,
+		Type:   uint64(voucherMessage),
 		Vouch:  &cborgen.Deferred{Raw: vbytes},
 		VTyp:   vtype,
 		XferID: uint64(id),
@@ -123,20 +134,29 @@ func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, vouch
 	}, nil
 }
 
-// UpdateResponse returns a new update response
-func UpdateResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (DataTransferResponse, error) {
+// VoucherResultResponse builds a new response for a voucher result
+func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (DataTransferResponse, error) {
 	vbytes, err := encoding.Encode(voucherResult)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
 	return &transferResponse{
 		Acpt:   accepted,
-		Type:   uint64(updateMessage),
+		Type:   uint64(voucherResultMessage),
 		Paus:   isPaused,
 		XferID: uint64(id),
 		VTyp:   voucherResultType,
 		VRes:   &cborgen.Deferred{Raw: vbytes},
 	}, nil
+}
+
+// UpdateResponse returns a new update response
+func UpdateResponse(id datatransfer.TransferID, isPaused bool) DataTransferResponse {
+	return &transferResponse{
+		Type:   uint64(updateMessage),
+		Paus:   isPaused,
+		XferID: uint64(id),
+	}
 }
 
 // CancelResponse makes a new cancel response message
@@ -148,11 +168,19 @@ func CancelResponse(id datatransfer.TransferID) DataTransferResponse {
 }
 
 // CompleteResponse returns a new complete response message
-func CompleteResponse(id datatransfer.TransferID) DataTransferResponse {
+func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (DataTransferResponse, error) {
+	vbytes, err := encoding.Encode(voucherResult)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
 	return &transferResponse{
 		Type:   uint64(completeMessage),
+		Acpt:   isAccepted,
+		Paus:   isPaused,
+		VTyp:   voucherResultType,
+		VRes:   &cborgen.Deferred{Raw: vbytes},
 		XferID: uint64(id),
-	}
+	}, nil
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage

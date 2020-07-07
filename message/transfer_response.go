@@ -55,6 +55,10 @@ func (trsp *transferResponse) IsComplete() bool {
 	return trsp.Type == uint64(completeMessage)
 }
 
+func (trsp *transferResponse) IsVoucherResult() bool {
+	return trsp.Type == uint64(voucherResultMessage) || trsp.Type == uint64(newMessage) || trsp.Type == uint64(completeMessage)
+}
+
 // 	Accepted returns true if the request is accepted in the response
 func (trsp *transferResponse) Accepted() bool {
 	return trsp.Acpt

@@ -29,6 +29,7 @@ type manager struct {
 	dataTransferNetwork network.DataTransferNetwork
 	validatedTypes      *registry.Registry
 	resultTypes         *registry.Registry
+	revalidators        *registry.Registry
 	pubSub              *pubsub.PubSub
 	channels            *channels.Channels
 	peerID              peer.ID
@@ -60,6 +61,7 @@ func NewDataTransfer(ds datastore.Datastore, dataTransferNetwork network.DataTra
 		dataTransferNetwork: dataTransferNetwork,
 		validatedTypes:      registry.NewRegistry(),
 		resultTypes:         registry.NewRegistry(),
+		revalidators:        registry.NewRegistry(),
 		pubSub:              pubsub.New(dispatcher),
 		peerID:              dataTransferNetwork.ID(),
 		transport:           transport,
@@ -90,92 +92,6 @@ func (m *manager) Start(ctx context.Context) error {
 // Stop terminates all data transfers and ends processing
 func (m *manager) Stop() error {
 	return nil
-}
-
-func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
-	has, err := m.channels.HasChannel(chid)
-	if err != nil {
-		return err
-	}
-	if !has {
-		return datatransfer.ErrChannelNotFound
-	}
-	return nil
-}
-
-func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) error {
-	return m.channels.IncrementReceived(chid, size)
-}
-
-func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) (message.DataTransferMessage, error) {
-	err := m.channels.IncrementSent(chid, size)
-	if err != nil {
-		return nil, err
-	}
-	return nil, nil
-}
-
-func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request message.DataTransferRequest) (message.DataTransferResponse, error) {
-	if request.IsNew() {
-		return m.receiveNewRequest(chid.Initiator, request)
-	}
-	if request.IsCancel() {
-		m.transport.CleanupChannel(chid)
-		return nil, m.channels.Cancel(chid)
-	}
-	return m.receiveUpdateRequest(chid, request)
-}
-
-func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response message.DataTransferResponse) error {
-
-	if response.IsCancel() {
-		return m.channels.Cancel(chid)
-	}
-	if !response.EmptyVoucherResult() {
-		vresult, err := m.decodeVoucherResult(response)
-		if err != nil {
-			return err
-		}
-		err = m.channels.NewVoucherResult(chid, vresult)
-		if err != nil {
-			return err
-		}
-	}
-	if response.IsNew() {
-		if response.Accepted() {
-			return m.channels.Accept(chid)
-		}
-		return m.channels.Error(chid, errors.New("Response Rejected"))
-	}
-	chst, err := m.channels.GetByID(context.TODO(), chid)
-	if err != nil {
-		return err
-	}
-	if response.IsComplete() {
-		if !m.isSender(chst, false) {
-			return m.channels.CompleteResponder(chid)
-		}
-		return m.channels.Complete(chid)
-	}
-	err = m.processUpdatePauseStatus(chid, chst, response.IsPaused())
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, success bool) error {
-	if success {
-		if chid.Initiator != m.peerID {
-			if err := m.dataTransferNetwork.SendMessage(context.TODO(), chid.Initiator, message.CompleteResponse(chid.ID)); err != nil {
-				_ = m.channels.Error(chid, err)
-				return err
-			}
-			return m.channels.Complete(chid)
-		}
-		return m.channels.FinishTransfer(chid)
-	}
-	return m.channels.Error(chid, errors.New("incomplete response"))
 }
 
 // RegisterVoucherType registers a validator for the given voucher type
@@ -242,7 +158,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 	if channelID.Initiator != m.peerID {
 		return errors.New("cannot send voucher for request we did not initiate")
 	}
-	updateRequest, err := message.UpdateRequest(channelID.ID, false, voucher.Type(), voucher)
+	updateRequest, err := message.VoucherRequest(channelID.ID, voucher.Type(), voucher)
 	if err != nil {
 		return err
 	}
@@ -264,12 +180,17 @@ func (m *manager) newRequest(ctx context.Context, selector ipld.Node, isPull boo
 	return message.NewRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
 }
 
-func (m *manager) response(isAccepted bool, isPaused bool, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (message.DataTransferResponse, error) {
+func (m *manager) response(isNew bool, err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (message.DataTransferResponse, error) {
+	isAccepted := err == nil || err == datatransfer.ErrPause
+	isPaused := err == datatransfer.ErrPause
 	resultType := datatransfer.EmptyTypeIdentifier
 	if voucherResult != nil {
 		resultType = voucherResult.Type()
 	}
-	return message.NewResponse(tid, isAccepted, isPaused, resultType, voucherResult)
+	if isNew {
+		return message.NewResponse(tid, isAccepted, isPaused, resultType, voucherResult)
+	}
+	return message.VoucherResultResponse(tid, isAccepted, isPaused, resultType, voucherResult)
 }
 
 // close an open channel (effectively a cancel)
@@ -294,66 +215,39 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 
 // pause a running data transfer channel
 func (m *manager) PauseDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	chst, err := m.channels.GetByID(ctx, chid)
-	if err != nil {
-		return err
-	}
-
-	if !m.isUnpaused(chst, false) {
-		return errors.New("Cannot pause a request that is already paused")
-	}
 
 	pausable, ok := m.transport.(transport.PauseableTransport)
 	if !ok {
 		return errors.New("unsupported")
 	}
 
-	err = pausable.PauseChannel(ctx, chid)
+	err := pausable.PauseChannel(ctx, chid)
 	if err != nil {
 		return err
 	}
 
-	pauseMessage, err := m.pauseMessage(chid)
-	if err != nil {
-		return err
-	}
-
-	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherParty(m.peerID), pauseMessage); err != nil {
+	if err := m.dataTransferNetwork.SendMessage(ctx, chid.OtherParty(m.peerID), m.pauseMessage(chid)); err != nil {
 		err = fmt.Errorf("Unable to send pause message: %w", err)
 		_ = m.channels.Error(chid, err)
 		return err
 	}
 
-	return m.pause(chid, chst, false)
+	return m.pause(chid)
 }
 
 // resume a running data transfer channel
 func (m *manager) ResumeDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	chst, err := m.channels.GetByID(ctx, chid)
-	if err != nil {
-		return err
-	}
-
-	if !m.isPaused(chst, false) {
-		return errors.New("Cannot resume a request that is not paused")
-	}
-
 	pausable, ok := m.transport.(transport.PauseableTransport)
 	if !ok {
 		return errors.New("unsupported")
 	}
 
-	resumeMessage, err := m.resumeMessage(chid)
+	err := pausable.ResumeChannel(ctx, m.resumeMessage(chid), chid)
 	if err != nil {
 		return err
 	}
 
-	err = pausable.ResumeChannel(ctx, resumeMessage, chid)
-	if err != nil {
-		return err
-	}
-
-	return m.resume(chid, chst, false)
+	return m.resume(chid)
 }
 
 // get status of a transfer
@@ -381,7 +275,11 @@ func (m *manager) InProgressChannels(ctx context.Context) (map[datatransfer.Chan
 // The revalidator can simply be the sampe as the original request validator,
 // or a different validator that satisfies the revalidator interface.
 func (m *manager) RegisterRevalidator(voucherType datatransfer.Voucher, revalidator datatransfer.Revalidator) error {
-	panic("not implemented")
+	err := m.revalidators.Register(voucherType, revalidator)
+	if err != nil {
+		return xerrors.Errorf("error registering revalidator type: %w", err)
+	}
+	return nil
 }
 
 // RegisterVoucherResultType allows deserialization of a voucher result,
@@ -392,87 +290,6 @@ func (m *manager) RegisterVoucherResultType(resultType datatransfer.VoucherResul
 		return xerrors.Errorf("error registering voucher type: %w", err)
 	}
 	return nil
-}
-
-func (m *manager) receiveNewRequest(
-	initiator peer.ID,
-	incoming message.DataTransferRequest) (message.DataTransferResponse, error) {
-	result, err := m.acceptRequest(initiator, incoming)
-	isAccepted := err == nil || err == datatransfer.ErrPause
-	msg, msgErr := m.response(isAccepted, err == datatransfer.ErrPause, incoming.TransferID(), result)
-	if msgErr != nil {
-		return nil, msgErr
-	}
-	// convert to the transport error for pauses
-	if err == datatransfer.ErrPause {
-		err = transport.ErrPause
-	}
-	return msg, err
-}
-
-func (m *manager) acceptRequest(
-	initiator peer.ID,
-	incoming message.DataTransferRequest) (datatransfer.VoucherResult, error) {
-
-	voucher, result, err := m.validateVoucher(initiator, incoming)
-	if err != nil && err != datatransfer.ErrPause {
-		return result, err
-	}
-	voucherErr := err
-	stor, _ := incoming.Selector()
-
-	var dataSender, dataReceiver peer.ID
-	if incoming.IsPull() {
-		dataSender = m.peerID
-		dataReceiver = initiator
-	} else {
-		dataSender = initiator
-		dataReceiver = m.peerID
-	}
-
-	chid, err := m.channels.CreateNew(incoming.TransferID(), incoming.BaseCid(), stor, voucher, initiator, dataSender, dataReceiver)
-	if err != nil {
-		return result, err
-	}
-	if result != nil {
-		err := m.channels.NewVoucherResult(chid, result)
-		if err != nil {
-			return result, err
-		}
-	}
-	if err := m.channels.Accept(chid); err != nil {
-		return result, err
-	}
-	return result, voucherErr
-}
-
-// validateVoucher converts a voucher in an incoming message to its appropriate
-// voucher struct, then runs the validator and returns the results.
-// returns error if:
-//   * reading voucher fails
-//   * deserialization of selector fails
-//   * validation fails
-func (m *manager) validateVoucher(sender peer.ID, incoming message.DataTransferRequest) (datatransfer.Voucher, datatransfer.VoucherResult, error) {
-	vouch, err := m.decodeVoucher(incoming)
-	if err != nil {
-		return nil, nil, err
-	}
-	var validatorFunc func(peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.VoucherResult, error)
-	processor, _ := m.validatedTypes.Processor(vouch.Type())
-	validator := processor.(datatransfer.RequestValidator)
-	if incoming.IsPull() {
-		validatorFunc = validator.ValidatePull
-	} else {
-		validatorFunc = validator.ValidatePush
-	}
-
-	stor, err := incoming.Selector()
-	if err != nil {
-		return vouch, nil, err
-	}
-
-	result, err := validatorFunc(sender, vouch, incoming.BaseCid(), stor)
-	return vouch, result, err
 }
 
 type statusList []datatransfer.Status
@@ -486,56 +303,46 @@ func (sl statusList) Contains(s datatransfer.Status) bool {
 	return false
 }
 
-func (m *manager) resume(chid datatransfer.ChannelID, chst datatransfer.ChannelState, useOtherParty bool) error {
-	if m.isSender(chst, useOtherParty) {
-		return m.channels.ResumeSender(chid)
-	}
-	return m.channels.ResumeReceiver(chid)
-}
-
-func (m *manager) isPaused(chst datatransfer.ChannelState, useOtherParty bool) bool {
-	acceptable := statusList{datatransfer.BothPaused}
-	if m.isSender(chst, useOtherParty) {
-		acceptable = append(acceptable, datatransfer.SenderPaused)
-	} else {
-		acceptable = append(acceptable, datatransfer.ReceiverPaused, datatransfer.ResponderCompletedReceiverPaused)
-	}
-	return acceptable.Contains(chst.Status())
-}
-
-func (m *manager) pause(chid datatransfer.ChannelID, chst datatransfer.ChannelState, useOtherParty bool) error {
-	if m.isSender(chst, useOtherParty) {
-		return m.channels.PauseSender(chid)
-	}
-	return m.channels.PauseReceiver(chid)
-}
-
-func (m *manager) isUnpaused(chst datatransfer.ChannelState, useOtherParty bool) bool {
-	acceptable := statusList{datatransfer.Ongoing}
-	if m.isSender(chst, useOtherParty) {
-		acceptable = append(acceptable, datatransfer.ReceiverPaused)
-	} else {
-		acceptable = append(acceptable, datatransfer.SenderPaused)
-	}
-	return acceptable.Contains(chst.Status())
-}
-
-func (m *manager) isSender(chst datatransfer.ChannelState, useOtherParty bool) bool {
-	return (chst.Sender() == m.peerID) != useOtherParty
-}
-
-func (m *manager) resumeMessage(chid datatransfer.ChannelID) (message.DataTransferMessage, error) {
+func (m *manager) resume(chid datatransfer.ChannelID) error {
 	if chid.Initiator == m.peerID {
-		return message.UpdateRequest(chid.ID, false, datatransfer.EmptyTypeIdentifier, nil)
+		return m.channels.ResumeInitiator(chid)
 	}
-	return message.UpdateResponse(chid.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
+	return m.channels.ResumeResponder(chid)
 }
 
-func (m *manager) pauseMessage(chid datatransfer.ChannelID) (message.DataTransferMessage, error) {
+func (m *manager) pause(chid datatransfer.ChannelID) error {
 	if chid.Initiator == m.peerID {
-		return message.UpdateRequest(chid.ID, true, datatransfer.EmptyTypeIdentifier, nil)
+		return m.channels.PauseInitiator(chid)
 	}
-	return message.UpdateResponse(chid.ID, true, true, datatransfer.EmptyTypeIdentifier, nil)
+	return m.channels.PauseResponder(chid)
+}
+
+func (m *manager) resumeOther(chid datatransfer.ChannelID) error {
+	if chid.Responder == m.peerID {
+		return m.channels.ResumeInitiator(chid)
+	}
+	return m.channels.ResumeResponder(chid)
+}
+
+func (m *manager) pauseOther(chid datatransfer.ChannelID) error {
+	if chid.Responder == m.peerID {
+		return m.channels.PauseInitiator(chid)
+	}
+	return m.channels.PauseResponder(chid)
+}
+
+func (m *manager) resumeMessage(chid datatransfer.ChannelID) message.DataTransferMessage {
+	if chid.Initiator == m.peerID {
+		return message.UpdateRequest(chid.ID, false)
+	}
+	return message.UpdateResponse(chid.ID, false)
+}
+
+func (m *manager) pauseMessage(chid datatransfer.ChannelID) message.DataTransferMessage {
+	if chid.Initiator == m.peerID {
+		return message.UpdateRequest(chid.ID, true)
+	}
+	return message.UpdateResponse(chid.ID, true)
 }
 
 func (m *manager) cancelMessage(chid datatransfer.ChannelID) message.DataTransferMessage {
@@ -558,9 +365,9 @@ func (m *manager) decodeVoucherResult(response message.DataTransferResponse) (da
 	return encodable.(datatransfer.Registerable), nil
 }
 
-func (m *manager) decodeVoucher(request message.DataTransferRequest) (datatransfer.Voucher, error) {
+func (m *manager) decodeVoucher(request message.DataTransferRequest, registry *registry.Registry) (datatransfer.Voucher, error) {
 	vtypStr := datatransfer.TypeIdentifier(request.VoucherType())
-	decoder, has := m.validatedTypes.Decoder(vtypStr)
+	decoder, has := registry.Decoder(vtypStr)
 	if !has {
 		return nil, xerrors.Errorf("unknown voucher type: %s", vtypStr)
 	}
@@ -569,49 +376,4 @@ func (m *manager) decodeVoucher(request message.DataTransferRequest) (datatransf
 		return nil, err
 	}
 	return encodable.(datatransfer.Registerable), nil
-}
-
-func (m *manager) receiveUpdateRequest(chid datatransfer.ChannelID, request message.DataTransferRequest) (message.DataTransferResponse, error) {
-	chst, err := m.channels.GetByID(context.TODO(), chid)
-	if err != nil {
-		return nil, err
-	}
-	err = m.processUpdatePauseStatus(chid, chst, request.IsPaused())
-	if err != nil {
-		return nil, err
-	}
-	if !request.EmptyVoucher() {
-		vouch, err := m.decodeVoucher(request)
-		if err != nil {
-			return nil, err
-		}
-		err = m.channels.NewVoucher(chid, vouch)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return nil, nil
-}
-
-func (m *manager) processUpdatePauseStatus(chid datatransfer.ChannelID, chst datatransfer.ChannelState, isPaused bool) error {
-	if isPaused {
-		if m.isUnpaused(chst, true) {
-			err := m.pause(chid, chst, true)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		if m.isPaused(chst, true) {
-			err := m.resume(chid, chst, true)
-			if err != nil {
-				return err
-			}
-			// if we were previously paused on both sides, still stay paused
-			if chst.Status() == datatransfer.BothPaused {
-				return transport.ErrPause
-			}
-		}
-	}
-	return nil
 }

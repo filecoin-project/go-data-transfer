@@ -3,6 +3,7 @@ package channels
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
@@ -87,7 +88,13 @@ func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 // CreateNew creates a new channel id and channel state and saves to channels.
 // returns error if the channel exists already.
 func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selector ipld.Node, voucher datatransfer.Voucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
-	chid := datatransfer.ChannelID{Initiator: initiator, ID: tid}
+	var responder peer.ID
+	if dataSender == initiator {
+		responder = dataReceiver
+	} else {
+		responder = dataSender
+	}
+	chid := datatransfer.ChannelID{Initiator: initiator, Responder: responder, ID: tid}
 	voucherBytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
@@ -99,6 +106,7 @@ func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selec
 	err = c.statemachines.Begin(chid, &internalChannelState{
 		TransferID: tid,
 		Initiator:  initiator,
+		Responder:  responder,
 		BaseCid:    baseCid,
 		Selector:   &cbg.Deferred{Raw: selBytes},
 		Sender:     dataSender,
@@ -127,8 +135,9 @@ func (c *Channels) InProgress(ctx context.Context) (map[datatransfer.ChannelID]d
 		return nil, err
 	}
 	channels := make(map[datatransfer.ChannelID]datatransfer.ChannelState, len(internalChannels))
+	fmt.Println(internalChannels)
 	for _, internalChannel := range internalChannels {
-		channels[datatransfer.ChannelID{ID: internalChannel.TransferID, Initiator: internalChannel.Initiator}] =
+		channels[datatransfer.ChannelID{ID: internalChannel.TransferID, Responder: internalChannel.Responder, Initiator: internalChannel.Initiator}] =
 			internalChannel.ToChannelState(c.voucherDecoder, c.voucherResultDecoder)
 	}
 	return channels, nil
@@ -166,24 +175,24 @@ func (c *Channels) IncrementReceived(chid datatransfer.ChannelID, delta uint64) 
 	return c.send(chid, datatransfer.Progress, uint64(0), delta)
 }
 
-// PauseSender pauses the sender of this channel
-func (c *Channels) PauseSender(chid datatransfer.ChannelID) error {
-	return c.send(chid, datatransfer.PauseSender)
+// PauseInitiator pauses the initator of this channel
+func (c *Channels) PauseInitiator(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.PauseInitiator)
 }
 
-// PauseReceiver pauses the receiver of this channel
-func (c *Channels) PauseReceiver(chid datatransfer.ChannelID) error {
-	return c.send(chid, datatransfer.PauseReceiver)
+// PauseResponder pauses the responder of this channel
+func (c *Channels) PauseResponder(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.PauseResponder)
 }
 
-// ResumeSender resumes the sender of this channel
-func (c *Channels) ResumeSender(chid datatransfer.ChannelID) error {
-	return c.send(chid, datatransfer.ResumeSender)
+// ResumeInitiator resumes the initator of this channel
+func (c *Channels) ResumeInitiator(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.ResumeInitiator)
 }
 
-// ResumeReceiver resumes the receiver of this channel
-func (c *Channels) ResumeReceiver(chid datatransfer.ChannelID) error {
-	return c.send(chid, datatransfer.ResumeReceiver)
+// ResumeResponder resumes the responder of this channel
+func (c *Channels) ResumeResponder(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.ResumeResponder)
 }
 
 // NewVoucher records a new voucher for this channel
@@ -214,9 +223,19 @@ func (c *Channels) FinishTransfer(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.FinishTransfer)
 }
 
-// CompleteResponder indicates an initator has finished receiving data from a responder
-func (c *Channels) CompleteResponder(chid datatransfer.ChannelID) error {
-	return c.send(chid, datatransfer.CompleteResponder)
+// ResponderCompletes indicates an initator has finished receiving data from a responder
+func (c *Channels) ResponderCompletes(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.ResponderCompletes)
+}
+
+// ResponderBeginsFinalization indicates a responder has finished processing but is awaiting confirmation from the initiator
+func (c *Channels) ResponderBeginsFinalization(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.ResponderBeginsFinalization)
+}
+
+// BeginFinalizing indicates a responder has finished processing but is awaiting confirmation from the initiator
+func (c *Channels) BeginFinalizing(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.BeginFinalizing)
 }
 
 // Cancel indicates a channel was cancelled prematurely

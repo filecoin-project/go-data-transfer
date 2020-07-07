@@ -156,15 +156,12 @@ func TestRequestCancel(t *testing.T) {
 
 func TestRequestUpdate(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	voucher := testutil.NewFakeDTType()
-	req, err := UpdateRequest(id, true, voucher.Type(), voucher)
-	require.NoError(t, err)
+	req := UpdateRequest(id, true)
 	require.Equal(t, req.TransferID(), id)
 	require.True(t, req.IsRequest())
 	require.False(t, req.IsCancel())
 	require.True(t, req.IsUpdate())
 	require.True(t, req.IsPaused())
-	testutil.AssertFakeDTVoucher(t, req, voucher)
 
 	wbuf := new(bytes.Buffer)
 	require.NoError(t, req.ToNet(wbuf))
@@ -179,47 +176,18 @@ func TestRequestUpdate(t *testing.T) {
 	require.Equal(t, deserializedRequest.IsRequest(), req.IsRequest())
 	require.Equal(t, deserializedRequest.IsUpdate(), req.IsUpdate())
 	require.Equal(t, deserializedRequest.IsPaused(), req.IsPaused())
-	testutil.AssertEqualFakeDTVoucher(t, req, deserializedRequest)
-}
-func TestRequestUpdateEmptyVoucher(t *testing.T) {
-
-	id := datatransfer.TransferID(rand.Int31())
-	req, err := UpdateRequest(id, true, "", nil)
-	require.NoError(t, err)
-	require.Equal(t, req.TransferID(), id)
-	require.True(t, req.IsRequest())
-	require.False(t, req.IsCancel())
-	require.True(t, req.IsUpdate())
-	require.True(t, req.IsPaused())
-	require.True(t, req.EmptyVoucher())
-
-	wbuf := new(bytes.Buffer)
-	require.NoError(t, req.ToNet(wbuf))
-
-	deserialized, err := FromNet(wbuf)
-	require.NoError(t, err)
-
-	deserializedRequest, ok := deserialized.(DataTransferRequest)
-	require.True(t, ok)
-	require.Equal(t, deserializedRequest.TransferID(), req.TransferID())
-	require.Equal(t, deserializedRequest.IsCancel(), req.IsCancel())
-	require.Equal(t, deserializedRequest.IsRequest(), req.IsRequest())
-	require.Equal(t, deserializedRequest.IsUpdate(), req.IsUpdate())
-	require.Equal(t, deserializedRequest.IsPaused(), req.IsPaused())
-	require.True(t, req.EmptyVoucher())
 }
 
 func TestUpdateResponse(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	response, err := UpdateResponse(id, false, true, datatransfer.EmptyTypeIdentifier, nil) // not accepted
-	require.NoError(t, err)
+	response := UpdateResponse(id, true) // not accepted
 	assert.Equal(t, response.TransferID(), id)
 	assert.False(t, response.Accepted())
 	assert.False(t, response.IsNew())
 	assert.True(t, response.IsUpdate())
 	assert.True(t, response.IsPaused())
 	assert.False(t, response.IsRequest())
-	assert.True(t, response.EmptyVoucherResult())
+
 	// Sanity check to make sure we can cast to DataTransferMessage
 	msg, ok := response.(DataTransferMessage)
 	require.True(t, ok)
@@ -252,10 +220,14 @@ func TestCancelResponse(t *testing.T) {
 
 func TestCompleteResponse(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	response := CompleteResponse(id)
+	response, err := CompleteResponse(id, true, true, datatransfer.EmptyTypeIdentifier, nil)
+	require.NoError(t, err)
 	assert.Equal(t, response.TransferID(), id)
 	assert.False(t, response.IsNew())
 	assert.False(t, response.IsUpdate())
+	assert.True(t, response.IsPaused())
+	assert.True(t, response.IsVoucherResult())
+	assert.True(t, response.EmptyVoucherResult())
 	assert.True(t, response.IsComplete())
 	assert.False(t, response.IsRequest())
 	// Sanity check to make sure we can cast to DataTransferMessage

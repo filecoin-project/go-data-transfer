@@ -36,7 +36,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingBlockHook()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				require.True(t, events.OnDataReceivedCalled)
 				require.NoError(t, gsData.incomingBlockHookActions.TerminationError)
 			},
@@ -50,7 +50,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingBlockHook()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				require.True(t, events.OnDataReceivedCalled)
 				require.NoError(t, gsData.incomingBlockHookActions.TerminationError)
 			},
@@ -78,7 +78,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingBlockHook()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				require.False(t, events.OnDataReceivedCalled)
 				require.NoError(t, gsData.incomingBlockHookActions.TerminationError)
 			},
@@ -92,7 +92,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingBlockHook()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				require.True(t, events.OnDataReceivedCalled)
 				require.Error(t, gsData.incomingBlockHookActions.TerminationError)
 			},
@@ -106,7 +106,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingResponseHOok()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				require.Equal(t, 0, events.OnRequestReceivedCallCount)
 				require.Equal(t, 1, events.OnResponseReceivedCallCount)
 				require.NoError(t, gsData.incomingResponseHookActions.TerminationError)
@@ -118,7 +118,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingResponseHOok()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				require.Equal(t, 0, events.OnRequestReceivedCallCount)
 				require.Equal(t, 0, events.OnResponseReceivedCallCount)
 				require.Error(t, gsData.incomingResponseHookActions.TerminationError)
@@ -133,7 +133,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingResponseHOok()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
 				require.Equal(t, 0, events.OnResponseReceivedCallCount)
 				require.NoError(t, gsData.incomingResponseHookActions.TerminationError)
@@ -151,7 +151,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingResponseHOok()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				require.Equal(t, 0, events.OnResponseReceivedCallCount)
 				require.Equal(t, 0, events.OnRequestReceivedCallCount)
 				require.Error(t, gsData.incomingResponseHookActions.TerminationError)
@@ -166,7 +166,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingResponseHOok()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				require.Equal(t, 0, events.OnRequestReceivedCallCount)
 				require.Equal(t, 0, events.OnResponseReceivedCallCount)
 				require.Error(t, gsData.incomingResponseHookActions.TerminationError)
@@ -181,7 +181,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingResponseHOok()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				require.Equal(t, 0, events.OnRequestReceivedCallCount)
 				require.Equal(t, 0, events.OnResponseReceivedCallCount)
 				require.NoError(t, gsData.incomingResponseHookActions.TerminationError)
@@ -199,7 +199,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingResponseHOok()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
 				require.Equal(t, 0, events.OnResponseReceivedCallCount)
 				require.NoError(t, gsData.incomingResponseHookActions.TerminationError)
@@ -234,7 +234,7 @@ func TestManager(t *testing.T) {
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
 				require.Equal(t, 0, events.OnResponseReceivedCallCount)
-				require.Equal(t, events.RequestReceivedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.Equal(t, events.RequestReceivedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				dtRequestData, _ := gsData.request.Extension(extension.ExtensionDataTransfer)
 				assertDecodesToMessage(t, dtRequestData, events.RequestReceivedRequest)
 				require.True(t, gsData.incomingRequestHookActions.Validated)
@@ -253,7 +253,7 @@ func TestManager(t *testing.T) {
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				require.Equal(t, 0, events.OnRequestReceivedCallCount)
 				require.Equal(t, 1, events.OnResponseReceivedCallCount)
-				require.Equal(t, events.ResponseReceivedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
+				require.Equal(t, events.ResponseReceivedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				dtResponseData, _ := gsData.request.Extension(extension.ExtensionDataTransfer)
 				assertDecodesToMessage(t, dtResponseData, events.ResponseReceivedResponse)
 				require.True(t, gsData.incomingRequestHookActions.Validated)
@@ -284,7 +284,7 @@ func TestManager(t *testing.T) {
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
 				require.Equal(t, 0, events.OnResponseReceivedCallCount)
-				require.Equal(t, events.RequestReceivedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				require.Equal(t, events.RequestReceivedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				dtRequestData, _ := gsData.request.Extension(extension.ExtensionDataTransfer)
 				assertDecodesToMessage(t, dtRequestData, events.RequestReceivedRequest)
 				require.False(t, gsData.incomingRequestHookActions.Validated)
@@ -533,7 +533,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingRequestHook()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				err := gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				err := gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				require.NoError(t, err)
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
 				gsData.fgs.AssertCancelResponseReceived(gsData.ctx, t)
@@ -541,7 +541,7 @@ func TestManager(t *testing.T) {
 		},
 		"unrecognized request cannot be closed": {
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				err := gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				err := gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				require.Error(t, err)
 			},
 		},
@@ -551,7 +551,7 @@ func TestManager(t *testing.T) {
 				gsData.requestorCancelledListener()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				err := gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				err := gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				require.NoError(t, err)
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
 				gsData.fgs.AssertNoCancelResponseReceived(t)
@@ -562,7 +562,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingRequestHook()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				err := gsData.transport.PauseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				err := gsData.transport.PauseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				require.NoError(t, err)
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
 				gsData.fgs.AssertPauseResponseReceived(gsData.ctx, t)
@@ -570,7 +570,7 @@ func TestManager(t *testing.T) {
 		},
 		"unrecognized request cannot be paused": {
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				err := gsData.transport.PauseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				err := gsData.transport.PauseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				require.Error(t, err)
 			},
 		},
@@ -580,7 +580,7 @@ func TestManager(t *testing.T) {
 				gsData.requestorCancelledListener()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				err := gsData.transport.PauseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other})
+				err := gsData.transport.PauseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
 				require.NoError(t, err)
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
 				gsData.fgs.AssertNoPauseResponseReceived(t)
@@ -593,7 +593,7 @@ func TestManager(t *testing.T) {
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				err := gsData.transport.ResumeChannel(gsData.ctx,
 					gsData.incoming,
-					datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other},
+					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other},
 				)
 				require.NoError(t, err)
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
@@ -604,7 +604,7 @@ func TestManager(t *testing.T) {
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				err := gsData.transport.ResumeChannel(gsData.ctx,
 					gsData.incoming,
-					datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other},
+					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other},
 				)
 				require.Error(t, err)
 			},
@@ -617,7 +617,7 @@ func TestManager(t *testing.T) {
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				err := gsData.transport.ResumeChannel(gsData.ctx,
 					gsData.incoming,
-					datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.other},
+					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other},
 				)
 				require.NoError(t, err)
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
@@ -633,7 +633,7 @@ func TestManager(t *testing.T) {
 				gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
-					datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self},
+					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self},
 					cidlink.Link{Cid: gsData.outgoing.BaseCid()},
 					stor,
 					gsData.outgoing)
@@ -643,7 +643,7 @@ func TestManager(t *testing.T) {
 				assertHasOutgoingMessage(t, requestReceived.Extensions, gsData.outgoing)
 				completed := make(chan struct{})
 				go func() {
-					gsData.transport.PauseChannel(context.Background(), datatransfer.ChannelID{ID: gsData.transferID, Initiator: gsData.self})
+					gsData.transport.PauseChannel(context.Background(), datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 					close(completed)
 				}()
 				time.Sleep(100 * time.Millisecond)

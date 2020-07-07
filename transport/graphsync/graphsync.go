@@ -190,7 +190,9 @@ func (t *Transport) ResumeChannel(ctx context.Context,
 	}
 	t.dataLock.Lock()
 	defer t.dataLock.Unlock()
+
 	if _, ok := t.requestorCancelledMap[chid]; ok {
+
 		t.pendingExtensions[chid] = append(t.pendingExtensions[chid], extensions...)
 		return nil
 	}
@@ -262,12 +264,15 @@ func (t *Transport) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestDa
 	}
 
 	var initiator peer.ID
+	var responder peer.ID
 	if message.IsRequest() {
 		initiator = t.peerID
+		responder = p
 	} else {
 		initiator = p
+		responder = t.peerID
 	}
-	chid := datatransfer.ChannelID{Initiator: initiator, ID: message.TransferID()}
+	chid := datatransfer.ChannelID{Initiator: initiator, Responder: responder, ID: message.TransferID()}
 	err := t.events.OnChannelOpened(chid)
 	// record the outgoing graphsync request to map it to channel ID going forward
 	t.dataLock.Lock()
@@ -358,12 +363,12 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 	var responseMessage message.DataTransferMessage
 	if msg.IsRequest() {
 		// when a DT request comes in on graphsync, it's a pull
-		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p}
+		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}
 		request := msg.(message.DataTransferRequest)
 		responseMessage, err = t.events.OnRequestReceived(chid, request)
 	} else {
 		// when a DT response comes in on graphsync, it's a push
-		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID}
+		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID, Responder: p}
 		response := msg.(message.DataTransferResponse)
 		err = t.events.OnResponseReceived(chid, response)
 	}
@@ -443,7 +448,6 @@ func (t *Transport) cleanupChannel(chid datatransfer.ChannelID, gsKey graphsyncK
 }
 
 func (t *Transport) gsRequestUpdatedHook(p peer.ID, request graphsync.RequestData, update graphsync.RequestData, hookActions graphsync.RequestUpdatedHookActions) {
-
 	t.dataLock.RLock()
 	chid, ok := t.graphsyncRequestMap[graphsyncKey{request.ID(), p}]
 	t.dataLock.RUnlock()
@@ -463,7 +467,7 @@ func (t *Transport) gsRequestUpdatedHook(p peer.ID, request graphsync.RequestDat
 		hookActions.SendExtensionData(extension)
 	}
 
-	if err != nil {
+	if err != nil && err != transport.ErrPause {
 		hookActions.TerminateWithError(err)
 	}
 
@@ -512,7 +516,7 @@ func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extensio
 	if msg.IsRequest() {
 
 		// only accept request message updates when original message was also request
-		if (chid != datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p}) {
+		if (chid != datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}) {
 			return nil, errors.New("received request on response channel")
 		}
 		dtRequest := msg.(message.DataTransferRequest)
@@ -520,7 +524,7 @@ func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extensio
 	}
 
 	// only accept response message updates when original message was also response
-	if (chid != datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID}) {
+	if (chid != datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID, Responder: p}) {
 		return nil, errors.New("received response on request channel")
 	}
 
@@ -531,6 +535,7 @@ func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extensio
 func (t *Transport) gsRequestorCancelledListener(p peer.ID, request graphsync.RequestData) {
 	t.dataLock.Lock()
 	defer t.dataLock.Unlock()
+
 	chid, ok := t.graphsyncRequestMap[graphsyncKey{request.ID(), p}]
 	if ok {
 		t.requestorCancelledMap[chid] = struct{}{}
