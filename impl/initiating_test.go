@@ -287,7 +287,8 @@ func TestDataTransferInitiating(t *testing.T) {
 			h.storedCounter = storedcounter.New(h.ds, datastore.NewKey("counter"))
 			dt, err := NewDataTransfer(h.ds, h.network, h.transport, h.storedCounter)
 			require.NoError(t, err)
-			dt.Start(ctx)
+			err = dt.Start(ctx)
+			require.NoError(t, err)
 			h.dt = dt
 			ev := eventVerifier{
 				expectedEvents: verify.expectedEvents,

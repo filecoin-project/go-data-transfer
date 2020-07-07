@@ -630,7 +630,7 @@ func TestManager(t *testing.T) {
 			action: func(gsData *harness) {
 				gsData.fgs.LeaveRequestsOpen()
 				stor, _ := gsData.outgoing.Selector()
-				gsData.transport.OpenChannel(
+				_ = gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
 					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self},
@@ -643,7 +643,8 @@ func TestManager(t *testing.T) {
 				assertHasOutgoingMessage(t, requestReceived.Extensions, gsData.outgoing)
 				completed := make(chan struct{})
 				go func() {
-					gsData.transport.PauseChannel(context.Background(), datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
+					err := gsData.transport.PauseChannel(context.Background(), datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
+					require.NoError(t, err)
 					close(completed)
 				}()
 				time.Sleep(100 * time.Millisecond)
@@ -697,7 +698,7 @@ func TestManager(t *testing.T) {
 				requestUpdatedHookActions:   &testutil.FakeRequestUpdatedActions{},
 				incomingResponseHookActions: &testutil.FakeIncomingResponseHookActions{},
 			}
-			transport.SetEventHandler(&data.events)
+			require.NoError(t, transport.SetEventHandler(&data.events))
 			if data.action != nil {
 				data.action(gsData)
 			}

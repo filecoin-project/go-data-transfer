@@ -45,12 +45,12 @@ func TestRoundTrip(t *testing.T) {
 
 			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 			require.NoError(t, err)
-			dt1.Start(ctx)
-
+			err = dt1.Start(ctx)
+			require.NoError(t, err)
 			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 			require.NoError(t, err)
-			dt2.Start(ctx)
-
+			err = dt2.Start(ctx)
+			require.NoError(t, err)
 			finished := make(chan struct{}, 2)
 			errChan := make(chan struct{}, 2)
 			opened := make(chan struct{}, 2)
@@ -181,31 +181,31 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 
 			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 			require.NoError(t, err)
-			dt1.Start(ctx)
-
+			err = dt1.Start(ctx)
+			require.NoError(t, err)
 			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 			require.NoError(t, err)
-			dt2.Start(ctx)
-
+			err = dt2.Start(ctx)
+			require.NoError(t, err)
 			var chid datatransfer.ChannelID
 			errChan := make(chan struct{}, 2)
 			clientPausePoint := 0
 			clientFinished := make(chan struct{}, 1)
 			finalVoucherResult := testutil.NewFakeDTType()
 			encodedFVR, err := encoding.Encode(finalVoucherResult)
+			require.NoError(t, err)
 			var clientSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 				if event.Code == datatransfer.Accept {
-					dt2.PauseDataTransferChannel(ctx, chid)
+					err := dt2.PauseDataTransferChannel(ctx, chid)
+					require.NoError(t, err)
 					timer := time.NewTimer(config.unpauseRequestorDelay)
 					go func() {
-						select {
-						case <-ctx.Done():
-							t.Fatal("should have unpaused")
-						case <-timer.C:
-						}
-						dt2.ResumeDataTransferChannel(ctx, chid)
+						<-timer.C
+						err := dt2.ResumeDataTransferChannel(ctx, chid)
+						require.NoError(t, err)
 						if config.payForUnseal {
-							dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+							err := dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+							require.NoError(t, err)
 						}
 					}()
 				}
@@ -217,14 +217,14 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					encodedLVR, err := encoding.Encode(lastVoucherResult)
 					require.NoError(t, err)
 					if bytes.Equal(encodedLVR, encodedFVR) {
-						dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+						require.NoError(t, dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType()))
 					}
 				}
 
 				if event.Code == datatransfer.Progress &&
 					clientPausePoint < len(config.pausePoints) &&
 					channelState.Received() > config.pausePoints[clientPausePoint] {
-					dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+					require.NoError(t, dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType()))
 					clientPausePoint++
 				}
 				if channelState.Status() == datatransfer.Completed {
@@ -238,12 +238,8 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					if !config.payForUnseal {
 						timer := time.NewTimer(config.unpauseResponderDelay)
 						go func() {
-							select {
-							case <-ctx.Done():
-								t.Fatal("should have unpaused")
-							case <-timer.C:
-							}
-							dt1.ResumeDataTransferChannel(ctx, chid)
+							<-timer.C
+							require.NoError(t, dt1.ResumeDataTransferChannel(ctx, chid))
 						}()
 					}
 				}
@@ -313,12 +309,12 @@ func TestPauseAndResume(t *testing.T) {
 
 			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 			require.NoError(t, err)
-			dt1.Start(ctx)
-
+			err = dt1.Start(ctx)
+			require.NoError(t, err)
 			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 			require.NoError(t, err)
-			dt2.Start(ctx)
-
+			err = dt2.Start(ctx)
+			require.NoError(t, err)
 			finished := make(chan struct{}, 2)
 			errChan := make(chan struct{}, 2)
 			opened := make(chan struct{}, 2)
@@ -402,16 +398,16 @@ func TestPauseAndResume(t *testing.T) {
 				case sentIncrement := <-sent:
 					sentIncrements = append(sentIncrements, sentIncrement)
 					if len(sentIncrements) == 5 {
-						dt1.PauseDataTransferChannel(ctx, chid)
+						require.NoError(t, dt1.PauseDataTransferChannel(ctx, chid))
 						time.Sleep(100 * time.Millisecond)
-						dt1.ResumeDataTransferChannel(ctx, chid)
+						require.NoError(t, dt1.ResumeDataTransferChannel(ctx, chid))
 					}
 				case receivedIncrement := <-received:
 					receivedIncrements = append(receivedIncrements, receivedIncrement)
 					if len(receivedIncrements) == 10 {
-						dt2.PauseDataTransferChannel(ctx, chid)
+						require.NoError(t, dt2.PauseDataTransferChannel(ctx, chid))
 						time.Sleep(100 * time.Millisecond)
-						dt2.ResumeDataTransferChannel(ctx, chid)
+						require.NoError(t, dt2.ResumeDataTransferChannel(ctx, chid))
 					}
 				case <-errChan:
 					t.Fatal("received error on data transfer")
@@ -443,14 +439,16 @@ func TestDataTransferSubscribing(t *testing.T) {
 	sv.stubErrorPush()
 	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 	require.NoError(t, err)
-	dt2.Start(ctx)
+	err = dt2.Start(ctx)
+	require.NoError(t, err)
 	require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 	voucher := testutil.FakeDTType{Data: "applesauce"}
 	baseCid := testutil.GenerateCids(1)[0]
 
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 	require.NoError(t, err)
-	dt1.Start(ctx)
+	err = dt1.Start(ctx)
+	require.NoError(t, err)
 	subscribe1Calls := make(chan struct{}, 1)
 	subscribe1 := func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 		if event.Code == datatransfer.Error {
@@ -582,7 +580,8 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	tp1 := gsData.SetupGSTransportHost1()
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 	require.NoError(t, err)
-	dt1.Start(ctx)
+	err = dt1.Start(ctx)
+	require.NoError(t, err)
 	voucherResult := testutil.NewFakeDTType()
 	err = dt1.RegisterVoucherResultType(voucherResult)
 	require.NoError(t, err)
@@ -666,8 +665,8 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 	tp1 := tp.NewTransport(host1.ID(), gs1)
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 	require.NoError(t, err)
-	dt1.Start(ctx)
-
+	err = dt1.Start(ctx)
+	require.NoError(t, err)
 	t.Run("when it's not our extension, does not error and does not validate", func(t *testing.T) {
 		//register a hook that validates the request so we don't fail in gs because the request
 		//never gets processed
@@ -722,8 +721,8 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 
 		dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 		require.NoError(t, err)
-		dt1.Start(ctx)
-
+		err = dt1.Start(ctx)
+		require.NoError(t, err)
 		require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 		voucher := testutil.NewFakeDTType()
@@ -752,8 +751,8 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 		sv.expectErrorPull()
 		dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 		require.NoError(t, err)
-		dt1.Start(ctx)
-
+		err = dt1.Start(ctx)
+		require.NoError(t, err)
 		require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 		voucher := testutil.NewFakeDTType()
 		dtRequest, err := message.NewRequest(id, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)

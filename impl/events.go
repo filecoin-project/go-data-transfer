@@ -90,6 +90,9 @@ func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request message
 		return nil, err
 	}
 	chst, err := m.channels.GetByID(context.TODO(), chid)
+	if err != nil {
+		return nil, err
+	}
 	if chst.Status() == datatransfer.ResponderPaused ||
 		chst.Status() == datatransfer.ResponderFinalizing {
 		return nil, transport.ErrPause

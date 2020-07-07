@@ -237,7 +237,8 @@ func TestDataTransferResponding(t *testing.T) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pauseUpdate)
 				require.NoError(t, err)
-				h.dt.PauseDataTransferChannel(h.ctx, channelID(h.id, h.peers))
+				err = h.dt.PauseDataTransferChannel(h.ctx, channelID(h.id, h.peers))
+				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.resumeUpdate)
 				require.EqualError(t, err, transport.ErrPause.Error())
 			},
@@ -464,6 +465,7 @@ func TestDataTransferResponding(t *testing.T) {
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnChannelCompleted(channelID(h.id, h.peers), true)
+				require.NoError(t, err)
 				require.Len(t, h.network.SentMessages, 1)
 				response, ok := h.network.SentMessages[0].Message.(message.DataTransferResponse)
 				require.True(t, ok)
@@ -495,7 +497,8 @@ func TestDataTransferResponding(t *testing.T) {
 			h.storedCounter = storedcounter.New(h.ds, datastore.NewKey("counter"))
 			dt, err := NewDataTransfer(h.ds, h.network, h.transport, h.storedCounter)
 			require.NoError(t, err)
-			dt.Start(ctx)
+			err = dt.Start(ctx)
+			require.NoError(t, err)
 			h.dt = dt
 			ev := eventVerifier{
 				expectedEvents: verify.expectedEvents,
@@ -522,7 +525,7 @@ func TestDataTransferResponding(t *testing.T) {
 			if verify.configureValidator != nil {
 				verify.configureValidator(h.sv)
 			}
-			err = h.dt.RegisterVoucherType(h.voucher, h.sv)
+			require.NoError(t, h.dt.RegisterVoucherType(h.voucher, h.sv))
 			h.srv = newSRV()
 			if verify.configureRevalidator != nil {
 				verify.configureRevalidator(h.srv)
