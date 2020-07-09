@@ -18,6 +18,8 @@ func (es errorString) Error() string {
 	return string(es)
 }
 
+//go:generate cbor-gen-for ChannelID
+
 // ErrChannelNotFound indicates the given channel does not exist
 const ErrChannelNotFound = errorString("channel not found")
 
