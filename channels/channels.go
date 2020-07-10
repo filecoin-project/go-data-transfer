@@ -3,7 +3,6 @@ package channels
 import (
 	"context"
 	"errors"
-	"math"
 	"time"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -16,8 +15,6 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
-
-const noopSynchronize = datatransfer.EventCode(math.MaxInt32)
 
 type DecoderByTypeFunc func(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool)
 
@@ -75,9 +72,6 @@ func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 	evtCode, ok := eventName.(datatransfer.EventCode)
 	if !ok {
 		log.Errorf("dropped bad event %v", eventName)
-	}
-	if evtCode == noopSynchronize {
-		return
 	}
 	realChannel, ok := channel.(internalChannelState)
 	if !ok {
@@ -153,12 +147,8 @@ func (c *Channels) InProgress(ctx context.Context) (map[datatransfer.ChannelID]d
 // Returns datatransfer.EmptyChannelState if there is no channel with that id
 func (c *Channels) GetByID(ctx context.Context, chid datatransfer.ChannelID) (datatransfer.ChannelState, error) {
 	var internalChannel internalChannelState
-	err := c.sendSync(ctx, chid, noopSynchronize)
+	err := c.statemachines.GetSync(ctx, chid, &internalChannel)
 	if err != nil && err != statemachine.ErrTerminated {
-		return nil, err
-	}
-	err = c.statemachines.Get(chid).Get(&internalChannel)
-	if err != nil {
 		return nil, ErrNotFound
 	}
 	return internalChannel.ToChannelState(c.voucherDecoder, c.voucherResultDecoder), nil

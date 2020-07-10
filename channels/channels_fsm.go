@@ -76,7 +76,6 @@ var ChannelEvents = fsm.Events{
 		From(datatransfer.Cancelling).To(datatransfer.Cancelled).
 		From(datatransfer.Failing).To(datatransfer.Failed).
 		From(datatransfer.Completing).To(datatransfer.Completed),
-	fsm.Event(noopSynchronize).FromAny().ToNoChange(),
 }
 
 // ChannelStateEntryFuncs are handlers called as we enter different states
