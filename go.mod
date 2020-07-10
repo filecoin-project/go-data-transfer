@@ -3,7 +3,7 @@ module github.com/filecoin-project/go-data-transfer
 go 1.13
 
 require (
-	github.com/filecoin-project/go-statemachine v0.0.0-20200710020535-0bb117d1f638
+	github.com/filecoin-project/go-statemachine v0.0.0-20200710195503-2909a4eefeb7
 	github.com/filecoin-project/go-storedcounter v0.0.0-20200421200003-1c99c62e8a5b
 	github.com/hannahhoward/cbor-gen-for v0.0.0-20191218204337-9ab7b1bcc099
 	github.com/hannahhoward/go-pubsub v0.0.0-20200423002714-8d62886cc36e
