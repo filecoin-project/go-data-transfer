@@ -235,9 +235,11 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			}
 			dt2.SubscribeToEvents(clientSubscriber)
 			providerFinished := make(chan struct{}, 1)
+			providerAccepted := false
 			var providerSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 				if event.Code == datatransfer.PauseResponder {
-					if !config.payForUnseal {
+					if !config.payForUnseal && !providerAccepted {
+						providerAccepted = true
 						timer := time.NewTimer(config.unpauseResponderDelay)
 						go func() {
 							<-timer.C
