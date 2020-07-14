@@ -7,7 +7,6 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-statemachine"
 	"github.com/filecoin-project/go-statemachine/fsm"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
@@ -148,7 +147,7 @@ func (c *Channels) InProgress(ctx context.Context) (map[datatransfer.ChannelID]d
 func (c *Channels) GetByID(ctx context.Context, chid datatransfer.ChannelID) (datatransfer.ChannelState, error) {
 	var internalChannel internalChannelState
 	err := c.statemachines.GetSync(ctx, chid, &internalChannel)
-	if err != nil && err != statemachine.ErrTerminated {
+	if err != nil {
 		return nil, ErrNotFound
 	}
 	return internalChannel.ToChannelState(c.voucherDecoder, c.voucherResultDecoder), nil
