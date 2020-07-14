@@ -383,7 +383,7 @@ func TestPauseAndResume(t *testing.T) {
 			sentIncrements := make([]uint64, 0, 21)
 			receivedIncrements := make([]uint64, 0, 21)
 			for opens < 2 || completes < 2 || len(sentIncrements) < 21 || len(receivedIncrements) < 21 ||
-				pauseInitiators < 2 || pauseResponders < 1 || resumeInitiators < 2 || resumeResponders < 1 {
+				pauseInitiators < 1 || pauseResponders < 1 || resumeInitiators < 1 || resumeResponders < 1 {
 				select {
 				case <-ctx.Done():
 					t.Fatal("Did not complete succcessful data transfer")
