@@ -15,6 +15,7 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.Accept).From(datatransfer.Requested).To(datatransfer.Ongoing),
 	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelling),
 	fsm.Event(datatransfer.Progress).FromMany(
+		datatransfer.Requested,
 		datatransfer.Ongoing,
 		datatransfer.InitiatorPaused,
 		datatransfer.ResponderPaused,
