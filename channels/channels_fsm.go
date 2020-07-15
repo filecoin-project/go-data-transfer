@@ -56,8 +56,6 @@ var ChannelEvents = fsm.Events{
 		From(datatransfer.ResponderPaused).To(datatransfer.Ongoing).
 		From(datatransfer.BothPaused).To(datatransfer.InitiatorPaused).
 		From(datatransfer.Finalizing).To(datatransfer.Completing).
-		From(datatransfer.ResponderFinalizing).To(datatransfer.ResponderCompleted).
-		From(datatransfer.ResponderFinalizingTransferFinished).To(datatransfer.Completing).
 		FromAny().ToNoChange(),
 	fsm.Event(datatransfer.FinishTransfer).
 		FromAny().To(datatransfer.TransferFinished).
@@ -69,7 +67,9 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.ResponderCompletes).
 		FromAny().To(datatransfer.ResponderCompleted).
 		From(datatransfer.ResponderPaused).To(datatransfer.ResponderFinalizing).
-		From(datatransfer.TransferFinished).To(datatransfer.Completing),
+		From(datatransfer.TransferFinished).To(datatransfer.Completing).
+		From(datatransfer.ResponderFinalizing).To(datatransfer.ResponderCompleted).
+		From(datatransfer.ResponderFinalizingTransferFinished).To(datatransfer.Completing),
 	fsm.Event(datatransfer.BeginFinalizing).FromAny().To(datatransfer.Finalizing),
 	fsm.Event(datatransfer.Complete).FromAny().To(datatransfer.Completing),
 	fsm.Event(datatransfer.CleanupComplete).
