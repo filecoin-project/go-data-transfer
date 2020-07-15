@@ -38,6 +38,7 @@ type ChannelEnvironment interface {
 	Protect(id peer.ID, tag string)
 	Unprotect(id peer.ID, tag string) bool
 	ID() peer.ID
+	CleanupChannel(chid datatransfer.ChannelID)
 }
 
 // New returns a new thread safe list of channels

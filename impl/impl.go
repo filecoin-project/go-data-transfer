@@ -68,7 +68,7 @@ func NewDataTransfer(ds datastore.Datastore, dataTransferNetwork network.DataTra
 		transport:           transport,
 		storedCounter:       storedCounter,
 	}
-	channels, err := channels.New(ds, m.notifier, m.voucherDecoder, m.resultTypes.Decoder, dataTransferNetwork)
+	channels, err := channels.New(ds, m.notifier, m.voucherDecoder, m.resultTypes.Decoder, &channelEnvironment{m})
 	if err != nil {
 		return nil, err
 	}
