@@ -4,8 +4,6 @@ import (
 	"context"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message"
-	"github.com/filecoin-project/go-data-transfer/transport"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
@@ -16,13 +14,13 @@ type OpenedChannel struct {
 	ChannelID  datatransfer.ChannelID
 	Root       ipld.Link
 	Selector   ipld.Node
-	Message    message.DataTransferMessage
+	Message    datatransfer.Message
 }
 
 // ResumedChannel records a call to resume a channel
 type ResumedChannel struct {
 	ChannelID datatransfer.ChannelID
-	Message   message.DataTransferMessage
+	Message   datatransfer.Message
 }
 
 // FakeTransport is a fake transport with mocked results
@@ -36,7 +34,7 @@ type FakeTransport struct {
 	ResumedChannels    []ResumedChannel
 	ResumeChannelErr   error
 	CleanedUpChannels  []datatransfer.ChannelID
-	EventHandler       transport.Events
+	EventHandler       datatransfer.EventsHandler
 	SetEventHandlerErr error
 }
 
@@ -50,7 +48,7 @@ func NewFakeTransport() *FakeTransport {
 // Note: from a data transfer symantic standpoint, it doesn't matter if the
 // request is push or pull -- OpenChannel is called by the party that is
 // intending to receive data
-func (ft *FakeTransport) OpenChannel(ctx context.Context, dataSender peer.ID, channelID datatransfer.ChannelID, root ipld.Link, stor ipld.Node, msg message.DataTransferMessage) error {
+func (ft *FakeTransport) OpenChannel(ctx context.Context, dataSender peer.ID, channelID datatransfer.ChannelID, root ipld.Link, stor ipld.Node, msg datatransfer.Message) error {
 	ft.OpenedChannels = append(ft.OpenedChannels, OpenedChannel{dataSender, channelID, root, stor, msg})
 	return ft.OpenChannelErr
 }
@@ -62,7 +60,7 @@ func (ft *FakeTransport) CloseChannel(ctx context.Context, chid datatransfer.Cha
 }
 
 // SetEventHandler sets the handler for events on channels
-func (ft *FakeTransport) SetEventHandler(events transport.Events) error {
+func (ft *FakeTransport) SetEventHandler(events datatransfer.EventsHandler) error {
 	ft.EventHandler = events
 	return ft.SetEventHandlerErr
 }
@@ -74,7 +72,7 @@ func (ft *FakeTransport) PauseChannel(ctx context.Context, chid datatransfer.Cha
 }
 
 // ResumeChannel resumes the given channel
-func (ft *FakeTransport) ResumeChannel(ctx context.Context, msg message.DataTransferMessage, chid datatransfer.ChannelID) error {
+func (ft *FakeTransport) ResumeChannel(ctx context.Context, msg datatransfer.Message, chid datatransfer.ChannelID) error {
 	ft.ResumedChannels = append(ft.ResumedChannels, ResumedChannel{chid, msg})
 	return ft.ResumeChannelErr
 }

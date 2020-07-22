@@ -5,10 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/filecoin-project/go-data-transfer/transport"
-
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
 	"github.com/ipfs/go-graphsync"
 	ipld "github.com/ipld/go-ipld-prime"
@@ -31,7 +28,7 @@ type responseProgress struct {
 // Transport manages graphsync hooks for data transfer, translating from
 // graphsync hooks to semantic data transfer events
 type Transport struct {
-	events                transport.Events
+	events                datatransfer.EventsHandler
 	gs                    graphsync.GraphExchange
 	peerID                peer.ID
 	dataLock              sync.RWMutex
@@ -71,9 +68,9 @@ func (t *Transport) OpenChannel(ctx context.Context,
 	channelID datatransfer.ChannelID,
 	root ipld.Link,
 	stor ipld.Node,
-	msg message.DataTransferMessage) error {
+	msg datatransfer.Message) error {
 	if t.events == nil {
-		return transport.ErrHandlerNotSet
+		return datatransfer.ErrHandlerNotSet
 	}
 	ext, err := extension.ToExtensionData(msg)
 	if err != nil {
@@ -125,11 +122,11 @@ func (t *Transport) gsKeyFromChannelID(ctx context.Context, chid datatransfer.Ch
 		pending, hasPending := t.pending[chid]
 		t.dataLock.RUnlock()
 		if !hasPending {
-			return graphsyncKey{}, transport.ErrChannelNotFound
+			return graphsyncKey{}, datatransfer.ErrChannelNotFound
 		}
 		select {
 		case <-ctx.Done():
-			return graphsyncKey{}, transport.ErrChannelNotFound
+			return graphsyncKey{}, datatransfer.ErrChannelNotFound
 		case <-pending:
 		}
 	}
@@ -140,7 +137,7 @@ func (t *Transport) PauseChannel(ctx context.Context,
 	chid datatransfer.ChannelID,
 ) error {
 	if t.events == nil {
-		return transport.ErrHandlerNotSet
+		return datatransfer.ErrHandlerNotSet
 	}
 	gsKey, err := t.gsKeyFromChannelID(ctx, chid)
 	if err != nil {
@@ -160,11 +157,11 @@ func (t *Transport) PauseChannel(ctx context.Context,
 
 // ResumeChannel resumes the given channel
 func (t *Transport) ResumeChannel(ctx context.Context,
-	msg message.DataTransferMessage,
+	msg datatransfer.Message,
 	chid datatransfer.ChannelID,
 ) error {
 	if t.events == nil {
-		return transport.ErrHandlerNotSet
+		return datatransfer.ErrHandlerNotSet
 	}
 	gsKey, err := t.gsKeyFromChannelID(ctx, chid)
 	if err != nil {
@@ -195,7 +192,7 @@ func (t *Transport) ResumeChannel(ctx context.Context,
 // CloseChannel closes the given channel
 func (t *Transport) CloseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
 	if t.events == nil {
-		return transport.ErrHandlerNotSet
+		return datatransfer.ErrHandlerNotSet
 	}
 	gsKey, err := t.gsKeyFromChannelID(ctx, chid)
 	if err != nil {
@@ -206,7 +203,7 @@ func (t *Transport) CloseChannel(ctx context.Context, chid datatransfer.ChannelI
 		cancelFn, ok := t.contextCancelMap[chid]
 		t.dataLock.RUnlock()
 		if !ok {
-			return transport.ErrChannelNotFound
+			return datatransfer.ErrChannelNotFound
 		}
 		cancelFn()
 		return nil
@@ -231,9 +228,9 @@ func (t *Transport) CleanupChannel(chid datatransfer.ChannelID) {
 }
 
 // SetEventHandler sets the handler for events on channels
-func (t *Transport) SetEventHandler(events transport.Events) error {
+func (t *Transport) SetEventHandler(events datatransfer.EventsHandler) error {
 	if t.events != nil {
-		return transport.ErrHandlerAlreadySet
+		return datatransfer.ErrHandlerAlreadySet
 	}
 	t.events = events
 	t.gs.RegisterIncomingRequestHook(t.gsReqRecdHook)
@@ -306,12 +303,12 @@ func (t *Transport) gsIncomingBlockHook(p peer.ID, response graphsync.ResponseDa
 	}
 
 	err := t.events.OnDataReceived(chid, block.Link(), block.BlockSize())
-	if err != nil && err != transport.ErrPause {
+	if err != nil && err != datatransfer.ErrPause {
 		hookActions.TerminateWithError(err)
 		return
 	}
 
-	if err == transport.ErrPause {
+	if err == datatransfer.ErrPause {
 		hookActions.PauseRequest()
 	}
 }
@@ -332,12 +329,12 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 	rp.maximumSent = rp.currentSent
 
 	msg, err := t.events.OnDataSent(chid, block.Link(), block.BlockSize())
-	if err != nil && err != transport.ErrPause {
+	if err != nil && err != datatransfer.ErrPause {
 		hookActions.TerminateWithError(err)
 		return
 	}
 
-	if err == transport.ErrPause {
+	if err == datatransfer.ErrPause {
 		hookActions.PauseResponse()
 	}
 
@@ -368,16 +365,16 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 	}
 
 	var chid datatransfer.ChannelID
-	var responseMessage message.DataTransferMessage
+	var responseMessage datatransfer.Message
 	if msg.IsRequest() {
 		// when a DT request comes in on graphsync, it's a pull
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}
-		request := msg.(message.DataTransferRequest)
+		request := msg.(datatransfer.Request)
 		responseMessage, err = t.events.OnRequestReceived(chid, request)
 	} else {
 		// when a DT response comes in on graphsync, it's a push
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID, Responder: p}
-		response := msg.(message.DataTransferResponse)
+		response := msg.(datatransfer.Response)
 		err = t.events.OnResponseReceived(chid, response)
 	}
 
@@ -390,12 +387,12 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		hookActions.SendExtensionData(extension)
 	}
 
-	if err != nil && err != transport.ErrPause {
+	if err != nil && err != datatransfer.ErrPause {
 		hookActions.TerminateWithError(err)
 		return
 	}
 
-	if err == transport.ErrPause {
+	if err == datatransfer.ErrPause {
 		hookActions.PauseResponse()
 	}
 
@@ -483,7 +480,7 @@ func (t *Transport) gsRequestUpdatedHook(p peer.ID, request graphsync.RequestDat
 		hookActions.SendExtensionData(extension)
 	}
 
-	if err != nil && err != transport.ErrPause {
+	if err != nil && err != datatransfer.ErrPause {
 		hookActions.TerminateWithError(err)
 	}
 
@@ -516,7 +513,7 @@ func (t *Transport) gsIncomingResponseHook(p peer.ID, response graphsync.Respons
 	}
 }
 
-func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extension.GsExtended, p peer.ID) (message.DataTransferMessage, error) {
+func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extension.GsExtended, p peer.ID) (datatransfer.Message, error) {
 
 	// if this is a push request the sender is us.
 	msg, err := extension.GetTransferData(gsMsg)
@@ -535,7 +532,7 @@ func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extensio
 		if (chid != datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}) {
 			return nil, errors.New("received request on response channel")
 		}
-		dtRequest := msg.(message.DataTransferRequest)
+		dtRequest := msg.(datatransfer.Request)
 		return t.events.OnRequestReceived(chid, dtRequest)
 	}
 
@@ -544,7 +541,7 @@ func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extensio
 		return nil, errors.New("received response on request channel")
 	}
 
-	dtResponse := msg.(message.DataTransferResponse)
+	dtResponse := msg.(datatransfer.Response)
 	return nil, t.events.OnResponseReceived(chid, dtResponse)
 }
 

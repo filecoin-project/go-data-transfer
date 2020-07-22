@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
 	"github.com/ipfs/go-cid"
@@ -19,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func matchDtMessage(t *testing.T, extensions []graphsync.ExtensionData) message.DataTransferMessage {
+func matchDtMessage(t *testing.T, extensions []graphsync.ExtensionData) datatransfer.Message {
 	var matchedExtension *graphsync.ExtensionData
 	for _, ext := range extensions {
 		if ext.Name == extension.ExtensionDataTransfer {
@@ -43,7 +44,7 @@ type ReceivedGraphSyncRequest struct {
 }
 
 // DTMessage returns the data transfer message among the graphsync extensions sent with this request
-func (gsRequest ReceivedGraphSyncRequest) DTMessage(t *testing.T) message.DataTransferMessage {
+func (gsRequest ReceivedGraphSyncRequest) DTMessage(t *testing.T) datatransfer.Message {
 	return matchDtMessage(t, gsRequest.Extensions)
 }
 
@@ -57,7 +58,7 @@ type ResumeRequest struct {
 }
 
 // DTMessage returns the data transfer message among the graphsync extensions sent with this request
-func (resumeRequest ResumeRequest) DTMessage(t *testing.T) message.DataTransferMessage {
+func (resumeRequest ResumeRequest) DTMessage(t *testing.T) datatransfer.Message {
 	return matchDtMessage(t, resumeRequest.Extensions)
 }
 
@@ -73,7 +74,7 @@ type ResumeResponse struct {
 }
 
 // DTMessage returns the data transfer message among the graphsync extensions sent with this request
-func (resumeResponse ResumeResponse) DTMessage(t *testing.T) message.DataTransferMessage {
+func (resumeResponse ResumeResponse) DTMessage(t *testing.T) datatransfer.Message {
 	return matchDtMessage(t, resumeResponse.Extensions)
 }
 

@@ -42,7 +42,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Equal(t, messageReceived.PeerID, h.peers[1])
 				received := messageReceived.Message
 				require.True(t, received.IsRequest())
-				receivedRequest, ok := received.(message.DataTransferRequest)
+				receivedRequest, ok := received.(datatransfer.Request)
 				require.True(t, ok)
 				require.Equal(t, receivedRequest.TransferID(), channelID.ID)
 				require.Equal(t, receivedRequest.BaseCid(), h.baseCid)
@@ -69,7 +69,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Equal(t, openChannel.Root, cidlink.Link{Cid: h.baseCid})
 				require.Equal(t, openChannel.Selector, h.stor)
 				require.True(t, openChannel.Message.IsRequest())
-				receivedRequest, ok := openChannel.Message.(message.DataTransferRequest)
+				receivedRequest, ok := openChannel.Message.(datatransfer.Request)
 				require.True(t, ok)
 				require.Equal(t, receivedRequest.TransferID(), channelID.ID)
 				require.Equal(t, receivedRequest.BaseCid(), h.baseCid)
@@ -98,7 +98,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 2)
 				received := h.network.SentMessages[1].Message
 				require.True(t, received.IsRequest())
-				receivedRequest, ok := received.(message.DataTransferRequest)
+				receivedRequest, ok := received.(datatransfer.Request)
 				require.True(t, ok)
 				require.True(t, receivedRequest.IsVoucher())
 				require.False(t, receivedRequest.IsCancel())
@@ -117,7 +117,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 1)
 				received := h.network.SentMessages[0].Message
 				require.True(t, received.IsRequest())
-				receivedRequest, ok := received.(message.DataTransferRequest)
+				receivedRequest, ok := received.(datatransfer.Request)
 				require.True(t, ok)
 				require.False(t, receivedRequest.IsCancel())
 				require.True(t, receivedRequest.IsVoucher())

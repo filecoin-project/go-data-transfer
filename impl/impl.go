@@ -19,7 +19,6 @@ import (
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/registry"
-	"github.com/filecoin-project/go-data-transfer/transport"
 	"github.com/filecoin-project/go-storedcounter"
 	"github.com/hannahhoward/go-pubsub"
 )
@@ -34,7 +33,7 @@ type manager struct {
 	pubSub              *pubsub.PubSub
 	channels            *channels.Channels
 	peerID              peer.ID
-	transport           transport.Transport
+	transport           datatransfer.Transport
 	storedCounter       *storedcounter.StoredCounter
 }
 
@@ -57,7 +56,7 @@ func dispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
 }
 
 // NewDataTransfer initializes a new instance of a data transfer manager
-func NewDataTransfer(ds datastore.Datastore, dataTransferNetwork network.DataTransferNetwork, transport transport.Transport, storedCounter *storedcounter.StoredCounter) (datatransfer.Manager, error) {
+func NewDataTransfer(ds datastore.Datastore, dataTransferNetwork network.DataTransferNetwork, transport datatransfer.Transport, storedCounter *storedcounter.StoredCounter) (datatransfer.Manager, error) {
 	m := &manager{
 		dataTransferNetwork: dataTransferNetwork,
 		validatedTypes:      registry.NewRegistry(),
@@ -204,7 +203,7 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 // pause a running data transfer channel
 func (m *manager) PauseDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
 
-	pausable, ok := m.transport.(transport.PauseableTransport)
+	pausable, ok := m.transport.(datatransfer.PauseableTransport)
 	if !ok {
 		return errors.New("unsupported")
 	}
@@ -225,7 +224,7 @@ func (m *manager) PauseDataTransferChannel(ctx context.Context, chid datatransfe
 
 // resume a running data transfer channel
 func (m *manager) ResumeDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	pausable, ok := m.transport.(transport.PauseableTransport)
+	pausable, ok := m.transport.(datatransfer.PauseableTransport)
 	if !ok {
 		return errors.New("unsupported")
 	}

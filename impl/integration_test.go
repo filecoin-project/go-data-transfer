@@ -13,7 +13,6 @@ import (
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/testutil"
-	"github.com/filecoin-project/go-data-transfer/transport"
 	tp "github.com/filecoin-project/go-data-transfer/transport/graphsync"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
 	"github.com/ipfs/go-graphsync"
@@ -600,7 +599,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 			t.Fatal("did not receive message sent")
 		case messageReceived = <-r.messageReceived:
 		}
-		requestReceived := messageReceived.message.(message.DataTransferRequest)
+		requestReceived := messageReceived.message.(datatransfer.Request)
 
 		var buf bytes.Buffer
 		response, err := message.NewResponse(requestReceived.TransferID(), true, false, voucherResult.Type(), voucherResult)
@@ -702,10 +701,10 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 	//create network
 	ctx := context.Background()
 	testCases := map[string]struct {
-		test func(*testing.T, *testutil.GraphsyncTestingData, transport.Transport, ipld.Link, datatransfer.TransferID, *fakeGraphSyncReceiver)
+		test func(*testing.T, *testutil.GraphsyncTestingData, datatransfer.Transport, ipld.Link, datatransfer.TransferID, *fakeGraphSyncReceiver)
 	}{
 		"When a pull request is initiated and validated": {
-			test: func(t *testing.T, gsData *testutil.GraphsyncTestingData, tp2 transport.Transport, link ipld.Link, id datatransfer.TransferID, gsr *fakeGraphSyncReceiver) {
+			test: func(t *testing.T, gsData *testutil.GraphsyncTestingData, tp2 datatransfer.Transport, link ipld.Link, id datatransfer.TransferID, gsr *fakeGraphSyncReceiver) {
 				sv := testutil.NewStubbedValidator()
 				sv.ExpectSuccessPull()
 
@@ -737,7 +736,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 			},
 		},
 		"When request is initiated, but fails validation": {
-			test: func(t *testing.T, gsData *testutil.GraphsyncTestingData, tp2 transport.Transport, link ipld.Link, id datatransfer.TransferID, gsr *fakeGraphSyncReceiver) {
+			test: func(t *testing.T, gsData *testutil.GraphsyncTestingData, tp2 datatransfer.Transport, link ipld.Link, id datatransfer.TransferID, gsr *fakeGraphSyncReceiver) {
 				sv := testutil.NewStubbedValidator()
 				sv.ExpectErrorPull()
 				dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
@@ -794,7 +793,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 }
 
 type receivedMessage struct {
-	message message.DataTransferMessage
+	message datatransfer.Message
 	sender  peer.ID
 }
 
@@ -806,7 +805,7 @@ type receiver struct {
 func (r *receiver) ReceiveRequest(
 	ctx context.Context,
 	sender peer.ID,
-	incoming message.DataTransferRequest) {
+	incoming datatransfer.Request) {
 
 	select {
 	case <-ctx.Done():
@@ -817,7 +816,7 @@ func (r *receiver) ReceiveRequest(
 func (r *receiver) ReceiveResponse(
 	ctx context.Context,
 	sender peer.ID,
-	incoming message.DataTransferResponse) {
+	incoming datatransfer.Response) {
 
 	select {
 	case <-ctx.Done():

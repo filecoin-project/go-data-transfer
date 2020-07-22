@@ -12,8 +12,8 @@ import (
 	"runtime"
 	"testing"
 
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/network"
-	"github.com/filecoin-project/go-data-transfer/transport"
 	gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
 	"github.com/filecoin-project/go-storedcounter"
 	blocks "github.com/ipfs/go-block-format"
@@ -174,7 +174,7 @@ func (gsData *GraphsyncTestingData) SetupGraphsyncHost1() graphsync.GraphExchang
 }
 
 // SetupGSTransportHost1 sets up a new grapshync transport over real graphsync on the first host
-func (gsData *GraphsyncTestingData) SetupGSTransportHost1() transport.Transport {
+func (gsData *GraphsyncTestingData) SetupGSTransportHost1() datatransfer.Transport {
 	// setup graphsync
 	gs := gsData.SetupGraphsyncHost1()
 	return gstransport.NewTransport(gsData.Host1.ID(), gs)
@@ -187,7 +187,7 @@ func (gsData *GraphsyncTestingData) SetupGraphsyncHost2() graphsync.GraphExchang
 }
 
 // SetupGSTransportHost2 sets up a new grapshync transport over real graphsync on the second host
-func (gsData *GraphsyncTestingData) SetupGSTransportHost2() transport.Transport {
+func (gsData *GraphsyncTestingData) SetupGSTransportHost2() datatransfer.Transport {
 	// setup graphsync
 	gs := gsData.SetupGraphsyncHost2()
 	return gstransport.NewTransport(gsData.Host2.ID(), gs)
