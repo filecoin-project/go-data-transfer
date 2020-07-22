@@ -42,6 +42,7 @@ type Transport struct {
 	requestorCancelledMap map[datatransfer.ChannelID]struct{}
 	pendingExtensions     map[datatransfer.ChannelID][]graphsync.ExtensionData
 	responseProgressMap   map[datatransfer.ChannelID]*responseProgress
+	stores                map[datatransfer.ChannelID]struct{}
 }
 
 // NewTransport makes a new hooks manager with the given hook events interface
@@ -56,6 +57,7 @@ func NewTransport(peerID peer.ID, gs graphsync.GraphExchange) *Transport {
 		channelIDMap:          make(map[datatransfer.ChannelID]graphsyncKey),
 		responseProgressMap:   make(map[datatransfer.ChannelID]*responseProgress),
 		pending:               make(map[datatransfer.ChannelID]chan struct{}),
+		stores:                make(map[datatransfer.ChannelID]struct{}),
 	}
 }
 
@@ -245,6 +247,18 @@ func (t *Transport) SetEventHandler(events transport.Events) error {
 	return nil
 }
 
+// UseStore tells the graphsync transport to use the given loader and storer for this channelID
+func (t *Transport) UseStore(channelID datatransfer.ChannelID, loader ipld.Loader, storer ipld.Storer) error {
+	err := t.gs.RegisterPersistenceOption("data-transfer-"+channelID.String(), loader, storer)
+	if err != nil {
+		return err
+	}
+	t.dataLock.Lock()
+	t.stores[channelID] = struct{}{}
+	t.dataLock.Unlock()
+	return nil
+}
+
 func (t *Transport) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestData, hookActions graphsync.OutgoingRequestHookActions) {
 	message, _ := extension.GetTransferData(request)
 
@@ -274,6 +288,10 @@ func (t *Transport) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestDa
 	if hasPending {
 		close(pending)
 		delete(t.pending, chid)
+	}
+	_, ok := t.stores[chid]
+	if ok {
+		hookActions.UsePersistenceOption("data-transfer-" + chid.String())
 	}
 	t.dataLock.Unlock()
 }
@@ -399,8 +417,11 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 	} else {
 		t.responseProgressMap[chid] = &responseProgress{}
 	}
+	_, ok := t.stores[chid]
+	if ok {
+		hookActions.UsePersistenceOption("data-transfer-" + chid.String())
+	}
 	t.dataLock.Unlock()
-
 	hookActions.ValidateRequest()
 }
 
@@ -432,6 +453,14 @@ func (t *Transport) cleanupChannel(chid datatransfer.ChannelID, gsKey graphsyncK
 	delete(t.responseProgressMap, chid)
 	delete(t.pendingExtensions, chid)
 	delete(t.requestorCancelledMap, chid)
+	_, ok := t.stores[chid]
+	if ok {
+		err := t.gs.UnregisterPersistenceOption("data-transfer-" + chid.String())
+		if err != nil {
+			log.Error(err)
+		}
+	}
+	delete(t.stores, chid)
 }
 
 func (t *Transport) gsRequestUpdatedHook(p peer.ID, request graphsync.RequestData, update graphsync.RequestData, hookActions graphsync.RequestUpdatedHookActions) {

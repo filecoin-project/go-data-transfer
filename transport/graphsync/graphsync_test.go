@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"math/rand"
 	"testing"
 	"time"
@@ -15,7 +16,7 @@ import (
 	. "github.com/filecoin-project/go-data-transfer/transport/graphsync"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
 	"github.com/ipfs/go-graphsync"
-	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
@@ -659,6 +660,44 @@ func TestManager(t *testing.T) {
 					t.Fatal("never paused channel")
 				case <-completed:
 				}
+			},
+		},
+		"UseStore can change store used for outgoing requests": {
+			action: func(gsData *harness) {
+				loader := func(ipld.Link, ipld.LinkContext) (io.Reader, error) {
+					return nil, nil
+				}
+				storer := func(ipld.LinkContext) (io.Writer, ipld.StoreCommitter, error) {
+					return nil, nil, nil
+				}
+				gsData.transport.UseStore(datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self}, loader, storer)
+				gsData.outgoingRequestHook()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				expectedChannel := "data-transfer-" + datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self}.String()
+				gsData.fgs.AssertHasPersistenceOption(t, expectedChannel)
+				require.Equal(t, expectedChannel, gsData.outgoingRequestHookActions.PersistenceOption)
+				gsData.transport.CleanupChannel(datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
+				gsData.fgs.AssertDoesNotHavePersistenceOption(t, expectedChannel)
+			},
+		},
+		"UseStore can change store used for incoming requests": {
+			action: func(gsData *harness) {
+				loader := func(ipld.Link, ipld.LinkContext) (io.Reader, error) {
+					return nil, nil
+				}
+				storer := func(ipld.LinkContext) (io.Writer, ipld.StoreCommitter, error) {
+					return nil, nil, nil
+				}
+				gsData.transport.UseStore(datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other}, loader, storer)
+				gsData.incomingRequestHook()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				expectedChannel := "data-transfer-" + datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other}.String()
+				gsData.fgs.AssertHasPersistenceOption(t, expectedChannel)
+				require.Equal(t, expectedChannel, gsData.incomingRequestHookActions.PersistenceOption)
+				gsData.transport.CleanupChannel(datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
+				gsData.fgs.AssertDoesNotHavePersistenceOption(t, expectedChannel)
 			},
 		},
 	}
