@@ -8,6 +8,48 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
+// RequestValidator is an interface implemented by the client of the
+// data transfer module to validate requests
+type RequestValidator interface {
+	// ValidatePush validates a push request received from the peer that will send data
+	ValidatePush(
+		sender peer.ID,
+		voucher Voucher,
+		baseCid cid.Cid,
+		selector ipld.Node) (VoucherResult, error)
+	// ValidatePull validates a pull request received from the peer that will receive data
+	ValidatePull(
+		receiver peer.ID,
+		voucher Voucher,
+		baseCid cid.Cid,
+		selector ipld.Node) (VoucherResult, error)
+}
+
+// Revalidator is a request validator revalidates in progress requests
+// by requesting request additional vouchers, and resuming when it receives them
+type Revalidator interface {
+	// Revalidate revalidates a request with a new voucher
+	Revalidate(channelID ChannelID, voucher Voucher) (VoucherResult, error)
+	// OnPullDataSent is called on the responder side when more bytes are sent
+	// for a given pull request. It should return a VoucherResult + ErrPause to
+	// request revalidation or nil to continue uninterrupted,
+	// other errors will terminate the request
+	OnPullDataSent(chid ChannelID, additionalBytesSent uint64) (VoucherResult, error)
+	// OnPushDataReceived is called on the responder side when more bytes are received
+	// for a given push request.  It should return a VoucherResult + ErrPause to
+	// request revalidation or nil to continue uninterrupted,
+	// other errors will terminate the request
+	OnPushDataReceived(chid ChannelID, additionalBytesReceived uint64) (VoucherResult, error)
+	// OnComplete is called to make a final request for revalidation -- often for the
+	// purpose of settlement.
+	// if VoucherResult is non nil, the request will enter a settlement phase awaiting
+	// a final update
+	OnComplete(chid ChannelID) (VoucherResult, error)
+}
+
+// TransportConfigurer provides a mechanism to provide transport specific configuration for a given voucher type
+type TransportConfigurer func(chid ChannelID, voucher Voucher, transport Transport)
+
 // Manager is the core interface presented by all implementations of
 // of the data transfer sub system
 type Manager interface {
@@ -33,6 +75,10 @@ type Manager interface {
 	// RegisterVoucherResultType allows deserialization of a voucher result,
 	// so that a listener can read the metadata
 	RegisterVoucherResultType(resultType VoucherResult) error
+
+	// RegisterTransportConfigurer registers the given transport configurer to be run on requests with the given voucher
+	// type
+	RegisterTransportConfigurer(voucherType Voucher, configurer TransportConfigurer) error
 
 	// open a data transfer that will send data to the recipient peer and
 	// transfer parts of the piece that match the selector

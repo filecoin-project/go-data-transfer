@@ -212,6 +212,11 @@ func (m *manager) acceptRequest(
 	if err := m.channels.Accept(chid); err != nil {
 		return result, err
 	}
+	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	if has {
+		transportConfigurer := processor.(datatransfer.TransportConfigurer)
+		transportConfigurer(chid, voucher, m.transport)
+	}
 	m.dataTransferNetwork.Protect(initiator, chid.String())
 	if voucherErr == datatransfer.ErrPause {
 		err := m.channels.PauseResponder(chid)

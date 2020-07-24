@@ -481,6 +481,50 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsPaused())
 			},
 		},
+		"new push request, customized transport": {
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept},
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPush()
+				sv.StubResult(testutil.NewFakeDTType())
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				err := h.dt.RegisterTransportConfigurer(h.voucher, func(channelID datatransfer.ChannelID, voucher datatransfer.Voucher, transport datatransfer.Transport) {
+					ft, ok := transport.(*testutil.FakeTransport)
+					if !ok {
+						return
+					}
+					ft.RecordCustomizedTransfer(channelID, voucher)
+				})
+				require.NoError(t, err)
+				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
+				require.Len(t, h.transport.CustomizedTransfers, 1)
+				customizedTransfer := h.transport.CustomizedTransfers[0]
+				require.Equal(t, channelID(h.id, h.peers), customizedTransfer.ChannelID)
+				require.Equal(t, h.voucher, customizedTransfer.Voucher)
+			},
+		},
+		"new pull request, customized transport": {
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept},
+			configureValidator: func(sv *testutil.StubbedValidator) {
+				sv.ExpectSuccessPull()
+			},
+			verify: func(t *testing.T, h *receiverHarness) {
+				err := h.dt.RegisterTransportConfigurer(h.voucher, func(channelID datatransfer.ChannelID, voucher datatransfer.Voucher, transport datatransfer.Transport) {
+					ft, ok := transport.(*testutil.FakeTransport)
+					if !ok {
+						return
+					}
+					ft.RecordCustomizedTransfer(channelID, voucher)
+				})
+				require.NoError(t, err)
+				_, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				require.NoError(t, err)
+				require.Len(t, h.transport.CustomizedTransfers, 1)
+				customizedTransfer := h.transport.CustomizedTransfers[0]
+				require.Equal(t, channelID(h.id, h.peers), customizedTransfer.ChannelID)
+				require.Equal(t, h.voucher, customizedTransfer.Voucher)
+			},
+		},
 	}
 	for testCase, verify := range testCases {
 		t.Run(testCase, func(t *testing.T) {

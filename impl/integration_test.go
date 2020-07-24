@@ -15,8 +15,17 @@ import (
 	"github.com/filecoin-project/go-data-transfer/testutil"
 	tp "github.com/filecoin-project/go-data-transfer/transport/graphsync"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
+	"github.com/ipfs/go-blockservice"
+	"github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/namespace"
+	dss "github.com/ipfs/go-datastore/sync"
 	"github.com/ipfs/go-graphsync"
 	gsmsg "github.com/ipfs/go-graphsync/message"
+	"github.com/ipfs/go-graphsync/storeutil"
+	bstore "github.com/ipfs/go-ipfs-blockstore"
+	offline "github.com/ipfs/go-ipfs-exchange-offline"
+	ipldformat "github.com/ipfs/go-ipld-format"
+	"github.com/ipfs/go-merkledag"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -26,11 +35,40 @@ import (
 
 func TestRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	testCases := map[string]bool{
-		"roundtrip for push requests": false,
-		"roundtrip for pull requests": true,
+	testCases := map[string]struct {
+		isPull            bool
+		customSourceStore bool
+		customTargetStore bool
+	}{
+		"roundtrip for push requests": {},
+		"roundtrip for pull requests": {
+			isPull: true,
+		},
+		"custom source, push": {
+			customSourceStore: true,
+		},
+		"custom source, pull": {
+			isPull:            true,
+			customSourceStore: true,
+		},
+		"custom dest, push": {
+			customTargetStore: true,
+		},
+		"custom dest, pull": {
+			isPull:            true,
+			customTargetStore: true,
+		},
+		"custom both sides, push": {
+			customSourceStore: true,
+			customTargetStore: true,
+		},
+		"custom both sides, pull": {
+			isPull:            true,
+			customSourceStore: true,
+			customTargetStore: true,
+		},
 	}
-	for testCase, isPull := range testCases {
+	for testCase, data := range testCases {
 		t.Run(testCase, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
@@ -39,8 +77,6 @@ func TestRoundTrip(t *testing.T) {
 			host1 := gsData.Host1 // initiator, data sender
 			host2 := gsData.Host2 // data recipient
 
-			root := gsData.LoadUnixFSFile(t, false)
-			rootCid := root.(cidlink.Link).Cid
 			tp1 := gsData.SetupGSTransportHost1()
 			tp2 := gsData.SetupGSTransportHost2()
 
@@ -52,6 +88,7 @@ func TestRoundTrip(t *testing.T) {
 			require.NoError(t, err)
 			err = dt2.Start(ctx)
 			require.NoError(t, err)
+
 			finished := make(chan struct{}, 2)
 			errChan := make(chan struct{}, 2)
 			opened := make(chan struct{}, 2)
@@ -80,8 +117,50 @@ func TestRoundTrip(t *testing.T) {
 			voucher := testutil.FakeDTType{Data: "applesauce"}
 			sv := testutil.NewStubbedValidator()
 
+			var sourceDagService ipldformat.DAGService
+			if data.customSourceStore {
+				ds := dss.MutexWrap(datastore.NewMapDatastore())
+				bs := bstore.NewBlockstore(namespace.Wrap(ds, datastore.NewKey("blockstore")))
+				loader := storeutil.LoaderForBlockstore(bs)
+				storer := storeutil.StorerForBlockstore(bs)
+				sourceDagService = merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
+				dt1.RegisterTransportConfigurer(&testutil.FakeDTType{}, func(channelID datatransfer.ChannelID, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+					fv, ok := testVoucher.(*testutil.FakeDTType)
+					if ok && fv.Data == voucher.Data {
+						gsTransport, ok := transport.(*tp.Transport)
+						if ok {
+							gsTransport.UseStore(channelID, loader, storer)
+						}
+					}
+				})
+			} else {
+				sourceDagService = gsData.DagService1
+			}
+			root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService)
+			rootCid := root.(cidlink.Link).Cid
+
+			var destDagService ipldformat.DAGService
+			if data.customSourceStore {
+				ds := dss.MutexWrap(datastore.NewMapDatastore())
+				bs := bstore.NewBlockstore(namespace.Wrap(ds, datastore.NewKey("blockstore")))
+				loader := storeutil.LoaderForBlockstore(bs)
+				storer := storeutil.StorerForBlockstore(bs)
+				destDagService = merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
+				dt2.RegisterTransportConfigurer(&testutil.FakeDTType{}, func(channelID datatransfer.ChannelID, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+					fv, ok := testVoucher.(*testutil.FakeDTType)
+					if ok && fv.Data == voucher.Data {
+						gsTransport, ok := transport.(*tp.Transport)
+						if ok {
+							gsTransport.UseStore(channelID, loader, storer)
+						}
+					}
+				})
+			} else {
+				destDagService = gsData.DagService2
+			}
+
 			var chid datatransfer.ChannelID
-			if isPull {
+			if data.isPull {
 				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
@@ -112,8 +191,8 @@ func TestRoundTrip(t *testing.T) {
 				}
 			}
 			require.Equal(t, sentIncrements, receivedIncrements)
-			gsData.VerifyFileTransferred(t, root, true)
-			if isPull {
+			testutil.VerifyHasFile(ctx, t, destDagService, root, origBytes)
+			if data.isPull {
 				assert.Equal(t, chid.Initiator, host2.ID())
 			} else {
 				assert.Equal(t, chid.Initiator, host1.ID())

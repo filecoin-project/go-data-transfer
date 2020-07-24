@@ -26,15 +26,16 @@ import (
 var log = logging.Logger("dt-impl")
 
 type manager struct {
-	dataTransferNetwork network.DataTransferNetwork
-	validatedTypes      *registry.Registry
-	resultTypes         *registry.Registry
-	revalidators        *registry.Registry
-	pubSub              *pubsub.PubSub
-	channels            *channels.Channels
-	peerID              peer.ID
-	transport           datatransfer.Transport
-	storedCounter       *storedcounter.StoredCounter
+	dataTransferNetwork  network.DataTransferNetwork
+	validatedTypes       *registry.Registry
+	resultTypes          *registry.Registry
+	revalidators         *registry.Registry
+	transportConfigurers *registry.Registry
+	pubSub               *pubsub.PubSub
+	channels             *channels.Channels
+	peerID               peer.ID
+	transport            datatransfer.Transport
+	storedCounter        *storedcounter.StoredCounter
 }
 
 type internalEvent struct {
@@ -58,14 +59,15 @@ func dispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
 // NewDataTransfer initializes a new instance of a data transfer manager
 func NewDataTransfer(ds datastore.Datastore, dataTransferNetwork network.DataTransferNetwork, transport datatransfer.Transport, storedCounter *storedcounter.StoredCounter) (datatransfer.Manager, error) {
 	m := &manager{
-		dataTransferNetwork: dataTransferNetwork,
-		validatedTypes:      registry.NewRegistry(),
-		resultTypes:         registry.NewRegistry(),
-		revalidators:        registry.NewRegistry(),
-		pubSub:              pubsub.New(dispatcher),
-		peerID:              dataTransferNetwork.ID(),
-		transport:           transport,
-		storedCounter:       storedCounter,
+		dataTransferNetwork:  dataTransferNetwork,
+		validatedTypes:       registry.NewRegistry(),
+		resultTypes:          registry.NewRegistry(),
+		revalidators:         registry.NewRegistry(),
+		transportConfigurers: registry.NewRegistry(),
+		pubSub:               pubsub.New(dispatcher),
+		peerID:               dataTransferNetwork.ID(),
+		transport:            transport,
+		storedCounter:        storedCounter,
 	}
 	channels, err := channels.New(ds, m.notifier, m.voucherDecoder, m.resultTypes.Decoder, &channelEnvironment{m})
 	if err != nil {
@@ -128,6 +130,11 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 	if err != nil {
 		return chid, err
 	}
+	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	if has {
+		transportConfigurer := processor.(datatransfer.TransportConfigurer)
+		transportConfigurer(chid, voucher, m.transport)
+	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	if err := m.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
@@ -149,6 +156,11 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 		m.peerID, requestTo, m.peerID)
 	if err != nil {
 		return chid, err
+	}
+	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	if has {
+		transportConfigurer := processor.(datatransfer.TransportConfigurer)
+		transportConfigurer(chid, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, req); err != nil {
@@ -275,6 +287,16 @@ func (m *manager) RegisterVoucherResultType(resultType datatransfer.VoucherResul
 	err := m.resultTypes.Register(resultType, nil)
 	if err != nil {
 		return xerrors.Errorf("error registering voucher type: %w", err)
+	}
+	return nil
+}
+
+// RegisterTransportConfigurer registers the given transport configurer to be run on requests with the given voucher
+// type
+func (m *manager) RegisterTransportConfigurer(voucherType datatransfer.Voucher, configurer datatransfer.TransportConfigurer) error {
+	err := m.transportConfigurers.Register(voucherType, configurer)
+	if err != nil {
+		return xerrors.Errorf("error registering transport configurer: %w", err)
 	}
 	return nil
 }

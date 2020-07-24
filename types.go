@@ -1,7 +1,6 @@
 package datatransfer
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/filecoin-project/go-data-transfer/encoding"
@@ -129,48 +128,4 @@ type ChannelState interface {
 
 	// LastVoucherResult returns the last voucher result sent on the channel
 	LastVoucherResult() VoucherResult
-}
-
-// RequestValidator is an interface implemented by the client of the
-// data transfer module to validate requests
-type RequestValidator interface {
-	// ValidatePush validates a push request received from the peer that will send data
-	ValidatePush(
-		sender peer.ID,
-		voucher Voucher,
-		baseCid cid.Cid,
-		selector ipld.Node) (VoucherResult, error)
-	// ValidatePull validates a pull request received from the peer that will receive data
-	ValidatePull(
-		receiver peer.ID,
-		voucher Voucher,
-		baseCid cid.Cid,
-		selector ipld.Node) (VoucherResult, error)
-}
-
-// ErrRetryValidation is a special error that the a revalidator can return
-// for ValidatePush/ValidatePull that will not fail the request
-// but send the voucher result back and await another attempt
-var ErrRetryValidation = errors.New("Retry Revalidation")
-
-// Revalidator is a request validator revalidates in progress requests
-// by requesting request additional vouchers, and resuming when it receives them
-type Revalidator interface {
-	// Revalidate revalidates a request with a new voucher
-	Revalidate(channelID ChannelID, voucher Voucher) (VoucherResult, error)
-	// OnPullDataSent is called on the responder side when more bytes are sent
-	// for a given pull request. It should return a VoucherResult + ErrPause to
-	// request revalidation or nil to continue uninterrupted,
-	// other errors will terminate the request
-	OnPullDataSent(chid ChannelID, additionalBytesSent uint64) (VoucherResult, error)
-	// OnPushDataReceived is called on the responder side when more bytes are received
-	// for a given push request.  It should return a VoucherResult + ErrPause to
-	// request revalidation or nil to continue uninterrupted,
-	// other errors will terminate the request
-	OnPushDataReceived(chid ChannelID, additionalBytesReceived uint64) (VoucherResult, error)
-	// OnComplete is called to make a final request for revalidation -- often for the
-	// purpose of settlement.
-	// if VoucherResult is non nil, the request will enter a settlement phase awaiting
-	// a final update
-	OnComplete(chid ChannelID) (VoucherResult, error)
 }
