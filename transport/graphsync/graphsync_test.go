@@ -669,7 +669,7 @@ func TestManager(t *testing.T) {
 				storer := func(ipld.LinkContext) (io.Writer, ipld.StoreCommitter, error) {
 					return nil, nil, nil
 				}
-				gsData.transport.UseStore(datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self}, loader, storer)
+				_ = gsData.transport.UseStore(datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self}, loader, storer)
 				gsData.outgoingRequestHook()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
@@ -688,7 +688,7 @@ func TestManager(t *testing.T) {
 				storer := func(ipld.LinkContext) (io.Writer, ipld.StoreCommitter, error) {
 					return nil, nil, nil
 				}
-				gsData.transport.UseStore(datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other}, loader, storer)
+				_ = gsData.transport.UseStore(datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other}, loader, storer)
 				gsData.incomingRequestHook()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {

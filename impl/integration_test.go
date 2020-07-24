@@ -124,15 +124,17 @@ func TestRoundTrip(t *testing.T) {
 				loader := storeutil.LoaderForBlockstore(bs)
 				storer := storeutil.StorerForBlockstore(bs)
 				sourceDagService = merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
-				dt1.RegisterTransportConfigurer(&testutil.FakeDTType{}, func(channelID datatransfer.ChannelID, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+				err := dt1.RegisterTransportConfigurer(&testutil.FakeDTType{}, func(channelID datatransfer.ChannelID, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
 					fv, ok := testVoucher.(*testutil.FakeDTType)
 					if ok && fv.Data == voucher.Data {
 						gsTransport, ok := transport.(*tp.Transport)
 						if ok {
-							gsTransport.UseStore(channelID, loader, storer)
+							err := gsTransport.UseStore(channelID, loader, storer)
+							require.NoError(t, err)
 						}
 					}
 				})
+				require.NoError(t, err)
 			} else {
 				sourceDagService = gsData.DagService1
 			}
@@ -146,15 +148,17 @@ func TestRoundTrip(t *testing.T) {
 				loader := storeutil.LoaderForBlockstore(bs)
 				storer := storeutil.StorerForBlockstore(bs)
 				destDagService = merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
-				dt2.RegisterTransportConfigurer(&testutil.FakeDTType{}, func(channelID datatransfer.ChannelID, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+				err := dt2.RegisterTransportConfigurer(&testutil.FakeDTType{}, func(channelID datatransfer.ChannelID, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
 					fv, ok := testVoucher.(*testutil.FakeDTType)
 					if ok && fv.Data == voucher.Data {
 						gsTransport, ok := transport.(*tp.Transport)
 						if ok {
-							gsTransport.UseStore(channelID, loader, storer)
+							err := gsTransport.UseStore(channelID, loader, storer)
+							require.NoError(t, err)
 						}
 					}
 				})
+				require.NoError(t, err)
 			} else {
 				destDagService = gsData.DagService2
 			}
