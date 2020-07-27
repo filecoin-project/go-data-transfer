@@ -142,7 +142,7 @@ func TestRoundTrip(t *testing.T) {
 			rootCid := root.(cidlink.Link).Cid
 
 			var destDagService ipldformat.DAGService
-			if data.customSourceStore {
+			if data.customTargetStore {
 				ds := dss.MutexWrap(datastore.NewMapDatastore())
 				bs := bstore.NewBlockstore(namespace.Wrap(ds, datastore.NewKey("blockstore")))
 				loader := storeutil.LoaderForBlockstore(bs)
