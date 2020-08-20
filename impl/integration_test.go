@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/filecoin-project/go-storedcounter"
+
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
 	. "github.com/filecoin-project/go-data-transfer/impl"
@@ -35,7 +37,6 @@ import (
 	"github.com/filecoin-project/go-data-transfer/testutil"
 	tp "github.com/filecoin-project/go-data-transfer/transport/graphsync"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
-	"github.com/filecoin-project/go-storedcounter"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -566,12 +567,11 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 						go func() {
 							select {
 							case <-ctx.Done():
-								t.Fatal("timer did not complete")
 							case <-timer.C:
 								if data.isPull {
-									dt1.CloseDataTransferChannel(ctx, chid)
+									_ = dt1.CloseDataTransferChannel(ctx, chid)
 								} else {
-									dt2.CloseDataTransferChannel(ctx, chid)
+									_ = dt2.CloseDataTransferChannel(ctx, chid)
 								}
 							}
 						}()
