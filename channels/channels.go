@@ -261,14 +261,3 @@ func (c *Channels) send(chid datatransfer.ChannelID, code datatransfer.EventCode
 	}
 	return c.statemachines.Send(chid, code, args...)
 }
-
-func (c *Channels) sendSync(ctx context.Context, chid datatransfer.ChannelID, code datatransfer.EventCode, args ...interface{}) error {
-	has, err := c.statemachines.Has(chid)
-	if err != nil {
-		return err
-	}
-	if !has {
-		return ErrNotFound
-	}
-	return c.statemachines.SendSync(ctx, chid, code, args...)
-}

@@ -109,7 +109,7 @@ func (m *manager) Stop(ctx context.Context) error {
 	}
 
 	var result error
-	for chid, _ := range openChannels {
+	for chid := range openChannels {
 		if err := m.CloseDataTransferChannel(ctx, chid); err != nil {
 			result = multierror.Append(result, xerrors.Errorf("error closing channel with ID %v, err: %w", chid, err))
 		}
