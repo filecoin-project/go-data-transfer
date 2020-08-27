@@ -131,7 +131,7 @@ func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selec
 }
 
 // InProgress returns a list of in progress channels
-func (c *Channels) InProgress(ctx context.Context) (map[datatransfer.ChannelID]datatransfer.ChannelState, error) {
+func (c *Channels) InProgress() (map[datatransfer.ChannelID]datatransfer.ChannelState, error) {
 	var internalChannels []internalChannelState
 	err := c.statemachines.List(&internalChannels)
 	if err != nil {
