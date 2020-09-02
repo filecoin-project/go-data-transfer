@@ -43,6 +43,9 @@ type channelState struct {
 	voucherResults       []encodedVoucherResult
 	voucherResultDecoder DecoderByTypeFunc
 	voucherDecoder       DecoderByTypeFunc
+
+	receivedCids []cid.Cid
+	sentCids     []cid.Cid
 }
 
 // EmptyChannelState is the zero value for channel state, meaning not present
@@ -80,6 +83,11 @@ func (c channelState) Voucher() datatransfer.Voucher {
 	decoder, _ := c.voucherDecoder(c.vouchers[0].Type)
 	encodable, _ := decoder.DecodeFromCbor(c.vouchers[0].Voucher.Raw)
 	return encodable.(datatransfer.Voucher)
+}
+
+// ReceivedCids returns the cids received so far on this channel
+func (c channelState) ReceivedCids() []cid.Cid {
+	return c.receivedCids
 }
 
 // Sender returns the peer id for the node that is sending data

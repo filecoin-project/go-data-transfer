@@ -51,6 +51,11 @@ type internalChannelState struct {
 	Message        string
 	Vouchers       []encodedVoucher
 	VoucherResults []encodedVoucherResult
+
+	// ReceivedCids is all the cids the initiator has received so far
+	ReceivedCids []cid.Cid
+	// SentCids is all the cids the initiator has sent so far
+	SentCids []cid.Cid
 }
 
 func (c internalChannelState) ToChannelState(voucherDecoder DecoderByTypeFunc, voucherResultDecoder DecoderByTypeFunc) datatransfer.ChannelState {
@@ -70,5 +75,8 @@ func (c internalChannelState) ToChannelState(voucherDecoder DecoderByTypeFunc, v
 		voucherResults:       c.VoucherResults,
 		voucherResultDecoder: voucherResultDecoder,
 		voucherDecoder:       voucherDecoder,
+
+		receivedCids: c.ReceivedCids,
+		sentCids:     c.SentCids,
 	}
 }

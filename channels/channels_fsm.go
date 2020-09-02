@@ -1,6 +1,7 @@
 package channels
 
 import (
+	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
@@ -10,6 +11,13 @@ import (
 )
 
 var log = logging.Logger("data-transfer")
+
+type DataTransferDir int
+
+const (
+	Inward DataTransferDir = iota
+	Outward
+)
 
 // ChannelEvents describe the events taht can
 var ChannelEvents = fsm.Events{
@@ -23,9 +31,15 @@ var ChannelEvents = fsm.Events{
 		datatransfer.ResponderPaused,
 		datatransfer.BothPaused,
 		datatransfer.ResponderCompleted,
-		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, deltaSent uint64, deltaReceived uint64) error {
-		chst.Received += deltaReceived
-		chst.Sent += deltaSent
+		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, dir DataTransferDir, delta uint64, c cid.Cid) error {
+		if dir == Outward {
+			chst.Sent += delta
+			chst.SentCids = append(chst.SentCids, c)
+		} else {
+			chst.Received += delta
+			chst.ReceivedCids = append(chst.ReceivedCids, c)
+		}
+
 		return nil
 	}),
 	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failing).Action(func(chst *internalChannelState, err error) error {

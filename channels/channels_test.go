@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
@@ -113,40 +114,59 @@ func TestChannels(t *testing.T) {
 	})
 
 	t.Run("updating send/receive values", func(t *testing.T) {
-		state, err := channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
+		ds := datastore.NewMapDatastore()
+		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{})
 		require.NoError(t, err)
+
+		_, err = channelList.CreateNew(tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
+		require.NoError(t, err)
+		state := checkEvent(ctx, t, received, datatransfer.Open)
+		require.Equal(t, datatransfer.Requested, state.Status())
 		require.Equal(t, uint64(0), state.Received())
 		require.Equal(t, uint64(0), state.Sent())
+		require.Empty(t, state.ReceivedCids())
 
-		err = channelList.IncrementReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, 50)
+		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[0], 50)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.Progress)
 		require.Equal(t, uint64(50), state.Received())
 		require.Equal(t, uint64(0), state.Sent())
+		require.Equal(t, []cid.Cid{cids[0]}, state.ReceivedCids())
 
-		err = channelList.IncrementSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, 100)
+		err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 100)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.Progress)
 		require.Equal(t, uint64(50), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
+		require.Equal(t, []cid.Cid{cids[0]}, state.ReceivedCids())
 
 		// errors if channel does not exist
-		err = channelList.IncrementReceived(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, 200)
+		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200)
 		require.EqualError(t, err, channels.ErrNotFound.Error())
-		err = channelList.IncrementSent(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, 200)
+		err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200)
 		require.EqualError(t, err, channels.ErrNotFound.Error())
+		require.Equal(t, []cid.Cid{cids[0]}, state.ReceivedCids())
 
-		err = channelList.IncrementReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, 50)
+		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 50)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.Progress)
 		require.Equal(t, uint64(100), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
+		require.Equal(t, []cid.Cid{cids[0], cids[1]}, state.ReceivedCids())
 
-		err = channelList.IncrementSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, 25)
+		err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 25)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.Progress)
 		require.Equal(t, uint64(100), state.Received())
 		require.Equal(t, uint64(125), state.Sent())
+		require.Equal(t, []cid.Cid{cids[0], cids[1]}, state.ReceivedCids())
+
+		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[0], 50)
+		require.NoError(t, err)
+		state = checkEvent(ctx, t, received, datatransfer.Progress)
+		require.Equal(t, uint64(150), state.Received())
+		require.Equal(t, uint64(125), state.Sent())
+		require.Equal(t, []cid.Cid{cids[0], cids[1], cids[0]}, state.ReceivedCids())
 	})
 
 	t.Run("pause/resume", func(t *testing.T) {
