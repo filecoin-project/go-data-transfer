@@ -12,36 +12,39 @@ import (
 
 var log = logging.Logger("data-transfer")
 
-type DataTransferDir int
-
-const (
-	Inward DataTransferDir = iota
-	Outward
-)
-
 // ChannelEvents describe the events taht can
 var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.Open).FromAny().To(datatransfer.Requested),
 	fsm.Event(datatransfer.Accept).From(datatransfer.Requested).To(datatransfer.Ongoing),
 	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelling),
-	fsm.Event(datatransfer.Progress).FromMany(
+
+	fsm.Event(datatransfer.DataReceived).FromMany(
 		datatransfer.Requested,
 		datatransfer.Ongoing,
 		datatransfer.InitiatorPaused,
 		datatransfer.ResponderPaused,
 		datatransfer.BothPaused,
 		datatransfer.ResponderCompleted,
-		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, dir DataTransferDir, delta uint64, c cid.Cid) error {
-		if dir == Outward {
-			chst.Sent += delta
-			chst.SentCids = append(chst.SentCids, c)
-		} else {
-			chst.Received += delta
-			chst.ReceivedCids = append(chst.ReceivedCids, c)
-		}
+		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, delta uint64, c cid.Cid) error {
+		chst.Received += delta
+		chst.ReceivedCids = append(chst.ReceivedCids, c)
+		return nil
+	}),
+
+	fsm.Event(datatransfer.DataSent).FromMany(
+		datatransfer.Requested,
+		datatransfer.Ongoing,
+		datatransfer.InitiatorPaused,
+		datatransfer.ResponderPaused,
+		datatransfer.BothPaused,
+		datatransfer.ResponderCompleted,
+		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, delta uint64, c cid.Cid) error {
+		chst.Sent += delta
+		chst.SentCids = append(chst.SentCids, c)
 
 		return nil
 	}),
+
 	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failing).Action(func(chst *internalChannelState, err error) error {
 		chst.Message = err.Error()
 		return nil

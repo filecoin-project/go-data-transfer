@@ -164,11 +164,11 @@ func (c *Channels) Accept(chid datatransfer.ChannelID) error {
 }
 
 func (c *Channels) DataSent(chid datatransfer.ChannelID, cid cid.Cid, delta uint64) error {
-	return c.send(chid, datatransfer.Progress, Outward, delta, cid)
+	return c.send(chid, datatransfer.DataSent, delta, cid)
 }
 
 func (c *Channels) DataReceived(chid datatransfer.ChannelID, cid cid.Cid, delta uint64) error {
-	return c.send(chid, datatransfer.Progress, Inward, delta, cid)
+	return c.send(chid, datatransfer.DataReceived, delta, cid)
 }
 
 // PauseInitiator pauses the initator of this channel
