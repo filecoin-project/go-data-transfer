@@ -58,3 +58,7 @@ func (fn *FakeNetwork) Protect(id peer.ID, tag string) {
 func (fn *FakeNetwork) Unprotect(id peer.ID, tag string) bool {
 	return false
 }
+
+func (fn *FakeNetwork) StopAcceptingRequests() {
+
+}

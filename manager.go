@@ -111,4 +111,7 @@ type Manager interface {
 
 	// RestartDataTransferChannel restarts an existing data transfer channel
 	RestartDataTransferChannel(ctx context.Context, chid ChannelID) error
+
+	// ShutDown shuts down the manager but retains the channel states
+	ShutDown(ctx context.Context) error
 }

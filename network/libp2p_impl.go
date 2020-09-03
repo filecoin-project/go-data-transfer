@@ -74,6 +74,10 @@ func (dtnet *libp2pDataTransferNetwork) ConnectTo(ctx context.Context, p peer.ID
 	return dtnet.host.Connect(ctx, peer.AddrInfo{ID: p})
 }
 
+func (dtnet *libp2pDataTransferNetwork) StopAcceptingRequests() {
+	dtnet.host.RemoveStreamHandler(ProtocolDataTransfer)
+}
+
 // handleNewStream receives a new stream from the network.
 func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 	defer s.Close() // nolint: errcheck,gosec

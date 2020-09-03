@@ -29,6 +29,9 @@ type DataTransferNetwork interface {
 	// network.
 	SetDelegate(Receiver)
 
+	// StopAcceptingRequests stops accepting requests on the protocol
+	StopAcceptingRequests()
+
 	// ConnectTo establishes a connection to the given peer
 	ConnectTo(context.Context, peer.ID) error
 

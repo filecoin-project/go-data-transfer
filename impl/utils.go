@@ -34,11 +34,11 @@ func (m *manager) newRequest(selector ipld.Node, isPull bool, voucher datatransf
 		return nil, err
 	}
 	tid := datatransfer.TransferID(next)
-	return message.NewRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
+	return message.NewRequest(false, tid, isPull, voucher.Type(), voucher, baseCid, selector)
 }
 
 func (m *manager) restartRequest(tid datatransfer.TransferID, selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid) (datatransfer.Request, error) {
-	return message.RestartRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
+	return message.NewRequest(true, tid, isPull, voucher.Type(), voucher, baseCid, selector)
 }
 
 func (m *manager) response(isNew bool, isRestart bool, err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {

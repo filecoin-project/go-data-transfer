@@ -118,6 +118,29 @@ func (m *manager) Stop(ctx context.Context) error {
 	return result
 }
 
+// ShutDown shuts-down the channels state machine
+func (m *manager) ShutDown(ctx context.Context) error {
+	if err := m.channels.Stop(ctx); err != nil {
+		return err
+	}
+
+	openChannels, err := m.channels.InProgress()
+	if err != nil {
+		return xerrors.Errorf("error getting channels in progress: %w", err)
+	}
+
+	for chid := range openChannels {
+		err = m.transport.CloseChannel(ctx, chid)
+		if err != nil {
+			return err
+		}
+	}
+
+	m.dataTransferNetwork.StopAcceptingRequests()
+
+	return nil
+}
+
 // RegisterVoucherType registers a validator for the given voucher type
 // returns error if:
 // * voucher type does not implement voucher
@@ -345,8 +368,8 @@ func (m *manager) RestartDataTransferChannel(ctx context.Context, chid datatrans
 	// initiate restart
 	switch chType {
 	case ManagerPeerCreatePull:
-		return m.restartManagerPeerCreatePull(ctx, channel)
 		// other side needs to validate
+		return m.restartManagerPeerCreatePull(ctx, channel)
 	case ManagerPeerReceivePull:
 		// I need to validate
 	case ManagerPeerReceivePush:

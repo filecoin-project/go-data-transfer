@@ -87,7 +87,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
 		voucher := testutil.NewFakeDTType()
-		request, err := message.NewRequest(id, isPull, voucher.Type(), voucher, baseCid, selector)
+		request, err := message.NewRequest(false, id, isPull, voucher.Type(), voucher, baseCid, selector)
 		require.NoError(t, err)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 
