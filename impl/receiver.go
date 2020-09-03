@@ -43,7 +43,7 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 	if response != nil {
 		if response.IsNew() && response.Accepted() && !incoming.IsPull() {
 			stor, _ := incoming.Selector()
-			if err := r.manager.transport.OpenChannel(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, response); err != nil {
+			if err := r.manager.transport.OpenChannel(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, nil, response); err != nil {
 				return err
 			}
 		} else {

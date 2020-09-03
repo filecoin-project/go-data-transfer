@@ -123,3 +123,14 @@ var ChannelFinalityStates = []fsm.StateKey{
 	datatransfer.Completed,
 	datatransfer.Failed,
 }
+
+// IsChannelTerminated returns true if the channel is in a finality state
+func IsChannelTerminated(st datatransfer.Status) bool {
+	for _, s := range ChannelFinalityStates {
+		if s == st {
+			return true
+		}
+	}
+
+	return false
+}

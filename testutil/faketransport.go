@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 
+	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p-core/peer"
 
@@ -56,7 +57,7 @@ func NewFakeTransport() *FakeTransport {
 // Note: from a data transfer symantic standpoint, it doesn't matter if the
 // request is push or pull -- OpenChannel is called by the party that is
 // intending to receive data
-func (ft *FakeTransport) OpenChannel(ctx context.Context, dataSender peer.ID, channelID datatransfer.ChannelID, root ipld.Link, stor ipld.Node, msg datatransfer.Message) error {
+func (ft *FakeTransport) OpenChannel(ctx context.Context, dataSender peer.ID, channelID datatransfer.ChannelID, root ipld.Link, stor ipld.Node, dns *cid.Set, msg datatransfer.Message) error {
 	ft.OpenedChannels = append(ft.OpenedChannels, OpenedChannel{dataSender, channelID, root, stor, msg})
 	return ft.OpenChannelErr
 }

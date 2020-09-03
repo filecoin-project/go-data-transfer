@@ -27,6 +27,7 @@ type Message interface {
 // Request is a response message for the data transfer protocol
 type Request interface {
 	Message
+	IsRestart() bool
 	IsPull() bool
 	IsVoucher() bool
 	VoucherType() TypeIdentifier

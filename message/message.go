@@ -21,6 +21,7 @@ const (
 	completeMessage
 	voucherMessage
 	voucherResultMessage
+	restartMessage
 )
 
 // NewRequest generates a new request for the data transfer protocol
@@ -38,6 +39,30 @@ func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.Type
 	}
 	return &transferRequest{
 		Type:   uint64(newMessage),
+		Pull:   isPull,
+		Vouch:  &cborgen.Deferred{Raw: vbytes},
+		Stor:   &cborgen.Deferred{Raw: selBytes},
+		BCid:   &baseCid,
+		VTyp:   vtype,
+		XferID: uint64(id),
+	}, nil
+}
+
+// RestartRequest generates a restart request for the data transfer protocol
+func RestartRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
+	vbytes, err := encoding.Encode(voucher)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
+	if baseCid == cid.Undef {
+		return nil, xerrors.Errorf("base CID must be defined")
+	}
+	selBytes, err := encoding.Encode(selector)
+	if err != nil {
+		return nil, xerrors.Errorf("Error encoding selector")
+	}
+	return &transferRequest{
+		Type:   uint64(restartMessage),
 		Pull:   isPull,
 		Vouch:  &cborgen.Deferred{Raw: vbytes},
 		Stor:   &cborgen.Deferred{Raw: selBytes},

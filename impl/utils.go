@@ -1,11 +1,8 @@
 package impl
 
 import (
-	"context"
-
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -31,13 +28,17 @@ var resumeTransportStatesResponder = statusList{
 }
 
 // newRequest encapsulates message creation
-func (m *manager) newRequest(ctx context.Context, selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid, to peer.ID) (datatransfer.Request, error) {
+func (m *manager) newRequest(selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid) (datatransfer.Request, error) {
 	next, err := m.storedCounter.Next()
 	if err != nil {
 		return nil, err
 	}
 	tid := datatransfer.TransferID(next)
 	return message.NewRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
+}
+
+func (m *manager) restartRequest(tid datatransfer.TransferID, selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid) (datatransfer.Request, error) {
+	return message.RestartRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
 }
 
 func (m *manager) response(isNew bool, err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {

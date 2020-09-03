@@ -134,7 +134,7 @@ func (m *manager) RegisterVoucherType(voucherType datatransfer.Voucher, validato
 // OpenPushDataChannel opens a data transfer that will send data to the recipient peer and
 // transfer parts of the piece that match the selector
 func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.ChannelID, error) {
-	req, err := m.newRequest(ctx, selector, false, voucher, baseCid, requestTo)
+	req, err := m.newRequest(selector, false, voucher, baseCid)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
@@ -161,7 +161,7 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 // OpenPullDataChannel opens a data transfer that will request data from the sending peer and
 // transfer parts of the piece that match the selector
 func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.ChannelID, error) {
-	req, err := m.newRequest(ctx, selector, true, voucher, baseCid, requestTo)
+	req, err := m.newRequest(selector, true, voucher, baseCid)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
@@ -177,7 +177,7 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 		transportConfigurer(chid, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
-	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, req); err != nil {
+	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, nil, req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.channels.Error(chid, err)
 		return chid, err
@@ -312,5 +312,49 @@ func (m *manager) RegisterTransportConfigurer(voucherType datatransfer.Voucher, 
 	if err != nil {
 		return xerrors.Errorf("error registering transport configurer: %w", err)
 	}
+	return nil
+}
+
+// RestartDataTransferChannel restarts an existing data transfer channel
+// returns an error if the channel does not exist
+func (m *manager) RestartDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	channel, err := m.channels.GetByID(ctx, chid)
+	if err != nil {
+		return xerrors.Errorf("failed to fetch channel for restart: %w", err)
+	}
+
+	// if channel has already been completed, there is nothing to do.
+	// TODO We could be in a state where the channel has completed but the corresponding event hasnt fired in the client/provider.
+	for _, s := range channels.ChannelFinalityStates {
+		if channel.Status() == s {
+			return nil
+		}
+	}
+
+	// discern restart type
+	var chType RestartChannelType
+	if channel.IsPull() && channel.Recipient() == m.peerID {
+		chType = ManagerPeerCreatePull
+	} else if channel.IsPull() && channel.Sender() == m.peerID {
+		// I need to validate
+		chType = ManagerPeerReceivePull
+	} else if !channel.IsPull() && channel.Recipient() == m.peerID {
+		chType = ManagerPeerReceivePush
+	} else {
+		chType = ManagerPeerCreatePush
+	}
+
+	// initiate restart
+	switch chType {
+	case ManagerPeerCreatePull:
+		// other side needs to validate
+	case ManagerPeerReceivePull:
+		// I need to validate
+	case ManagerPeerReceivePush:
+		// I need to validate
+	case ManagerPeerCreatePush:
+		// other side needs to validate
+	}
+
 	return nil
 }
