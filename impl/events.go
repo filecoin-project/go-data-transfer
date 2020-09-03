@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/filecoin-project/go-data-transfer/channels"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -72,6 +73,10 @@ func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size u
 }
 
 func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
+	if request.IsRestart() {
+		return m.receiveRestartRequest(chid, request)
+	}
+
 	if request.IsNew() {
 		return m.receiveNewRequest(chid.Initiator, request)
 	}
@@ -124,6 +129,11 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 				return err
 			}
 		}
+		if response.IsRestart() {
+			if err := m.channels.Restart(chid); err != nil {
+				return err
+			}
+		}
 	}
 	if response.IsComplete() && response.Accepted() {
 		if !response.IsPaused() {
@@ -166,15 +176,78 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, success bool) 
 	return m.channels.Error(chid, errors.New("incomplete response"))
 }
 
-func (m *manager) receiveNewRequest(
-	initiator peer.ID,
-	incoming datatransfer.Request) (datatransfer.Response, error) {
-	result, err := m.acceptRequest(initiator, incoming)
-	msg, msgErr := m.response(true, err, incoming.TransferID(), result)
+func (m *manager) receiveRestartRequest(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
+	result, err := m.acceptRestartRequest(chid, request)
+	msg, msgErr := m.response(false, true, err, request.TransferID(), result)
 	if msgErr != nil {
 		return nil, msgErr
 	}
 	return msg, err
+}
+
+func (m *manager) receiveNewRequest(
+	initiator peer.ID,
+	incoming datatransfer.Request) (datatransfer.Response, error) {
+	result, err := m.acceptRequest(initiator, incoming)
+	msg, msgErr := m.response(true, false, err, incoming.TransferID(), result)
+	if msgErr != nil {
+		return nil, msgErr
+	}
+	return msg, err
+}
+
+func (m *manager) acceptRestartRequest(
+	chid datatransfer.ChannelID,
+	incoming datatransfer.Request) (datatransfer.VoucherResult, error) {
+
+	// verify channel exists in the correct state
+	channel, err := m.channels.GetByID(context.Background(), chid)
+	if err != nil {
+		return nil, err
+	}
+	if channels.IsChannelTerminated(channel.Status()) {
+		return nil, errors.New("channel already terminated")
+	}
+
+	stor, err := incoming.Selector()
+	if err != nil {
+		return nil, err
+	}
+
+	// validate the voucher
+	voucher, result, err := m.validateVoucher(chid.Initiator, incoming, incoming.IsPull(), incoming.BaseCid(), stor)
+	if err != nil && err != datatransfer.ErrPause {
+		return nil, err
+	}
+	voucherErr := err
+
+	if err := m.channels.Restart(chid); err != nil {
+		return result, err
+	}
+	if result != nil {
+		err := m.channels.NewVoucherResult(chid, result)
+		if err != nil {
+			return result, err
+		}
+	}
+
+	// configure the transport
+	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	if has {
+		transportConfigurer := processor.(datatransfer.TransportConfigurer)
+		transportConfigurer(chid, voucher, m.transport)
+	}
+
+	// protect connection with the channel initiator
+	m.dataTransferNetwork.Protect(chid.Initiator, chid.String())
+
+	if voucherErr == datatransfer.ErrPause {
+		err := m.channels.PauseResponder(chid)
+		if err != nil {
+			return result, err
+		}
+	}
+	return result, voucherErr
 }
 
 func (m *manager) acceptRequest(
@@ -295,7 +368,7 @@ func (m *manager) revalidationResponse(chid datatransfer.ChannelID, result datat
 	if chst.Status() == datatransfer.Finalizing {
 		return m.completeResponse(resultErr, chid.ID, result)
 	}
-	return m.response(false, resultErr, chid.ID, result)
+	return m.response(false, false, resultErr, chid.ID, result)
 }
 
 func (m *manager) processRevalidationResult(chid datatransfer.ChannelID, result datatransfer.VoucherResult, resultErr error) (datatransfer.Response, error) {

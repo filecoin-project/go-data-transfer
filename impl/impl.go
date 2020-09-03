@@ -325,10 +325,8 @@ func (m *manager) RestartDataTransferChannel(ctx context.Context, chid datatrans
 
 	// if channel has already been completed, there is nothing to do.
 	// TODO We could be in a state where the channel has completed but the corresponding event hasnt fired in the client/provider.
-	for _, s := range channels.ChannelFinalityStates {
-		if channel.Status() == s {
-			return nil
-		}
+	if channels.IsChannelTerminated(channel.Status()) {
+		return nil
 	}
 
 	// discern restart type
@@ -347,6 +345,7 @@ func (m *manager) RestartDataTransferChannel(ctx context.Context, chid datatrans
 	// initiate restart
 	switch chType {
 	case ManagerPeerCreatePull:
+		return m.restartManagerPeerCreatePull(ctx, channel)
 		// other side needs to validate
 	case ManagerPeerReceivePull:
 		// I need to validate

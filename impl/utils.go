@@ -41,7 +41,7 @@ func (m *manager) restartRequest(tid datatransfer.TransferID, selector ipld.Node
 	return message.RestartRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
 }
 
-func (m *manager) response(isNew bool, err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {
+func (m *manager) response(isNew bool, isRestart bool, err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {
 	isAccepted := err == nil || err == datatransfer.ErrPause
 	isPaused := err == datatransfer.ErrPause
 	resultType := datatransfer.EmptyTypeIdentifier
@@ -51,6 +51,10 @@ func (m *manager) response(isNew bool, err error, tid datatransfer.TransferID, v
 	if isNew {
 		return message.NewResponse(tid, isAccepted, isPaused, resultType, voucherResult)
 	}
+	if isRestart {
+		return message.RestartResponse(tid, isAccepted, isPaused, resultType, voucherResult)
+	}
+
 	return message.VoucherResultResponse(tid, isAccepted, isPaused, resultType, voucherResult)
 }
 

@@ -14,6 +14,7 @@ import (
 // (either request or response) that can serialize to a protobuf
 type Message interface {
 	IsRequest() bool
+	IsRestart() bool
 	IsNew() bool
 	IsUpdate() bool
 	IsPaused() bool
@@ -27,7 +28,6 @@ type Message interface {
 // Request is a response message for the data transfer protocol
 type Request interface {
 	Message
-	IsRestart() bool
 	IsPull() bool
 	IsVoucher() bool
 	VoucherType() TypeIdentifier
