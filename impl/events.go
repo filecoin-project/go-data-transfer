@@ -6,6 +6,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -25,7 +26,7 @@ func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
 }
 
 func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64) error {
-	err := m.channels.IncrementReceived(chid, size)
+	err := m.channels.DataReceived(chid, link.(cidlink.Link).Cid, size)
 	if err != nil {
 		return err
 	}
@@ -55,7 +56,7 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 }
 
 func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) (datatransfer.Message, error) {
-	err := m.channels.IncrementSent(chid, size)
+	err := m.channels.DataSent(chid, link.(cidlink.Link).Cid, size)
 	if err != nil {
 		return nil, err
 	}

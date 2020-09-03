@@ -94,6 +94,9 @@ type Channel interface {
 
 	// OtherParty returns the opposite party in the channel to the passed in party
 	OtherParty(thisParty peer.ID) peer.ID
+
+	// ReceivedCids returns the cids received so far on the channel
+	ReceivedCids() []cid.Cid
 }
 
 // ChannelState is channel parameters plus it's current state

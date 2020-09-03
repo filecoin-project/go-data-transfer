@@ -7,6 +7,7 @@ import (
 	"io"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
@@ -14,7 +15,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufinternalChannelState = []byte{142}
+var lengthBufinternalChannelState = []byte{143}
 
 func (t *internalChannelState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -155,6 +156,20 @@ func (t *internalChannelState) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.ReceivedCids ([]cid.Cid) (slice)
+	if len(t.ReceivedCids) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.ReceivedCids was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.ReceivedCids))); err != nil {
+		return err
+	}
+	for _, v := range t.ReceivedCids {
+		if err := cbg.WriteCidBuf(scratch, w, v); err != nil {
+			return xerrors.Errorf("failed writing cid field t.ReceivedCids: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -172,7 +187,7 @@ func (t *internalChannelState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 14 {
+	if extra != 15 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -374,6 +389,34 @@ func (t *internalChannelState) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.VoucherResults[i] = v
+	}
+
+	// t.ReceivedCids ([]cid.Cid) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.ReceivedCids: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.ReceivedCids = make([]cid.Cid, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("reading cid field t.ReceivedCids failed: %w", err)
+		}
+		t.ReceivedCids[i] = c
 	}
 
 	return nil

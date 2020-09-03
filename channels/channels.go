@@ -122,7 +122,8 @@ func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selec
 				},
 			},
 		},
-		Status: datatransfer.Requested,
+		Status:       datatransfer.Requested,
+		ReceivedCids: nil,
 	})
 	if err != nil {
 		return datatransfer.ChannelID{}, err
@@ -161,16 +162,12 @@ func (c *Channels) Accept(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.Accept)
 }
 
-// IncrementSent increments the total sent on the given channel by the given amount (returning
-// the new total)
-func (c *Channels) IncrementSent(chid datatransfer.ChannelID, delta uint64) error {
-	return c.send(chid, datatransfer.Progress, delta, uint64(0))
+func (c *Channels) DataSent(chid datatransfer.ChannelID, cid cid.Cid, delta uint64) error {
+	return c.send(chid, datatransfer.DataSent, delta, cid)
 }
 
-// IncrementReceived increments the total received on the given channel by the given amount (returning
-// the new total)
-func (c *Channels) IncrementReceived(chid datatransfer.ChannelID, delta uint64) error {
-	return c.send(chid, datatransfer.Progress, uint64(0), delta)
+func (c *Channels) DataReceived(chid datatransfer.ChannelID, cid cid.Cid, delta uint64) error {
+	return c.send(chid, datatransfer.DataReceived, delta, cid)
 }
 
 // PauseInitiator pauses the initator of this channel
