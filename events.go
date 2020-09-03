@@ -12,8 +12,11 @@ const (
 	// Accept is an event that emits when the data transfer is first accepted
 	Accept
 
-	// Progress is an event that gets emitted every time more data is transferred
-	Progress
+	// DataReceived is emitted when data is received on the channel from a remote peer
+	DataReceived
+
+	// DataSent is emitted when data is sent on the channel to the remote peer
+	DataSent
 
 	// Cancel indicates one side has cancelled the transfer
 	Cancel
@@ -63,7 +66,8 @@ const (
 var Events = map[EventCode]string{
 	Open:                        "Open",
 	Accept:                      "Accept",
-	Progress:                    "Progress",
+	DataSent:                    "DataSent",
+	DataReceived:                "DataReceived",
 	Cancel:                      "Cancel",
 	Error:                       "Error",
 	CleanupComplete:             "CleanupComplete",

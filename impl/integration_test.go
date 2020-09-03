@@ -101,13 +101,18 @@ func TestRoundTrip(t *testing.T) {
 			sent := make(chan uint64, 21)
 			received := make(chan uint64, 21)
 			var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-				if event.Code == datatransfer.Progress {
-					if channelState.Received() > 0 {
-						received <- channelState.Received()
-					} else if channelState.Sent() > 0 {
+				if event.Code == datatransfer.DataSent {
+					if channelState.Sent() > 0 {
 						sent <- channelState.Sent()
 					}
 				}
+
+				if event.Code == datatransfer.DataReceived {
+					if channelState.Received() > 0 {
+						received <- channelState.Received()
+					}
+				}
+
 				if channelState.Status() == datatransfer.Completed {
 					finished <- struct{}{}
 				}
@@ -685,7 +690,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					}
 				}
 
-				if event.Code == datatransfer.Progress &&
+				if event.Code == datatransfer.DataReceived &&
 					clientPausePoint < len(config.pausePoints) &&
 					channelState.Received() > config.pausePoints[clientPausePoint] {
 					_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
@@ -791,13 +796,19 @@ func TestPauseAndResume(t *testing.T) {
 			pauseResponder := make(chan struct{}, 2)
 			resumeResponder := make(chan struct{}, 2)
 			var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-				if event.Code == datatransfer.Progress {
-					if channelState.Received() > 0 {
-						received <- channelState.Received()
-					} else if channelState.Sent() > 0 {
+
+				if event.Code == datatransfer.DataSent {
+					if channelState.Sent() > 0 {
 						sent <- channelState.Sent()
 					}
 				}
+
+				if event.Code == datatransfer.DataReceived {
+					if channelState.Received() > 0 {
+						received <- channelState.Received()
+					}
+				}
+
 				if event.Code == datatransfer.PauseInitiator {
 					pauseInitiator <- struct{}{}
 				}

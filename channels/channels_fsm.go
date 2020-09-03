@@ -1,6 +1,7 @@
 package channels
 
 import (
+	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
@@ -16,18 +17,32 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.Open).FromAny().To(datatransfer.Requested),
 	fsm.Event(datatransfer.Accept).From(datatransfer.Requested).To(datatransfer.Ongoing),
 	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelling),
-	fsm.Event(datatransfer.Progress).FromMany(
+
+	fsm.Event(datatransfer.DataReceived).FromMany(
 		datatransfer.Requested,
 		datatransfer.Ongoing,
 		datatransfer.InitiatorPaused,
 		datatransfer.ResponderPaused,
 		datatransfer.BothPaused,
 		datatransfer.ResponderCompleted,
-		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, deltaSent uint64, deltaReceived uint64) error {
-		chst.Received += deltaReceived
-		chst.Sent += deltaSent
+		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, delta uint64, c cid.Cid) error {
+		chst.Received += delta
+		chst.ReceivedCids = append(chst.ReceivedCids, c)
 		return nil
 	}),
+
+	fsm.Event(datatransfer.DataSent).FromMany(
+		datatransfer.Requested,
+		datatransfer.Ongoing,
+		datatransfer.InitiatorPaused,
+		datatransfer.ResponderPaused,
+		datatransfer.BothPaused,
+		datatransfer.ResponderCompleted,
+		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, delta uint64, c cid.Cid) error {
+		chst.Sent += delta
+		return nil
+	}),
+
 	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failing).Action(func(chst *internalChannelState, err error) error {
 		chst.Message = err.Error()
 		return nil
