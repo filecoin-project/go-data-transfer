@@ -124,7 +124,6 @@ func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selec
 		},
 		Status:       datatransfer.Requested,
 		ReceivedCids: nil,
-		SentCids:     nil,
 	})
 	if err != nil {
 		return datatransfer.ChannelID{}, err

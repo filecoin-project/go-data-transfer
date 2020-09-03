@@ -40,8 +40,6 @@ var ChannelEvents = fsm.Events{
 		datatransfer.ResponderCompleted,
 		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, delta uint64, c cid.Cid) error {
 		chst.Sent += delta
-		chst.SentCids = append(chst.SentCids, c)
-
 		return nil
 	}),
 

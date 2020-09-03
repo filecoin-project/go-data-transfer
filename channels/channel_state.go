@@ -45,7 +45,6 @@ type channelState struct {
 	voucherDecoder       DecoderByTypeFunc
 
 	receivedCids []cid.Cid
-	sentCids     []cid.Cid
 }
 
 // EmptyChannelState is the zero value for channel state, meaning not present
