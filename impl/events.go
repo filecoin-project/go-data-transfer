@@ -8,6 +8,7 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
@@ -73,7 +74,7 @@ func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size u
 
 func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
 	if request.IsRestart() {
-		return m.receiveRestartRequest(chid, request)
+		return m.receiveRestartRequest(chid.Initiator, request)
 	}
 
 	if request.IsNew() {
@@ -129,7 +130,11 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 			}
 		}
 		if response.IsRestart() {
-			return m.channels.Restart(chid)
+			chId, err := response.RestartChannelID()
+			if err != nil {
+				return xerrors.Errorf("failed to get channel Id: %w", err)
+			}
+			return m.channels.Restart(chId)
 		}
 	}
 	if response.IsComplete() && response.Accepted() {
@@ -173,9 +178,14 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, success bool) 
 	return m.channels.Error(chid, errors.New("incomplete response"))
 }
 
-func (m *manager) receiveRestartRequest(chid datatransfer.ChannelID, req datatransfer.Request) (datatransfer.Response, error) {
-	result, err := m.acceptRestartRequest(chid, req)
-	msg, msgErr := m.response(false, true, err, chid.ID, result)
+func (m *manager) receiveRestartRequest(otherPeer peer.ID, req datatransfer.Request) (datatransfer.Response, error) {
+	chid, err := req.RestartChannelID()
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := m.acceptRestartRequest(otherPeer, chid, req)
+	msg, msgErr := m.restartResponse(err, chid, result)
 	if msgErr != nil {
 		return nil, msgErr
 	}
@@ -186,18 +196,19 @@ func (m *manager) receiveNewRequest(
 	initiator peer.ID,
 	incoming datatransfer.Request) (datatransfer.Response, error) {
 	result, err := m.acceptRequest(initiator, incoming)
-	msg, msgErr := m.response(true, false, err, incoming.TransferID(), result)
+	msg, msgErr := m.response(true, err, incoming.TransferID(), result)
 	if msgErr != nil {
 		return nil, msgErr
 	}
 	return msg, err
 }
 
-func (m *manager) acceptRestartRequest(chid datatransfer.ChannelID, req datatransfer.Request) (datatransfer.VoucherResult, error) {
-	chType, err := m.validateRestartChannelReq(context.Background(), chid, req)
+func (m *manager) acceptRestartRequest(otherPeer peer.ID, chid datatransfer.ChannelID, req datatransfer.Request) (datatransfer.VoucherResult, error) {
+	chType, err := m.validateRestartChannelReq(context.Background(), otherPeer, chid, req)
 	if err != nil {
 		return nil, err
 	}
+	channel, _ := m.channels.GetByID(context.Background(), chid)
 
 	stor, err := req.Selector()
 	if err != nil {
@@ -211,11 +222,15 @@ func (m *manager) acceptRestartRequest(chid datatransfer.ChannelID, req datatran
 	switch chType {
 	case ManagerPeerCreatePush:
 		// we created the original Pull request, nothing to validate here
+		voucher = channel.Voucher()
 	case ManagerPeerReceivePull:
 		// validate the voucher by reconstructing the request that would have created this channel
 		voucher, result, err = m.validateVoucher(chid.Initiator, req, true, req.BaseCid(), stor)
 		if err != nil && err != datatransfer.ErrPause {
 			return nil, err
+		}
+		if voucher != channel.Voucher() {
+			return nil, xerrors.New("vouchers do not match")
 		}
 		voucherErr = err
 	}
@@ -371,7 +386,7 @@ func (m *manager) revalidationResponse(chid datatransfer.ChannelID, result datat
 	if chst.Status() == datatransfer.Finalizing {
 		return m.completeResponse(resultErr, chid.ID, result)
 	}
-	return m.response(false, false, resultErr, chid.ID, result)
+	return m.response(false, resultErr, chid.ID, result)
 }
 
 func (m *manager) processRevalidationResult(chid datatransfer.ChannelID, result datatransfer.VoucherResult, resultErr error) (datatransfer.Response, error) {

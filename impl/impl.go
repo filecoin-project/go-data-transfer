@@ -355,15 +355,13 @@ func (m *manager) RestartDataTransferChannel(ctx context.Context, chid datatrans
 	// initiate restart
 	chType := m.channelDataTransferType(channel)
 	switch chType {
-
 	case ManagerPeerCreatePull:
-		return m.restartAsReceiver(ctx, channel, nil)
+		return m.restartAsReceiver(ctx, channel)
 
 	case ManagerPeerReceivePush:
 		return m.restartManagerPeerReceivePush(ctx, channel)
 
 	case ManagerPeerReceivePull:
-	// TODO
 
 	case ManagerPeerCreatePush:
 		// TODO

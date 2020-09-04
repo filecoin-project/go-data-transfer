@@ -20,10 +20,19 @@ type transferResponse struct {
 	XferID uint64
 	VRes   *cbg.Deferred
 	VTyp   datatransfer.TypeIdentifier
+
+	RestartChanelId datatransfer.ChannelID
 }
 
 func (trsp *transferResponse) TransferID() datatransfer.TransferID {
 	return datatransfer.TransferID(trsp.XferID)
+}
+
+func (trsp *transferResponse) RestartChannelID() (datatransfer.ChannelID, error) {
+	if !trsp.IsRestart() {
+		return datatransfer.ChannelID{}, xerrors.New("not a restart message")
+	}
+	return trsp.RestartChanelId, nil
 }
 
 // IsRequest always returns false in this case because this is a transfer response

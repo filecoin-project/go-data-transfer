@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/ipfs/go-cid"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
 )
 
@@ -30,17 +31,24 @@ const (
 
 func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel datatransfer.ChannelState) error {
 	chid := channel.ChannelID()
+	sender := channel.OtherParty(m.peerID)
 
 	// recreate the request that would led to this push channel being created for validation
-	req, err := message.NewRequest(false, chid.ID, false, channel.Voucher().Type(), channel.Voucher(),
+	req, err := message.RestartRequest(chid, false, channel.Voucher().Type(), channel.Voucher(),
 		channel.BaseCID(), channel.Selector())
 	if err != nil {
 		return err
 	}
-	return m.restartAsReceiver(ctx, channel, req)
+
+	// revalidate the voucher by reconstructing the request that would have led to the creation of this channel
+	if _, _, err := m.validateVoucher(sender, req, false, channel.BaseCID(), channel.Selector()); err != nil {
+		return err
+	}
+
+	return m.restartAsReceiver(ctx, channel)
 }
 
-func (m *manager) restartAsReceiver(ctx context.Context, channel datatransfer.ChannelState, reqToValidate datatransfer.Request) error {
+func (m *manager) restartAsReceiver(ctx context.Context, channel datatransfer.ChannelState) error {
 	received := channel.ReceivedCids()
 	doNotSend := mkCidSet(received)
 	selector := channel.Selector()
@@ -49,14 +57,7 @@ func (m *manager) restartAsReceiver(ctx context.Context, channel datatransfer.Ch
 	requestTo := channel.OtherParty(m.peerID)
 	chid := channel.ChannelID()
 
-	// revalidate the voucher by reconstructing the request that would have led to the creation of this channel
-	if reqToValidate != nil {
-		if _, _, err := m.validateVoucher(chid.Initiator, reqToValidate, false, baseCid, selector); err != nil {
-			return err
-		}
-	}
-
-	req, err := m.restartRequest(channel.TransferID(), selector, true, voucher, baseCid)
+	req, err := message.RestartRequest(chid, true, voucher.Type(), voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}
@@ -78,7 +79,24 @@ func (m *manager) restartAsReceiver(ctx context.Context, channel datatransfer.Ch
 	return nil
 }
 
-func (m *manager) validateRestartChannelReq(ctx context.Context, chid datatransfer.ChannelID, req datatransfer.Request) (ChannelDataTransferType, error) {
+/*func (m *manager) restartAsSender(ctx context.Context, channel datatransfer.ChannelState, reqToValidate datatransfer.Request) error {
+	received := channel.ReceivedCids()
+	doNotSend := mkCidSet(received)
+	selector := channel.Selector()
+	voucher := channel.Voucher()
+	baseCid := channel.BaseCID()
+	requestTo := channel.OtherParty(m.peerID)
+	chid := channel.ChannelID()
+
+	// revalidate the voucher by reconstructing the request that would have led to the creation of this channel
+	if reqToValidate != nil {
+		if _, _, err := m.validateVoucher(m.peerID, reqToValidate, false, baseCid, selector); err != nil {
+			return err
+		}
+	}
+}*/
+
+func (m *manager) validateRestartChannelReq(ctx context.Context, otherPeer peer.ID, chid datatransfer.ChannelID, req datatransfer.Request) (ChannelDataTransferType, error) {
 	channel, err := m.channels.GetByID(ctx, chid)
 	if err != nil {
 		return 0, xerrors.Errorf("failed to fetch channel: %w", err)
@@ -102,7 +120,54 @@ func (m *manager) validateRestartChannelReq(ctx context.Context, chid datatransf
 		return 0, xerrors.New("vouchers do not match")
 	}
 
-	return m.channelDataTransferType(channel), nil
+	sender := channel.Sender()
+	recipient := channel.Recipient()
+	initiator := channel.ChannelID().Initiator
+
+	chType := m.channelDataTransferType(channel)
+	switch chType {
+	case ManagerPeerCreatePush:
+		if initiator != m.peerID || sender != m.peerID || recipient != otherPeer {
+			return 0, xerrors.New("peers do not match")
+		}
+	case ManagerPeerReceivePull:
+		if initiator != otherPeer || sender != m.peerID || recipient != otherPeer {
+			return 0, xerrors.New("peers do not match")
+		}
+		// 	TODO more states
+	}
+
+	return chType, nil
+}
+
+func (m *manager) validateRestartChannelResp(ctx context.Context, otherPeer peer.ID, chid datatransfer.ChannelID, resp datatransfer.Response) error {
+	channel, err := m.channels.GetByID(ctx, chid)
+	if err != nil {
+		return xerrors.Errorf("failed to fetch channel: %w", err)
+	}
+
+	if channels.IsChannelTerminated(channel.Status()) {
+		return xerrors.New("channel is terminated")
+	}
+
+	sender := channel.Sender()
+	recipient := channel.Recipient()
+	initiator := channel.ChannelID().Initiator
+
+	chType := m.channelDataTransferType(channel)
+	switch chType {
+	case ManagerPeerCreatePush:
+		if initiator != m.peerID || sender != m.peerID || recipient != otherPeer {
+			return 0, xerrors.New("peers do not match")
+		}
+	case ManagerPeerReceivePull:
+		if initiator != otherPeer || sender != m.peerID || recipient != otherPeer {
+			return 0, xerrors.New("peers do not match")
+		}
+		// 	TODO more states
+	}
+
+	return nil
 }
 
 func mkCidSet(cids []cid.Cid) *cid.Set {

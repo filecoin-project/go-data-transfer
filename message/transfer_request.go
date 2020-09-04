@@ -29,11 +29,21 @@ type transferRequest struct {
 	Vouch  *cbg.Deferred
 	VTyp   datatransfer.TypeIdentifier
 	XferID uint64
+
+	RestartChannelId datatransfer.ChannelID
 }
 
 // IsRequest always returns true in this case because this is a transfer request
 func (trq *transferRequest) IsRequest() bool {
 	return true
+}
+
+func (trsp *transferRequest) RestartChannelID() (datatransfer.ChannelID, error) {
+	if !trsp.IsRestart() {
+		return datatransfer.ChannelID{}, xerrors.New("not a restart message")
+	}
+
+	return trsp.RestartChannelId, nil
 }
 
 func (trq *transferRequest) IsNew() bool {

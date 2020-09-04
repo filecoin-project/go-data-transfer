@@ -25,7 +25,7 @@ const (
 )
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(isRestart bool, id datatransfer.TransferID, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
+func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
 	vbytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
@@ -39,9 +39,6 @@ func NewRequest(isRestart bool, id datatransfer.TransferID, isPull bool, vtype d
 	}
 
 	typ := uint64(newMessage)
-	if isRestart {
-		typ = uint64(restartMessage)
-	}
 
 	return &transferRequest{
 		Type:   typ,
@@ -51,6 +48,33 @@ func NewRequest(isRestart bool, id datatransfer.TransferID, isPull bool, vtype d
 		BCid:   &baseCid,
 		VTyp:   vtype,
 		XferID: uint64(id),
+	}, nil
+}
+
+// RestartRequest generates a restart request for the data transfer protocol
+func RestartRequest(channelId datatransfer.ChannelID, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
+	vbytes, err := encoding.Encode(voucher)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
+	if baseCid == cid.Undef {
+		return nil, xerrors.Errorf("base CID must be defined")
+	}
+	selBytes, err := encoding.Encode(selector)
+	if err != nil {
+		return nil, xerrors.Errorf("Error encoding selector")
+	}
+
+	return &transferRequest{
+		Type:   uint64(restartMessage),
+		Pull:   isPull,
+		Vouch:  &cborgen.Deferred{Raw: vbytes},
+		Stor:   &cborgen.Deferred{Raw: selBytes},
+		BCid:   &baseCid,
+		VTyp:   vtype,
+		XferID: uint64(channelId.ID),
+
+		RestartChannelId: channelId,
 	}, nil
 }
 
@@ -101,7 +125,7 @@ func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, vouch
 	}, nil
 }
 
-func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
+func RestartResponse(chId datatransfer.ChannelID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
 	vbytes, err := encoding.Encode(voucherResult)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
@@ -110,9 +134,11 @@ func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, v
 		Acpt:   accepted,
 		Type:   uint64(restartMessage),
 		Paus:   isPaused,
-		XferID: uint64(id),
+		XferID: uint64(chId.ID),
 		VTyp:   voucherResultType,
 		VRes:   &cborgen.Deferred{Raw: vbytes},
+
+		RestartChanelId: chId,
 	}, nil
 }
 

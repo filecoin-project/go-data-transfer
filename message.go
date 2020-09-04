@@ -15,6 +15,7 @@ import (
 type Message interface {
 	IsRequest() bool
 	IsRestart() bool
+	RestartChannelID() (ChannelID, error)
 	IsNew() bool
 	IsUpdate() bool
 	IsPaused() bool

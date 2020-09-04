@@ -34,14 +34,10 @@ func (m *manager) newRequest(selector ipld.Node, isPull bool, voucher datatransf
 		return nil, err
 	}
 	tid := datatransfer.TransferID(next)
-	return message.NewRequest(false, tid, isPull, voucher.Type(), voucher, baseCid, selector)
+	return message.NewRequest(tid, isPull, voucher.Type(), voucher, baseCid, selector)
 }
 
-func (m *manager) restartRequest(tid datatransfer.TransferID, selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid) (datatransfer.Request, error) {
-	return message.NewRequest(true, tid, isPull, voucher.Type(), voucher, baseCid, selector)
-}
-
-func (m *manager) response(isNew bool, isRestart bool, err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {
+func (m *manager) response(isNew bool, err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {
 	isAccepted := err == nil || err == datatransfer.ErrPause
 	isPaused := err == datatransfer.ErrPause
 	resultType := datatransfer.EmptyTypeIdentifier
@@ -51,11 +47,19 @@ func (m *manager) response(isNew bool, isRestart bool, err error, tid datatransf
 	if isNew {
 		return message.NewResponse(tid, isAccepted, isPaused, resultType, voucherResult)
 	}
-	if isRestart {
-		return message.RestartResponse(tid, isAccepted, isPaused, resultType, voucherResult)
-	}
 
 	return message.VoucherResultResponse(tid, isAccepted, isPaused, resultType, voucherResult)
+}
+
+func (m *manager) restartResponse(err error, chId datatransfer.ChannelID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {
+	isAccepted := err == nil || err == datatransfer.ErrPause
+	isPaused := err == datatransfer.ErrPause
+	resultType := datatransfer.EmptyTypeIdentifier
+	if voucherResult != nil {
+		resultType = voucherResult.Type()
+	}
+
+	return message.RestartResponse(chId, isAccepted, isPaused, resultType, voucherResult)
 }
 
 func (m *manager) completeResponse(err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {

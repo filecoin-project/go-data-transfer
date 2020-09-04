@@ -552,9 +552,9 @@ func TestDataTransferResponding(t *testing.T) {
 			h.voucher = testutil.NewFakeDTType()
 			h.baseCid = testutil.GenerateCids(1)[0]
 			h.id = datatransfer.TransferID(rand.Int31())
-			h.pullRequest, err = message.NewRequest(false, h.id, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pullRequest, err = message.NewRequest(h.id, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
-			h.pushRequest, err = message.NewRequest(false, h.id, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pushRequest, err = message.NewRequest(h.id, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
 			h.pauseUpdate = message.UpdateRequest(h.id, true)
 			require.NoError(t, err)

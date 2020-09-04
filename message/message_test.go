@@ -21,7 +21,7 @@ func TestNewRequest(t *testing.T) {
 	isPull := true
 	id := datatransfer.TransferID(rand.Int31())
 	voucher := testutil.NewFakeDTType()
-	request, err := NewRequest(false, id, isPull, voucher.Type(), voucher, baseCid, selector)
+	request, err := NewRequest(id, isPull, voucher.Type(), voucher, baseCid, selector)
 	require.NoError(t, err)
 	assert.Equal(t, id, request.TransferID())
 	assert.False(t, request.IsCancel())
@@ -249,7 +249,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 	accepted := false
 	voucher := testutil.NewFakeDTType()
 	voucherResult := testutil.NewFakeDTType()
-	request, err := NewRequest(false, id, isPull, voucher.Type(), voucher, baseCid, selector)
+	request, err := NewRequest(id, isPull, voucher.Type(), voucher, baseCid, selector)
 	require.NoError(t, err)
 	buf := new(bytes.Buffer)
 	err = request.ToNet(buf)
@@ -306,5 +306,5 @@ func NewTestTransferRequest() (datatransfer.Request, error) {
 	isPull := false
 	id := datatransfer.TransferID(rand.Int31())
 	voucher := testutil.NewFakeDTType()
-	return NewRequest(false, id, isPull, voucher.Type(), voucher, bcid, selector)
+	return NewRequest(id, isPull, voucher.Type(), voucher, bcid, selector)
 }

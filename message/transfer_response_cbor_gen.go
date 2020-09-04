@@ -13,7 +13,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBuftransferResponse = []byte{134}
+var lengthBuftransferResponse = []byte{135}
 
 func (t *transferResponse) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -64,6 +64,11 @@ func (t *transferResponse) MarshalCBOR(w io.Writer) error {
 	if _, err := io.WriteString(w, string(t.VTyp)); err != nil {
 		return err
 	}
+
+	// t.RestartChanelId (datatransfer.ChannelID) (struct)
+	if err := t.RestartChanelId.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -81,7 +86,7 @@ func (t *transferResponse) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 6 {
+	if extra != 7 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -166,6 +171,15 @@ func (t *transferResponse) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.VTyp = datatransfer.TypeIdentifier(sval)
+	}
+	// t.RestartChanelId (datatransfer.ChannelID) (struct)
+
+	{
+
+		if err := t.RestartChanelId.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.RestartChanelId: %w", err)
+		}
+
 	}
 	return nil
 }
