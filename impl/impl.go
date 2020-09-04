@@ -352,31 +352,34 @@ func (m *manager) RestartDataTransferChannel(ctx context.Context, chid datatrans
 		return nil
 	}
 
-	// discern restart type
-	var chType RestartChannelType
-	if channel.IsPull() && channel.Recipient() == m.peerID {
-		chType = ManagerPeerCreatePull
-	} else if channel.IsPull() && channel.Sender() == m.peerID {
-		// I need to validate
-		chType = ManagerPeerReceivePull
-	} else if !channel.IsPull() && channel.Recipient() == m.peerID {
-		chType = ManagerPeerReceivePush
-	} else {
-		chType = ManagerPeerCreatePush
-	}
-
 	// initiate restart
+	chType := m.channelDataTransferType(channel)
 	switch chType {
+
 	case ManagerPeerCreatePull:
-		// other side needs to validate
-		return m.restartManagerPeerCreatePull(ctx, channel)
-	case ManagerPeerReceivePull:
-		// I need to validate
+		return m.restartAsReceiver(ctx, channel, nil)
+
 	case ManagerPeerReceivePush:
-		// I need to validate
+		return m.restartManagerPeerReceivePush(ctx, channel)
+
+	case ManagerPeerReceivePull:
+	// TODO
+
 	case ManagerPeerCreatePush:
-		// other side needs to validate
+		// TODO
 	}
 
 	return nil
+}
+
+func (m *manager) channelDataTransferType(channel datatransfer.ChannelState) ChannelDataTransferType {
+	if channel.IsPull() && channel.Recipient() == m.peerID {
+		return ManagerPeerCreatePull
+	} else if channel.IsPull() && channel.Sender() == m.peerID {
+		return ManagerPeerReceivePull
+	} else if !channel.IsPull() && channel.Recipient() == m.peerID {
+		return ManagerPeerReceivePush
+	} else {
+		return ManagerPeerCreatePush
+	}
 }

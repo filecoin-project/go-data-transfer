@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/filecoin-project/go-data-transfer/channels"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -130,9 +129,7 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 			}
 		}
 		if response.IsRestart() {
-			if err := m.channels.Restart(chid); err != nil {
-				return err
-			}
+			return m.channels.Restart(chid)
 		}
 	}
 	if response.IsComplete() && response.Accepted() {
@@ -176,9 +173,9 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, success bool) 
 	return m.channels.Error(chid, errors.New("incomplete response"))
 }
 
-func (m *manager) receiveRestartRequest(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
-	result, err := m.acceptRestartRequest(chid, request)
-	msg, msgErr := m.response(false, true, err, request.TransferID(), result)
+func (m *manager) receiveRestartRequest(chid datatransfer.ChannelID, req datatransfer.Request) (datatransfer.Response, error) {
+	result, err := m.acceptRestartRequest(chid, req)
+	msg, msgErr := m.response(false, true, err, chid.ID, result)
 	if msgErr != nil {
 		return nil, msgErr
 	}
@@ -196,39 +193,44 @@ func (m *manager) receiveNewRequest(
 	return msg, err
 }
 
-func (m *manager) acceptRestartRequest(
-	chid datatransfer.ChannelID,
-	incoming datatransfer.Request) (datatransfer.VoucherResult, error) {
-
-	// verify channel exists in the correct state
-	channel, err := m.channels.GetByID(context.Background(), chid)
-	if err != nil {
-		return nil, err
-	}
-	if channels.IsChannelTerminated(channel.Status()) {
-		return nil, errors.New("channel already terminated")
-	}
-
-	stor, err := incoming.Selector()
+func (m *manager) acceptRestartRequest(chid datatransfer.ChannelID, req datatransfer.Request) (datatransfer.VoucherResult, error) {
+	chType, err := m.validateRestartChannelReq(context.Background(), chid, req)
 	if err != nil {
 		return nil, err
 	}
 
-	// validate the voucher
-	voucher, result, err := m.validateVoucher(chid.Initiator, incoming, incoming.IsPull(), incoming.BaseCid(), stor)
-	if err != nil && err != datatransfer.ErrPause {
+	stor, err := req.Selector()
+	if err != nil {
 		return nil, err
 	}
-	voucherErr := err
 
-	if err := m.channels.Restart(chid); err != nil {
-		return result, err
+	var result datatransfer.VoucherResult
+	var voucher datatransfer.Voucher
+	var voucherErr error
+
+	switch chType {
+	case ManagerPeerCreatePush:
+		// we created the original Pull request, nothing to validate here
+	case ManagerPeerReceivePull:
+		// validate the voucher by reconstructing the request that would have created this channel
+		voucher, result, err = m.validateVoucher(chid.Initiator, req, true, req.BaseCid(), stor)
+		if err != nil && err != datatransfer.ErrPause {
+			return nil, err
+		}
+		voucherErr = err
 	}
+
+	// add voucher result
 	if result != nil {
 		err := m.channels.NewVoucherResult(chid, result)
 		if err != nil {
 			return result, err
 		}
+	}
+
+	// restart channel fsm
+	if err := m.channels.Restart(chid); err != nil {
+		return result, err
 	}
 
 	// configure the transport
@@ -247,6 +249,7 @@ func (m *manager) acceptRestartRequest(
 			return result, err
 		}
 	}
+
 	return result, voucherErr
 }
 
