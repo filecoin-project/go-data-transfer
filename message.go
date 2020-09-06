@@ -33,6 +33,8 @@ type Request interface {
 	Voucher(decoder encoding.Decoder) (encoding.Encodable, error)
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
+	IsRestart() bool
+	RestartChannelId() (ChannelID, error)
 }
 
 // Response is a response message for the data transfer protocol

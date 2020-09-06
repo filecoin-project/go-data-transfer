@@ -314,3 +314,51 @@ func (m *manager) RegisterTransportConfigurer(voucherType datatransfer.Voucher, 
 	}
 	return nil
 }
+
+// RestartDataTransferChannel restarts data transfer on the channel with the given channelId
+func (m *manager) RestartDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	channel, err := m.channels.GetByID(ctx, chid)
+	if err != nil {
+		return xerrors.Errorf("failed to fetch channel: %w", err)
+	}
+
+	// if channel has already been completed, there is nothing to do.
+	// TODO We could be in a state where the channel has completed but the corresponding event hasnt fired in the client/provider.
+	if channels.IsChannelTerminated(channel.Status()) {
+		return nil
+	}
+
+	// initiate restart
+	chType := m.channelDataTransferType(channel)
+	switch chType {
+	case ManagerPeerReceivePush:
+		return m.restartManagerPeerReceivePush(ctx, channel)
+	case ManagerPeerReceivePull:
+		return m.restartManagerPeerReceivePull(ctx, channel)
+
+		// TODO Other channel types
+	}
+
+	return nil
+}
+
+func (m *manager) channelDataTransferType(channel datatransfer.ChannelState) ChannelDataTransferType {
+	initiator := channel.ChannelID().Initiator
+	if channel.IsPull() {
+		// we created a pull channel
+		if initiator == m.peerID {
+			return ManagerPeerCreatePull
+		}
+
+		// we received a pull channel
+		return ManagerPeerReceivePull
+	}
+
+	// we created a push channel
+	if initiator == m.peerID {
+		return ManagerPeerCreatePush
+	}
+
+	// we received a push channel
+	return ManagerPeerReceivePush
+}

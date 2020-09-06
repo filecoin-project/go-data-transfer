@@ -55,6 +55,10 @@ func (r *receiver) ReceiveResponse(
 func (r *receiver) ReceiveError(err error) {
 }
 
+func (r *receiver) ReceiveRestartRequest(ctx context.Context, sender peer.ID, incoming datatransfer.Request) {
+
+}
+
 func TestMessageSendAndReceive(t *testing.T) {
 	// create network
 	ctx := context.Background()

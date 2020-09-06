@@ -21,6 +21,7 @@ const (
 	completeMessage
 	voucherMessage
 	voucherResultMessage
+	restartReqMessage
 )
 
 // NewRequest generates a new request for the data transfer protocol
@@ -45,6 +46,13 @@ func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.Type
 		VTyp:   vtype,
 		XferID: uint64(id),
 	}, nil
+}
+
+// RestartRequest creates a new restart request
+func RestartRequest(channelId datatransfer.ChannelID) datatransfer.Request {
+
+	return &transferRequest{Type: uint64(restartReqMessage),
+		RestartChannel: channelId}
 }
 
 // CancelRequest request generates a request to cancel an in progress request

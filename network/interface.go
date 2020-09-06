@@ -48,5 +48,7 @@ type Receiver interface {
 		sender peer.ID,
 		incoming datatransfer.Response)
 
+	ReceiveRestartRequest(ctx context.Context, sender peer.ID, incoming datatransfer.Request)
+
 	ReceiveError(error)
 }

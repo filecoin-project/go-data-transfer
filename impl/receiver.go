@@ -95,3 +95,9 @@ func (r *receiver) receiveResponse(
 func (r *receiver) ReceiveError(err error) {
 	log.Errorf("received error message on data transfer: %s", err.Error())
 }
+
+func (r *receiver) ReceiveRestartRequest(ctx context.Context,
+	sender peer.ID,
+	incoming datatransfer.Request) {
+
+}
