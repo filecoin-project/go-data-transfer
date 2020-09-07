@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/filecoin-project/go-data-transfer/channels"
+	"github.com/ipfs/go-cid"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 
@@ -42,9 +43,18 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 	}
 
 	if response != nil {
-		if response.IsNew() && response.Accepted() && !incoming.IsPull() {
+		if (response.IsNew() || response.IsRestart()) && response.Accepted() && !incoming.IsPull() {
+			var doNotSendCids []cid.Cid
+			if response.IsRestart() {
+				channel, err := r.manager.channels.GetByID(ctx, chid)
+				if err != nil {
+					return err
+				}
+				doNotSendCids = channel.ReceivedCids()
+			}
+
 			stor, _ := incoming.Selector()
-			if err := r.manager.transport.OpenChannel(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, response); err != nil {
+			if err := r.manager.transport.OpenChannel(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, doNotSendCids, response); err != nil {
 				return err
 			}
 		} else {

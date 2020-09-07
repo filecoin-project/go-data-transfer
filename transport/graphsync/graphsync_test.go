@@ -637,6 +637,7 @@ func TestManager(t *testing.T) {
 					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self},
 					cidlink.Link{Cid: gsData.outgoing.BaseCid()},
 					stor,
+					nil,
 					gsData.outgoing)
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {

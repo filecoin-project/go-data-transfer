@@ -95,6 +95,22 @@ func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifie
 	}, nil
 }
 
+// RestartResponse builds a new Data Transfer response
+func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
+	vbytes, err := encoding.Encode(voucherResult)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
+	return &transferResponse{
+		Acpt:   accepted,
+		Type:   uint64(restartMessage),
+		Paus:   isPaused,
+		XferID: uint64(id),
+		VTyp:   voucherResultType,
+		VRes:   &cborgen.Deferred{Raw: vbytes},
+	}, nil
+}
+
 // NewResponse builds a new Data Transfer response
 func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
 	vbytes, err := encoding.Encode(voucherResult)

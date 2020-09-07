@@ -12,6 +12,9 @@ const (
 	// Accept is an event that emits when the data transfer is first accepted
 	Accept
 
+	// Restart is an event that emits when the data transfer is restarted
+	Restart
+
 	// DataReceived is emitted when data is received on the channel from a remote peer
 	DataReceived
 

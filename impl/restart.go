@@ -5,8 +5,11 @@ import (
 	"fmt"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/channels"
 	"github.com/filecoin-project/go-data-transfer/message"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/xerrors"
 )
 
 type ChannelDataTransferType int
@@ -100,7 +103,7 @@ func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransf
 	requestTo := channel.OtherParty(m.peerID)
 	chid := channel.ChannelID()
 
-	req, err := m.newRequest(ctx, selector, true, voucher, baseCid, requestTo)
+	req, err := message.NewRequest(chid.ID, true, true, voucher.Type(), voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}
@@ -111,10 +114,41 @@ func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransf
 		transportConfigurer(chid, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
-	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, req); err != nil {
+	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, channel.ReceivedCids(), req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.channels.Error(chid, err)
 		return err
+	}
+
+	return nil
+}
+
+func (m *manager) validateRestartRequest(ctx context.Context, otherPeer peer.ID, chid datatransfer.ChannelID, req datatransfer.Request) error {
+	channel, err := m.channels.GetByID(ctx, chid)
+	if err != nil {
+		return err
+	}
+
+	if channels.IsChannelTerminated(channel.Status()) {
+		return xerrors.New("channel is already terminated")
+	}
+
+	if channel.ChannelID().Initiator != otherPeer {
+		return xerrors.New("other peer is not the initiator of the channel")
+	}
+
+	// channel and request params should match
+	if req.BaseCid() != channel.BaseCID() {
+		return xerrors.New("base cid does not match")
+	}
+
+	reqVoucher, err := m.decodeVoucher(req, m.validatedTypes)
+	if err != nil {
+		return xerrors.Errorf("failed to decode request voucher: %w", err)
+	}
+
+	if reqVoucher != channel.Voucher() {
+		return xerrors.New("channel and request vouchers do not match")
 	}
 
 	return nil

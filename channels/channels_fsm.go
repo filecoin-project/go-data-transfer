@@ -16,6 +16,8 @@ var log = logging.Logger("data-transfer")
 var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.Open).FromAny().To(datatransfer.Requested),
 	fsm.Event(datatransfer.Accept).From(datatransfer.Requested).To(datatransfer.Ongoing),
+	fsm.Event(datatransfer.Restart).FromAny().ToNoChange(),
+
 	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelling),
 
 	fsm.Event(datatransfer.DataReceived).FromMany(
