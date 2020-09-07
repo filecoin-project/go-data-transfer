@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ipfs/go-graphsync"
+	"github.com/ipfs/go-graphsync/cidset"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -625,6 +626,34 @@ func TestManager(t *testing.T) {
 				gsData.fgs.AssertNoResumeResponseReceived(t)
 				gsData.incomingRequestHook()
 				assertDecodesToMessage(t, gsData.incomingRequestHookActions.SentExtension.Data, gsData.incoming)
+			},
+		},
+		"open channel adds doNotSendCids to the DoNotSend extension": {
+			action: func(gsData *harness) {
+				cids := testutil.GenerateCids(2)
+				stor, _ := gsData.outgoing.Selector()
+				_ = gsData.transport.OpenChannel(
+					gsData.ctx,
+					gsData.other,
+					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self},
+					cidlink.Link{Cid: gsData.outgoing.BaseCid()},
+					stor,
+					cids,
+					gsData.outgoing)
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				requestReceived := gsData.fgs.AssertRequestReceived(gsData.ctx, t)
+
+				ext := requestReceived.Extensions
+				require.Len(t, ext, 2)
+				doNotSend := ext[1]
+
+				name := doNotSend.Name
+				require.Equal(t, graphsync.ExtensionDoNotSendCIDs, name)
+				data := doNotSend.Data
+				cs, err := cidset.DecodeCidSet(data)
+				require.NoError(t, err)
+				require.Equal(t, cs.Len(), 2)
 			},
 		},
 		"request pause works even if called when request is still pending": {

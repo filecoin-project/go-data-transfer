@@ -57,8 +57,8 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 	}, nil
 }
 
-// RestartRequest creates a new restart request
-func RestartRequest(channelId datatransfer.ChannelID) datatransfer.Request {
+// RestartExistingChannelRequest creates a request to ask the other side to restart an existing channel
+func RestartExistingChannelRequest(channelId datatransfer.ChannelID) datatransfer.Request {
 
 	return &transferRequest{Type: uint64(restartExistingChannelRequestMessage),
 		RestartChannel: channelId}

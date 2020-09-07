@@ -34,7 +34,7 @@ func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel dat
 	}
 
 	// send a libp2p message to the other peer asking to send a "restart push request"
-	req := message.RestartRequest(channel.ChannelID())
+	req := message.RestartExistingChannelRequest(channel.ChannelID())
 
 	return m.dataTransferNetwork.SendMessage(ctx, channel.OtherParty(m.peerID), req)
 }
@@ -44,7 +44,7 @@ func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel dat
 		return err
 	}
 
-	req := message.RestartRequest(channel.ChannelID())
+	req := message.RestartExistingChannelRequest(channel.ChannelID())
 
 	// send a libp2p message to the other peer asking to send a "restart pull request"
 	return m.dataTransferNetwork.SendMessage(ctx, channel.OtherParty(m.peerID), req)

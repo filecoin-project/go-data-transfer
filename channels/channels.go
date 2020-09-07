@@ -162,7 +162,7 @@ func (c *Channels) Accept(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.Accept)
 }
 
-// Restart marks a data transfer as accepted
+// Restart marks a data transfer as restarted
 func (c *Channels) Restart(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.Restart)
 }

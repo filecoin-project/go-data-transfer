@@ -263,6 +263,12 @@ func TestChannels(t *testing.T) {
 	})
 }
 
+func TestIsChannelTerminated(t *testing.T) {
+	require.True(t, channels.IsChannelTerminated(datatransfer.Cancelled))
+	require.True(t, channels.IsChannelTerminated(datatransfer.Failed))
+	require.False(t, channels.IsChannelTerminated(datatransfer.Ongoing))
+}
+
 type event struct {
 	event datatransfer.Event
 	state datatransfer.ChannelState

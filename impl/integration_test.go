@@ -1301,7 +1301,7 @@ func (r *receiver) ReceiveResponse(
 func (r *receiver) ReceiveError(err error) {
 }
 
-func (r *receiver) ReceiveRestartRequest(ctx context.Context,
+func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
 	sender peer.ID,
 	incoming datatransfer.Request) {
 

@@ -21,11 +21,12 @@ import (
 
 // Receiver is an interface for receiving messages from the DataTransferNetwork.
 type receiver struct {
-	messageReceived chan struct{}
-	lastRequest     datatransfer.Request
-	lastResponse    datatransfer.Response
-	lastSender      peer.ID
-	connectedPeers  chan peer.ID
+	messageReceived    chan struct{}
+	lastRequest        datatransfer.Request
+	lastRestartRequest datatransfer.Request
+	lastResponse       datatransfer.Response
+	lastSender         peer.ID
+	connectedPeers     chan peer.ID
 }
 
 func (r *receiver) ReceiveRequest(
@@ -55,8 +56,13 @@ func (r *receiver) ReceiveResponse(
 func (r *receiver) ReceiveError(err error) {
 }
 
-func (r *receiver) ReceiveRestartRequest(ctx context.Context, sender peer.ID, incoming datatransfer.Request) {
-
+func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context, sender peer.ID, incoming datatransfer.Request) {
+	r.lastSender = sender
+	r.lastRestartRequest = incoming
+	select {
+	case <-ctx.Done():
+	case r.messageReceived <- struct{}{}:
+	}
 }
 
 func TestMessageSendAndReceive(t *testing.T) {
@@ -140,5 +146,26 @@ func TestMessageSendAndReceive(t *testing.T) {
 		assert.Equal(t, response.Accepted(), receivedResponse.Accepted())
 		assert.Equal(t, response.IsRequest(), receivedResponse.IsRequest())
 		testutil.AssertEqualFakeDTVoucherResult(t, response, receivedResponse)
+	})
+
+	t.Run("Send Restart Request", func(t *testing.T) {
+		peers := testutil.GeneratePeers(2)
+		id := datatransfer.TransferID(rand.Int31())
+		chId := datatransfer.ChannelID{peers[0], peers[1], id}
+
+		request := message.RestartExistingChannelRequest(chId)
+		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
+
+		select {
+		case <-ctx.Done():
+			t.Fatal("did not receive message sent")
+		case <-r.messageReceived:
+		}
+
+		sender := r.lastSender
+		require.Equal(t, sender, host1.ID())
+
+		receivedRequest := r.lastRestartRequest
+		require.NotNil(t, receivedRequest)
 	})
 }

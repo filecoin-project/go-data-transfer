@@ -102,7 +102,7 @@ func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 			receivedRequest, ok := received.(datatransfer.Request)
 			if ok {
 				if receivedRequest.IsRestartExistingChannelRequest() {
-					dtnet.receiver.ReceiveRestartRequest(ctx, p, receivedRequest)
+					dtnet.receiver.ReceiveRestartExistingChannelRequest(ctx, p, receivedRequest)
 				} else {
 					dtnet.receiver.ReceiveRequest(ctx, p, receivedRequest)
 				}
