@@ -123,7 +123,7 @@ func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
 	}
 
 	// initator should be me
-	if channel.ChannelID().Initiator == r.manager.peerID {
+	if channel.ChannelID().Initiator != r.manager.peerID {
 		log.Error("channel initiator is not the manager peer")
 	}
 
