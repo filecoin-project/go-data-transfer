@@ -54,7 +54,7 @@ func (m *manager) validateRestartVoucher(channel datatransfer.ChannelState, isPu
 	// re-validate the original voucher received for safety
 	chid := channel.ChannelID()
 
-	// recreate the request that would led to this pull channel being created for validation
+	// recreate the request that would have led to this pull channel being created for validation
 	req, err := message.NewRequest(chid.ID, false, isPull, channel.Voucher().Type(), channel.Voucher(),
 		channel.BaseCID(), channel.Selector())
 	if err != nil {
