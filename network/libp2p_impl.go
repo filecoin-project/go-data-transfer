@@ -97,10 +97,15 @@ func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 		p := s.Conn().RemotePeer()
 		ctx := context.Background()
 		log.Debugf("graphsync net handleNewStream from %s", s.Conn().RemotePeer())
+
 		if received.IsRequest() {
 			receivedRequest, ok := received.(datatransfer.Request)
 			if ok {
-				dtnet.receiver.ReceiveRequest(ctx, p, receivedRequest)
+				if receivedRequest.IsRestartExistingChannelRequest() {
+					dtnet.receiver.ReceiveRestartRequest(ctx, p, receivedRequest)
+				} else {
+					dtnet.receiver.ReceiveRequest(ctx, p, receivedRequest)
+				}
 			}
 		} else {
 			receivedResponse, ok := received.(datatransfer.Response)

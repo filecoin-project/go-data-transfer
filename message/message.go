@@ -16,16 +16,17 @@ type messageType uint64
 
 const (
 	newMessage messageType = iota
+	restartMessage
 	updateMessage
 	cancelMessage
 	completeMessage
 	voucherMessage
 	voucherResultMessage
-	restartReqMessage
+	restartExistingChannelRequestMessage
 )
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
+func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
 	vbytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
@@ -37,8 +38,16 @@ func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.Type
 	if err != nil {
 		return nil, xerrors.Errorf("Error encoding selector")
 	}
+
+	var typ uint64
+	if isRestart {
+		typ = uint64(restartMessage)
+	} else {
+		typ = uint64(newMessage)
+	}
+
 	return &transferRequest{
-		Type:   uint64(newMessage),
+		Type:   typ,
 		Pull:   isPull,
 		Vouch:  &cborgen.Deferred{Raw: vbytes},
 		Stor:   &cborgen.Deferred{Raw: selBytes},
@@ -51,7 +60,7 @@ func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.Type
 // RestartRequest creates a new restart request
 func RestartRequest(channelId datatransfer.ChannelID) datatransfer.Request {
 
-	return &transferRequest{Type: uint64(restartReqMessage),
+	return &transferRequest{Type: uint64(restartExistingChannelRequestMessage),
 		RestartChannel: channelId}
 }
 

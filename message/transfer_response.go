@@ -76,6 +76,10 @@ func (trsp *transferResponse) VoucherResult(decoder encoding.Decoder) (encoding.
 	return decoder.DecodeFromCbor(trsp.VRes.Raw)
 }
 
+func (trq *transferResponse) IsRestart() bool {
+	return trq.Type == uint64(restartMessage)
+}
+
 func (trsp *transferResponse) EmptyVoucherResult() bool {
 	return trsp.VTyp == datatransfer.EmptyTypeIdentifier
 }

@@ -39,11 +39,15 @@ func (trq *transferRequest) IsRequest() bool {
 }
 
 func (trq *transferRequest) IsRestart() bool {
-	return trq.Type == uint64(restartReqMessage)
+	return trq.Type == uint64(restartMessage)
+}
+
+func (trq *transferRequest) IsRestartExistingChannelRequest() bool {
+	return trq.Type == uint64(restartExistingChannelRequestMessage)
 }
 
 func (trq *transferRequest) RestartChannelId() (datatransfer.ChannelID, error) {
-	if !trq.IsRestart() {
+	if !trq.IsRestartExistingChannelRequest() {
 		return datatransfer.ChannelID{}, xerrors.New("not a restart request")
 	}
 	return trq.RestartChannel, nil

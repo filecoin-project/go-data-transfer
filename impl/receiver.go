@@ -3,6 +3,7 @@ package impl
 import (
 	"context"
 
+	"github.com/filecoin-project/go-data-transfer/channels"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 
@@ -100,4 +101,38 @@ func (r *receiver) ReceiveRestartRequest(ctx context.Context,
 	sender peer.ID,
 	incoming datatransfer.Request) {
 
+	ch, err := incoming.RestartChannelId()
+	if err != nil {
+		log.Error(err)
+	}
+
+	// validate channel exists -> in non-terminal state and that the sender matches
+	channel, err := r.manager.channels.GetByID(ctx, ch)
+	if err != nil {
+		// nothing to do here, we wont handle the request
+	}
+
+	// initator should be me
+	if channel.ChannelID().Initiator == r.manager.peerID {
+		log.Error("channel initiator is not the manager peer")
+	}
+
+	// other peer should be the counter party on the channel
+	if channel.OtherParty(r.manager.peerID) != sender {
+		log.Error("channel counterpart is not the sender peer")
+	}
+
+	// channel should NOT be terminated
+	if channels.IsChannelTerminated(channel.Status()) {
+		log.Error("channel is already terminated")
+	}
+
+	switch r.manager.channelDataTransferType(channel) {
+	case ManagerPeerCreatePush:
+		r.manager.openPushRestartChannel(ctx, channel)
+	case ManagerPeerCreatePull:
+		r.manager.openPullRestartChannel(ctx, channel)
+	default:
+		log.Error("peer is not the creator of the channel")
+	}
 }
