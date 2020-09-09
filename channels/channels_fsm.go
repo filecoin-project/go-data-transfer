@@ -16,6 +16,8 @@ var log = logging.Logger("data-transfer")
 var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.Open).FromAny().To(datatransfer.Requested),
 	fsm.Event(datatransfer.Accept).From(datatransfer.Requested).To(datatransfer.Ongoing),
+	fsm.Event(datatransfer.Restart).FromAny().ToNoChange(),
+
 	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelling),
 
 	fsm.Event(datatransfer.DataReceived).FromMany(
@@ -122,4 +124,15 @@ var ChannelFinalityStates = []fsm.StateKey{
 	datatransfer.Cancelled,
 	datatransfer.Completed,
 	datatransfer.Failed,
+}
+
+// IsChannelTerminated returns true if the channel is in a finality state
+func IsChannelTerminated(st datatransfer.Status) bool {
+	for _, s := range ChannelFinalityStates {
+		if s == st {
+			return true
+		}
+	}
+
+	return false
 }

@@ -16,15 +16,17 @@ type messageType uint64
 
 const (
 	newMessage messageType = iota
+	restartMessage
 	updateMessage
 	cancelMessage
 	completeMessage
 	voucherMessage
 	voucherResultMessage
+	restartExistingChannelRequestMessage
 )
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
+func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
 	vbytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
@@ -36,8 +38,16 @@ func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.Type
 	if err != nil {
 		return nil, xerrors.Errorf("Error encoding selector")
 	}
+
+	var typ uint64
+	if isRestart {
+		typ = uint64(restartMessage)
+	} else {
+		typ = uint64(newMessage)
+	}
+
 	return &transferRequest{
-		Type:   uint64(newMessage),
+		Type:   typ,
 		Pull:   isPull,
 		Vouch:  &cborgen.Deferred{Raw: vbytes},
 		Stor:   &cborgen.Deferred{Raw: selBytes},
@@ -45,6 +55,13 @@ func NewRequest(id datatransfer.TransferID, isPull bool, vtype datatransfer.Type
 		VTyp:   vtype,
 		XferID: uint64(id),
 	}, nil
+}
+
+// RestartExistingChannelRequest creates a request to ask the other side to restart an existing channel
+func RestartExistingChannelRequest(channelId datatransfer.ChannelID) datatransfer.Request {
+
+	return &transferRequest{Type: uint64(restartExistingChannelRequestMessage),
+		RestartChannel: channelId}
 }
 
 // CancelRequest request generates a request to cancel an in progress request
@@ -75,6 +92,22 @@ func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifie
 		Vouch:  &cborgen.Deferred{Raw: vbytes},
 		VTyp:   vtype,
 		XferID: uint64(id),
+	}, nil
+}
+
+// RestartResponse builds a new Data Transfer response
+func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
+	vbytes, err := encoding.Encode(voucherResult)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
+	return &transferResponse{
+		Acpt:   accepted,
+		Type:   uint64(restartMessage),
+		Paus:   isPaused,
+		XferID: uint64(id),
+		VTyp:   voucherResultType,
+		VRes:   &cborgen.Deferred{Raw: vbytes},
 	}, nil
 }
 

@@ -21,7 +21,7 @@ func TestNewRequest(t *testing.T) {
 	isPull := true
 	id := datatransfer.TransferID(rand.Int31())
 	voucher := testutil.NewFakeDTType()
-	request, err := NewRequest(id, isPull, voucher.Type(), voucher, baseCid, selector)
+	request, err := NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
 	require.NoError(t, err)
 	assert.Equal(t, id, request.TransferID())
 	assert.False(t, request.IsCancel())
@@ -39,7 +39,57 @@ func TestNewRequest(t *testing.T) {
 
 	assert.True(t, msg.IsRequest())
 	assert.Equal(t, request.TransferID(), msg.TransferID())
+	assert.False(t, msg.IsRestart())
+	assert.True(t, msg.IsNew())
 }
+
+func TestRestartRequest(t *testing.T) {
+	baseCid := testutil.GenerateCids(1)[0]
+	selector := builder.NewSelectorSpecBuilder(basicnode.Style.Any).Matcher().Node()
+	isPull := true
+	id := datatransfer.TransferID(rand.Int31())
+	voucher := testutil.NewFakeDTType()
+	request, err := NewRequest(id, true, isPull, voucher.Type(), voucher, baseCid, selector)
+	require.NoError(t, err)
+	assert.Equal(t, id, request.TransferID())
+	assert.False(t, request.IsCancel())
+	assert.False(t, request.IsUpdate())
+	assert.True(t, request.IsPull())
+	assert.True(t, request.IsRequest())
+	assert.Equal(t, baseCid.String(), request.BaseCid().String())
+	testutil.AssertFakeDTVoucher(t, request, voucher)
+	receivedSelector, err := request.Selector()
+	require.NoError(t, err)
+	require.Equal(t, selector, receivedSelector)
+	// Sanity check to make sure we can cast to datatransfer.Message
+	msg, ok := request.(datatransfer.Message)
+	require.True(t, ok)
+
+	assert.True(t, msg.IsRequest())
+	assert.Equal(t, request.TransferID(), msg.TransferID())
+	assert.True(t, msg.IsRestart())
+	assert.False(t, msg.IsNew())
+}
+
+func TestRestartExistingChannelRequest(t *testing.T) {
+	peers := testutil.GeneratePeers(2)
+	tid := uint64(1)
+	chid := datatransfer.ChannelID{peers[0], peers[1], datatransfer.TransferID(tid)}
+	req := RestartExistingChannelRequest(chid)
+
+	wbuf := new(bytes.Buffer)
+	require.NoError(t, req.ToNet(wbuf))
+
+	desMsg, err := FromNet(wbuf)
+	require.NoError(t, err)
+	req, ok := (desMsg).(datatransfer.Request)
+	require.True(t, ok)
+	require.True(t, req.IsRestartExistingChannelRequest())
+	achid, err := req.RestartChannelId()
+	require.NoError(t, err)
+	require.Equal(t, chid, achid)
+}
+
 func TestTransferRequest_MarshalCBOR(t *testing.T) {
 	// sanity check MarshalCBOR does its thing w/o error
 	req, err := NewTestTransferRequest()
@@ -247,7 +297,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 	accepted := false
 	voucher := testutil.NewFakeDTType()
 	voucherResult := testutil.NewFakeDTType()
-	request, err := NewRequest(id, isPull, voucher.Type(), voucher, baseCid, selector)
+	request, err := NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
 	require.NoError(t, err)
 	buf := new(bytes.Buffer)
 	err = request.ToNet(buf)
@@ -304,5 +354,5 @@ func NewTestTransferRequest() (datatransfer.Request, error) {
 	isPull := false
 	id := datatransfer.TransferID(rand.Int31())
 	voucher := testutil.NewFakeDTType()
-	return NewRequest(id, isPull, voucher.Type(), voucher, bcid, selector)
+	return NewRequest(id, false, isPull, voucher.Type(), voucher, bcid, selector)
 }

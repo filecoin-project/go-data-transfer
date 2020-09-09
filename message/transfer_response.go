@@ -57,7 +57,8 @@ func (trsp *transferResponse) IsComplete() bool {
 }
 
 func (trsp *transferResponse) IsVoucherResult() bool {
-	return trsp.Type == uint64(voucherResultMessage) || trsp.Type == uint64(newMessage) || trsp.Type == uint64(completeMessage)
+	return trsp.Type == uint64(voucherResultMessage) || trsp.Type == uint64(newMessage) || trsp.Type == uint64(completeMessage) ||
+		trsp.Type == uint64(restartMessage)
 }
 
 // 	Accepted returns true if the request is accepted in the response
@@ -74,6 +75,10 @@ func (trsp *transferResponse) VoucherResult(decoder encoding.Decoder) (encoding.
 		return nil, xerrors.New("No voucher present to read")
 	}
 	return decoder.DecodeFromCbor(trsp.VRes.Raw)
+}
+
+func (trq *transferResponse) IsRestart() bool {
+	return trq.Type == uint64(restartMessage)
 }
 
 func (trsp *transferResponse) EmptyVoucherResult() bool {

@@ -1189,7 +1189,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 				voucher := testutil.NewFakeDTType()
-				request, err := message.NewRequest(id, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
+				request, err := message.NewRequest(id, false, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
 				buf := new(bytes.Buffer)
 				err = request.ToNet(buf)
@@ -1219,7 +1219,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				voucher := testutil.NewFakeDTType()
-				dtRequest, err := message.NewRequest(id, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
+				dtRequest, err := message.NewRequest(id, false, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
 
 				buf := new(bytes.Buffer)
@@ -1299,4 +1299,10 @@ func (r *receiver) ReceiveResponse(
 }
 
 func (r *receiver) ReceiveError(err error) {
+}
+
+func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
+	sender peer.ID,
+	incoming datatransfer.Request) {
+
 }
