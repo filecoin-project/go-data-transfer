@@ -99,7 +99,8 @@ func (t *Transport) OpenChannel(ctx context.Context,
 		if err != nil {
 			return xerrors.Errorf("failed to encode cid set: %w", err)
 		}
-		doNotSendExt := graphsync.ExtensionData{graphsync.ExtensionDoNotSendCIDs, bz}
+		doNotSendExt := graphsync.ExtensionData{Name: graphsync.ExtensionDoNotSendCIDs,
+			Data: bz}
 		exts = append(exts, doNotSendExt)
 	}
 	_, errChan := t.gs.Request(internalCtx, dataSender, root, stor, exts...)

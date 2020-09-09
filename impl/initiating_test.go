@@ -369,8 +369,8 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				testCids := testutil.GenerateCids(2)
 				ev, ok := h.dt.(datatransfer.EventsHandler)
 				require.True(t, ok)
-				ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[0]}, 12345)
-				ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[1]}, 12345)
+				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[0]}, 12345))
+				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[1]}, 12345))
 
 				// restart that pull channel
 				err = h.dt.RestartDataTransferChannel(ctx, channelID)
@@ -591,7 +591,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			// setup voucher processing
 			h.stor = testutil.AllSelector()
 			h.voucher = testutil.NewFakeDTType()
-			h.dt.RegisterVoucherType(h.voucher, h.voucherValidator)
+			require.NoError(t, h.dt.RegisterVoucherType(h.voucher, h.voucherValidator))
 			h.voucherResult = testutil.NewFakeDTType()
 			err = h.dt.RegisterVoucherResultType(h.voucherResult)
 			require.NoError(t, err)

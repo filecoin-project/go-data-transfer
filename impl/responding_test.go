@@ -611,8 +611,8 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				testCids := testutil.GenerateCids(2)
 				ev, ok := h.dt.(datatransfer.EventsHandler)
 				require.True(t, ok)
-				ev.OnDataReceived(chid, cidlink.Link{Cid: testCids[0]}, 12345)
-				ev.OnDataReceived(chid, cidlink.Link{Cid: testCids[1]}, 12345)
+				require.NoError(t, ev.OnDataReceived(chid, cidlink.Link{Cid: testCids[0]}, 12345))
+				require.NoError(t, ev.OnDataReceived(chid, cidlink.Link{Cid: testCids[1]}, 12345))
 
 				// receive restart push request
 				req, err := message.NewRequest(h.pushRequest.TransferID(), true, false, h.voucher.Type(), h.voucher,
@@ -661,7 +661,8 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
-				h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				require.NoError(t, err)
 				require.Len(t, h.sv.ValidationsReceived, 1)
 				require.Len(t, h.transport.OpenedChannels, 0)
 				require.Len(t, h.network.SentMessages, 0)
@@ -702,7 +703,8 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
-				h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				require.NoError(t, err)
 				require.Len(t, h.sv.ValidationsReceived, 1)
 				require.Len(t, h.transport.OpenedChannels, 0)
 				require.Len(t, h.network.SentMessages, 0)
@@ -722,7 +724,8 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				// receive an incoming pull
 				h.sv.ExpectSuccessPull()
 				h.sv.StubResult(testutil.NewFakeDTType())
-				h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				require.NoError(t, err)
 				require.Len(t, h.sv.ValidationsReceived, 1)
 				require.Len(t, h.transport.OpenedChannels, 0)
 				require.Len(t, h.network.SentMessages, 0)
@@ -743,7 +746,8 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
-				h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				require.NoError(t, err)
 				require.Len(t, h.sv.ValidationsReceived, 1)
 				require.Len(t, h.transport.OpenedChannels, 0)
 				require.Len(t, h.network.SentMessages, 0)
@@ -764,7 +768,8 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
-				h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				require.NoError(t, err)
 				require.Len(t, h.sv.ValidationsReceived, 1)
 				require.Len(t, h.transport.OpenedChannels, 0)
 				require.Len(t, h.network.SentMessages, 0)
@@ -785,7 +790,8 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
-				h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
+				require.NoError(t, err)
 				require.Len(t, h.sv.ValidationsReceived, 1)
 				require.Len(t, h.transport.OpenedChannels, 0)
 				require.Len(t, h.network.SentMessages, 0)
@@ -813,8 +819,8 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				testCids := testutil.GenerateCids(2)
 				ev, ok := h.dt.(datatransfer.EventsHandler)
 				require.True(t, ok)
-				ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[0]}, 12345)
-				ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[1]}, 12345)
+				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[0]}, 12345))
+				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[1]}, 12345))
 
 				// send a request to restart the same pull channel
 				restartReq := message.RestartExistingChannelRequest(channelID)

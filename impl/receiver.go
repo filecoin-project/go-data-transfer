@@ -113,7 +113,7 @@ func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
 
 	ch, err := incoming.RestartChannelId()
 	if err != nil {
-		log.Error(err)
+		log.Errorf("failed to fetch restart channel Id: %w", err)
 		return
 	}
 
@@ -144,9 +144,13 @@ func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
 
 	switch r.manager.channelDataTransferType(channel) {
 	case ManagerPeerCreatePush:
-		r.manager.openPushRestartChannel(ctx, channel)
+		if err := r.manager.openPushRestartChannel(ctx, channel); err != nil {
+			log.Errorf("failed to open push restart channel: %w", err)
+		}
 	case ManagerPeerCreatePull:
-		r.manager.openPullRestartChannel(ctx, channel)
+		if err := r.manager.openPullRestartChannel(ctx, channel); err != nil {
+			log.Errorf("failed to open pull restart channel: %w", err)
+		}
 	default:
 		log.Error("peer is not the creator of the channel")
 	}
