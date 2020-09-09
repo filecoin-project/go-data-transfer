@@ -167,5 +167,9 @@ func TestMessageSendAndReceive(t *testing.T) {
 
 		receivedRequest := r.lastRestartRequest
 		require.NotNil(t, receivedRequest)
+		achid, err := receivedRequest.RestartChannelId()
+		require.NoError(t, err)
+		require.Equal(t, chId, achid)
 	})
+
 }

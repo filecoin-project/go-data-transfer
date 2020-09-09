@@ -217,7 +217,7 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 
 	voucher, result, err := m.validateVoucher(initiator, incoming, incoming.IsPull(), incoming.BaseCid(), stor)
 	if err != nil && err != datatransfer.ErrPause {
-		return result, err
+		return result, xerrors.Errorf("failed to validate voucher: %w", err)
 	}
 	voucherErr := err
 

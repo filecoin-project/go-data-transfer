@@ -114,27 +114,32 @@ func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
 	ch, err := incoming.RestartChannelId()
 	if err != nil {
 		log.Error(err)
+		return
 	}
 
 	// validate channel exists -> in non-terminal state and that the sender matches
 	channel, err := r.manager.channels.GetByID(ctx, ch)
-	if err != nil {
+	if err != nil || channel == nil {
 		// nothing to do here, we wont handle the request
+		return
 	}
 
-	// initator should be me
+	// initiator should be me
 	if channel.ChannelID().Initiator != r.manager.peerID {
 		log.Error("channel initiator is not the manager peer")
+		return
 	}
 
 	// other peer should be the counter party on the channel
 	if channel.OtherParty(r.manager.peerID) != sender {
-		log.Error("channel counterpart is not the sender peer")
+		log.Error("channel counterparty is not the sender peer")
+		return
 	}
 
 	// channel should NOT be terminated
 	if channels.IsChannelTerminated(channel.Status()) {
 		log.Error("channel is already terminated")
+		return
 	}
 
 	switch r.manager.channelDataTransferType(channel) {

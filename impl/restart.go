@@ -1,11 +1,13 @@
 package impl
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"
+	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/message"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -30,7 +32,7 @@ const (
 
 func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel datatransfer.ChannelState) error {
 	if err := m.validateRestartVoucher(channel, false); err != nil {
-		return err
+		return xerrors.Errorf("failed to restart channel, validation error: %w", err)
 	}
 
 	// send a libp2p message to the other peer asking to send a "restart push request"
@@ -41,7 +43,7 @@ func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel dat
 
 func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel datatransfer.ChannelState) error {
 	if err := m.validateRestartVoucher(channel, true); err != nil {
-		return err
+		return xerrors.Errorf("failed to restart channel, validation error: %w", err)
 	}
 
 	req := message.RestartExistingChannelRequest(channel.ChannelID())
@@ -124,30 +126,46 @@ func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransf
 }
 
 func (m *manager) validateRestartRequest(ctx context.Context, otherPeer peer.ID, chid datatransfer.ChannelID, req datatransfer.Request) error {
+	// channel should exist
 	channel, err := m.channels.GetByID(ctx, chid)
 	if err != nil {
 		return err
 	}
 
+	// channel is not terminated
 	if channels.IsChannelTerminated(channel.Status()) {
 		return xerrors.New("channel is already terminated")
 	}
 
+	// channel initator should be the sender peer
 	if channel.ChannelID().Initiator != otherPeer {
 		return xerrors.New("other peer is not the initiator of the channel")
 	}
 
-	// channel and request params should match
+	// channel and request baseCid should match
 	if req.BaseCid() != channel.BaseCID() {
 		return xerrors.New("base cid does not match")
 	}
 
+	// vouchers should match
 	reqVoucher, err := m.decodeVoucher(req, m.validatedTypes)
 	if err != nil {
 		return xerrors.Errorf("failed to decode request voucher: %w", err)
 	}
+	if reqVoucher.Type() != channel.Voucher().Type() {
+		return xerrors.New("channel and request voucher types do not match")
+	}
 
-	if reqVoucher != channel.Voucher() {
+	reqBz, err := encoding.Encode(reqVoucher)
+	if err != nil {
+		return xerrors.New("failed to encode request voucher")
+	}
+	channelBz, err := encoding.Encode(channel.Voucher())
+	if err != nil {
+		return xerrors.New("failed to encode channel voucher")
+	}
+
+	if !bytes.Equal(reqBz, channelBz) {
 		return xerrors.New("channel and request vouchers do not match")
 	}
 
