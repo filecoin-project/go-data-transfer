@@ -14,6 +14,7 @@ import (
 // (either request or response) that can serialize to a protobuf
 type Message interface {
 	IsRequest() bool
+	IsRestart() bool
 	IsNew() bool
 	IsUpdate() bool
 	IsPaused() bool
@@ -33,6 +34,8 @@ type Request interface {
 	Voucher(decoder encoding.Decoder) (encoding.Encodable, error)
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
+	IsRestartExistingChannelRequest() bool
+	RestartChannelId() (ChannelID, error)
 }
 
 // Response is a response message for the data transfer protocol

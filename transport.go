@@ -3,6 +3,7 @@ package datatransfer
 import (
 	"context"
 
+	"github.com/ipfs/go-cid"
 	ipld "github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 )
@@ -73,6 +74,7 @@ type Transport interface {
 		channelID ChannelID,
 		root ipld.Link,
 		stor ipld.Node,
+		doNotSendCids []cid.Cid,
 		msg Message) error
 
 	// CloseChannel closes the given channel

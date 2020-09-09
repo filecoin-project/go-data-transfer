@@ -5,10 +5,13 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
+	"github.com/ipfs/go-graphsync/cidset"
 	logging "github.com/ipfs/go-log/v2"
 	ipld "github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
@@ -71,6 +74,7 @@ func (t *Transport) OpenChannel(ctx context.Context,
 	channelID datatransfer.ChannelID,
 	root ipld.Link,
 	stor ipld.Node,
+	doNotSendCids []cid.Cid,
 	msg datatransfer.Message) error {
 	if t.events == nil {
 		return datatransfer.ErrHandlerNotSet
@@ -84,7 +88,22 @@ func (t *Transport) OpenChannel(ctx context.Context,
 	t.pending[channelID] = make(chan struct{})
 	t.contextCancelMap[channelID] = internalCancel
 	t.dataLock.Unlock()
-	_, errChan := t.gs.Request(internalCtx, dataSender, root, stor, ext)
+
+	exts := []graphsync.ExtensionData{ext}
+	if len(doNotSendCids) != 0 {
+		set := cid.NewSet()
+		for _, c := range doNotSendCids {
+			set.Add(c)
+		}
+		bz, err := cidset.EncodeCidSet(set)
+		if err != nil {
+			return xerrors.Errorf("failed to encode cid set: %w", err)
+		}
+		doNotSendExt := graphsync.ExtensionData{graphsync.ExtensionDoNotSendCIDs, bz}
+		exts = append(exts, doNotSendExt)
+	}
+	_, errChan := t.gs.Request(internalCtx, dataSender, root, stor, exts...)
+
 	go t.executeGsRequest(ctx, channelID, errChan)
 	return nil
 }

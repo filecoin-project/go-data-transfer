@@ -118,4 +118,7 @@ type Manager interface {
 
 	// get all in progress transfers
 	InProgressChannels(ctx context.Context) (map[ChannelID]ChannelState, error)
+
+	// RestartDataTransferChannel restarts an existing data transfer channel
+	RestartDataTransferChannel(ctx context.Context, chid ChannelID) error
 }
