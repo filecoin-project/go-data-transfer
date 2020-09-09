@@ -592,6 +592,19 @@ func TestDataTransferRestartResponding(t *testing.T) {
 		configureRevalidator func(sv *testutil.StubbedRevalidator)
 		verify               func(t *testing.T, h *receiverHarness)
 	}{
+		"receiving a pull restart response": {
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Restart, datatransfer.ResumeResponder},
+			verify: func(t *testing.T, h *receiverHarness) {
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				require.NoError(t, err)
+				require.NotEmpty(t, channelID)
+
+				response, err := message.RestartResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
+				require.NoError(t, err)
+				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
+				require.NoError(t, err)
+			},
+		},
 		"receiving a push restart request validates and opens a channel for pull": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept,
 				datatransfer.DataReceived, datatransfer.DataReceived, datatransfer.NewVoucherResult, datatransfer.Restart},
