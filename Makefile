@@ -15,3 +15,7 @@ test:
 
 type-gen: build
 	go generate ./...
+
+lint:
+	git fetch
+	golangci-lint run -v --concurrency 2 --new-from-rev origin/master

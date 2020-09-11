@@ -7,14 +7,19 @@ import (
 	"time"
 
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/jpillora/backoff"
 	"github.com/libp2p/go-libp2p-core/helpers"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
+	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
 )
+
+const maxStreamOpenAttempts = 4
 
 var log = logging.Logger("data_transfer_network")
 
@@ -38,7 +43,30 @@ type libp2pDataTransferNetwork struct {
 }
 
 func (dtnet *libp2pDataTransferNetwork) newStreamToPeer(ctx context.Context, p peer.ID) (network.Stream, error) {
-	return dtnet.host.NewStream(ctx, p, ProtocolDataTransfer)
+	return dtnet.openStream(ctx, p, ProtocolDataTransfer)
+}
+
+func (impl *libp2pDataTransferNetwork) openStream(ctx context.Context, id peer.ID, protocol protocol.ID) (network.Stream, error) {
+	b := &backoff.Backoff{
+		Min:    100 * time.Millisecond,
+		Max:    10 * time.Second,
+		Factor: 5,
+		Jitter: true,
+	}
+
+	for {
+		s, err := impl.host.NewStream(ctx, id, protocol)
+		if err == nil {
+			return s, err
+		}
+
+		nAttempts := b.Attempt()
+		if nAttempts == maxStreamOpenAttempts {
+			return nil, xerrors.Errorf("exhausted %d attempts but failed to open stream, err: %w", maxStreamOpenAttempts, err)
+		}
+		d := b.Duration()
+		time.Sleep(d)
+	}
 }
 
 func (dtnet *libp2pDataTransferNetwork) SendMessage(
