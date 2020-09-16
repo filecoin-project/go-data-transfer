@@ -708,7 +708,7 @@ func TestManager(t *testing.T) {
 				require.Eventually(t, func() bool {
 					return events.OnRequestTimedOutCalled == true
 				}, 2*time.Second, 100*time.Millisecond)
-				require.Equal(t, events.OnRequestTimedOutChannelId, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self}, events.OnRequestTimedOutChannelId)
+				require.Equal(t, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self}, events.OnRequestTimedOutChannelId)
 			},
 		},
 		"request pause works even if called when request is still pending": {
