@@ -139,7 +139,7 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 		return datatransfer.ChannelID{}, err
 	}
 
-	chid, err := m.channels.CreateNew(req.TransferID(), baseCid, selector, voucher,
+	chid, err := m.channels.CreateNew(m.peerID, req.TransferID(), baseCid, selector, voucher,
 		m.peerID, m.peerID, requestTo) // initiator = us, sender = us, receiver = them
 	if err != nil {
 		return chid, err
@@ -166,7 +166,7 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 		return datatransfer.ChannelID{}, err
 	}
 	// initiator = us, sender = them, receiver = us
-	chid, err := m.channels.CreateNew(req.TransferID(), baseCid, selector, voucher,
+	chid, err := m.channels.CreateNew(m.peerID, req.TransferID(), baseCid, selector, voucher,
 		m.peerID, requestTo, m.peerID)
 	if err != nil {
 		return chid, err

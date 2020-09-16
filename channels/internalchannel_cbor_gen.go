@@ -15,7 +15,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufinternalChannelState = []byte{143}
+var lengthBufinternalChannelState = []byte{144}
 
 func (t *internalChannelState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -27,6 +27,18 @@ func (t *internalChannelState) MarshalCBOR(w io.Writer) error {
 	}
 
 	scratch := make([]byte, 9)
+
+	// t.ManagerPeer (peer.ID) (string)
+	if len(t.ManagerPeer) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.ManagerPeer was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.ManagerPeer))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.ManagerPeer)); err != nil {
+		return err
+	}
 
 	// t.TransferID (datatransfer.TransferID) (uint64)
 
@@ -187,10 +199,20 @@ func (t *internalChannelState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 15 {
+	if extra != 16 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
+	// t.ManagerPeer (peer.ID) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.ManagerPeer = peer.ID(sval)
+	}
 	// t.TransferID (datatransfer.TransferID) (uint64)
 
 	{

@@ -12,7 +12,7 @@ require (
 	github.com/ipfs/go-blockservice v0.1.3
 	github.com/ipfs/go-cid v0.0.7
 	github.com/ipfs/go-datastore v0.4.4
-	github.com/ipfs/go-graphsync v0.1.2
+	github.com/ipfs/go-graphsync v0.1.2-0.20200915122843-4c9b3c863031
 	github.com/ipfs/go-ipfs-blockstore v1.0.1
 	github.com/ipfs/go-ipfs-blocksutil v0.0.1
 	github.com/ipfs/go-ipfs-chunker v0.0.5
@@ -29,5 +29,8 @@ require (
 	github.com/libp2p/go-libp2p-core v0.5.0
 	github.com/stretchr/testify v1.5.1
 	github.com/whyrusleeping/cbor-gen v0.0.0-20200810223238-211df3b9e24c
+	go.uber.org/atomic v1.6.0
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 )
+
+replace github.com/ipfs/go-graphsync => /Users/aarshshah/go/src/github.com/ipfs/go-graphsync
