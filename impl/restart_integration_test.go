@@ -7,9 +7,6 @@ import (
 	"testing"
 	"time"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	. "github.com/filecoin-project/go-data-transfer/impl"
-	"github.com/filecoin-project/go-data-transfer/testutil"
 	"github.com/ipfs/go-cid"
 	ipldformat "github.com/ipfs/go-ipld-format"
 	"github.com/ipld/go-ipld-prime"
@@ -18,6 +15,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 	"golang.org/x/xerrors"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	. "github.com/filecoin-project/go-data-transfer/impl"
+	"github.com/filecoin-project/go-data-transfer/testutil"
 )
 
 const totalIncrements = 204
@@ -122,20 +123,20 @@ func TestRestartPush(t *testing.T) {
 
 				if channelState.Status() == datatransfer.Completed {
 					finishedPeersLk.Lock()
-					finishedPeers = append(finishedPeers, channelState.ManagerPeer())
+					finishedPeers = append(finishedPeers, channelState.SelfPeer())
 					finishedPeersLk.Unlock()
-					finished <- channelState.ManagerPeer()
+					finished <- channelState.SelfPeer()
 				}
 				if event.Code == datatransfer.Error {
 					err := xerrors.New(channelState.Message())
-					errChan <- &peerError{channelState.ManagerPeer(), err}
+					errChan <- &peerError{channelState.SelfPeer(), err}
 				}
 				if event.Code == datatransfer.Open {
 					opens.Inc()
 				}
 
 				if event.Code == datatransfer.Restart {
-					fmt.Printf("\n Restart for peer %s", channelState.ManagerPeer().Pretty())
+					fmt.Printf("\n Restart for peer %s", channelState.SelfPeer().Pretty())
 				}
 			}
 			rh.dt1.SubscribeToEvents(subscriber)
@@ -153,7 +154,6 @@ func TestRestartPush(t *testing.T) {
 
 				waitCtx, cancel := context.WithTimeout(rh.testCtx, wait)
 				defer cancel()
-				i := 0
 				for completes < nCompletes {
 					select {
 					case <-waitCtx.Done():
@@ -166,7 +166,6 @@ func TestRestartPush(t *testing.T) {
 					case s := <-sent:
 						sentI = append(sentI, s)
 					case r := <-received:
-						i++
 						receivedI = append(receivedI, r)
 					}
 				}

@@ -26,7 +26,7 @@ type encodedVoucherResult struct {
 
 type internalChannelState struct {
 	// PeerId of the manager peer
-	ManagerPeer peer.ID
+	SelfPeer peer.ID
 	// an identifier for this channel shared by request and responder, set by requester through protocol
 	TransferID datatransfer.TransferID
 	// Initiator is the person who intiated this datatransfer request
@@ -60,7 +60,7 @@ type internalChannelState struct {
 
 func (c internalChannelState) ToChannelState(voucherDecoder DecoderByTypeFunc, voucherResultDecoder DecoderByTypeFunc) datatransfer.ChannelState {
 	return channelState{
-		managerPeer:          c.ManagerPeer,
+		selfPeer:             c.SelfPeer,
 		isPull:               c.Initiator == c.Recipient,
 		transferID:           c.TransferID,
 		baseCid:              c.BaseCid,

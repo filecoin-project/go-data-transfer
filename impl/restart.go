@@ -5,13 +5,14 @@ import (
 	"context"
 	"fmt"
 
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/xerrors"
+
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"
 	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/message"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"golang.org/x/xerrors"
 )
 
 type ChannelDataTransferType int
@@ -38,7 +39,7 @@ func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel dat
 	// send a libp2p message to the other peer asking to send a "restart push request"
 	req := message.RestartExistingChannelRequest(channel.ChannelID())
 
-	return m.dataTransferNetwork.SendMessage(ctx, channel.OtherParty(m.peerID), req)
+	return m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req)
 }
 
 func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel datatransfer.ChannelState) error {
@@ -49,7 +50,7 @@ func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel dat
 	req := message.RestartExistingChannelRequest(channel.ChannelID())
 
 	// send a libp2p message to the other peer asking to send a "restart pull request"
-	return m.dataTransferNetwork.SendMessage(ctx, channel.OtherParty(m.peerID), req)
+	return m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req)
 }
 
 func (m *manager) validateRestartVoucher(channel datatransfer.ChannelState, isPull bool) error {
@@ -64,7 +65,7 @@ func (m *manager) validateRestartVoucher(channel datatransfer.ChannelState, isPu
 	}
 
 	// revalidate the voucher by reconstructing the request that would have led to the creation of this channel
-	if _, _, err := m.validateVoucher(channel.OtherParty(m.peerID), req, isPull, channel.BaseCID(), channel.Selector()); err != nil {
+	if _, _, err := m.validateVoucher(channel.OtherPeer(), req, isPull, channel.BaseCID(), channel.Selector()); err != nil {
 		return err
 	}
 
@@ -75,7 +76,7 @@ func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransf
 	selector := channel.Selector()
 	voucher := channel.Voucher()
 	baseCid := channel.BaseCID()
-	requestTo := channel.OtherParty(m.peerID)
+	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
 
 	req, err := message.NewRequest(chid.ID, true, false, voucher.Type(), voucher, baseCid, selector)
@@ -102,7 +103,7 @@ func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransf
 	selector := channel.Selector()
 	voucher := channel.Voucher()
 	baseCid := channel.BaseCID()
-	requestTo := channel.OtherParty(m.peerID)
+	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
 
 	req, err := message.NewRequest(chid.ID, true, true, voucher.Type(), voucher, baseCid, selector)
