@@ -74,7 +74,8 @@ func TestRestartRequest(t *testing.T) {
 func TestRestartExistingChannelRequest(t *testing.T) {
 	peers := testutil.GeneratePeers(2)
 	tid := uint64(1)
-	chid := datatransfer.ChannelID{peers[0], peers[1], datatransfer.TransferID(tid)}
+	chid := datatransfer.ChannelID{Initiator: peers[0],
+		Responder: peers[1], ID: datatransfer.TransferID(tid)}
 	req := RestartExistingChannelRequest(chid)
 
 	wbuf := new(bytes.Buffer)

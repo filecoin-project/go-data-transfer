@@ -39,6 +39,8 @@ import (
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
 )
 
+const loremFile = "lorem.txt"
+
 func TestRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	testCases := map[string]struct {
@@ -149,7 +151,7 @@ func TestRoundTrip(t *testing.T) {
 			} else {
 				sourceDagService = gsData.DagService1
 			}
-			root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService)
+			root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService, loremFile)
 			rootCid := root.(cidlink.Link).Cid
 
 			var destDagService ipldformat.DAGService
@@ -273,7 +275,7 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 			}
 			sv := testutil.NewStubbedValidator()
 
-			root, origBytes := testutil.LoadUnixFSFile(ctx, t, gsData.DagService1)
+			root, origBytes := testutil.LoadUnixFSFile(ctx, t, gsData.DagService1, loremFile)
 			rootCid := root.(cidlink.Link).Cid
 
 			destDagServices := make([]ipldformat.DAGService, 0, data.requestCount)
@@ -443,7 +445,7 @@ func TestManyReceiversAtOnce(t *testing.T) {
 			}
 			sv := testutil.NewStubbedValidator()
 
-			root, origBytes := testutil.LoadUnixFSFile(ctx, t, gsData.DagService1)
+			root, origBytes := testutil.LoadUnixFSFile(ctx, t, gsData.DagService1, loremFile)
 			rootCid := root.(cidlink.Link).Cid
 
 			if data.isPull {
@@ -539,7 +541,7 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 			dt2.SubscribeToEvents(subscriber)
 			voucher := testutil.FakeDTType{Data: "applesauce"}
 			sv := testutil.NewStubbedValidator()
-			root, _ := testutil.LoadUnixFSFile(ctx, t, gsData.DagService1)
+			root, _ := testutil.LoadUnixFSFile(ctx, t, gsData.DagService1, loremFile)
 			rootCid := root.(cidlink.Link).Cid
 
 			var chid datatransfer.ChannelID

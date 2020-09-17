@@ -151,7 +151,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 	t.Run("Send Restart Request", func(t *testing.T) {
 		peers := testutil.GeneratePeers(2)
 		id := datatransfer.TransferID(rand.Int31())
-		chId := datatransfer.ChannelID{peers[0], peers[1], id}
+		chId := datatransfer.ChannelID{Initiator: peers[0],
+			Responder: peers[1], ID: id}
 
 		request := message.RestartExistingChannelRequest(chId)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
@@ -167,5 +168,9 @@ func TestMessageSendAndReceive(t *testing.T) {
 
 		receivedRequest := r.lastRestartRequest
 		require.NotNil(t, receivedRequest)
+		achid, err := receivedRequest.RestartChannelId()
+		require.NoError(t, err)
+		require.Equal(t, chId, achid)
 	})
+
 }
