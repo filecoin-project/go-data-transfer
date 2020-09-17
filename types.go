@@ -103,6 +103,9 @@ type Channel interface {
 type ChannelState interface {
 	Channel
 
+	// ManagerPeer returns the manager peer for this channel
+	ManagerPeer() peer.ID
+
 	// Status is the current status of this channel
 	Status() Status
 

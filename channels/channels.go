@@ -90,7 +90,7 @@ func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 
 // CreateNew creates a new channel id and channel state and saves to channels.
 // returns error if the channel exists already.
-func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selector ipld.Node, voucher datatransfer.Voucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
+func (c *Channels) CreateNew(managerPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector ipld.Node, voucher datatransfer.Voucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
 	var responder peer.ID
 	if dataSender == initiator {
 		responder = dataReceiver
@@ -107,13 +107,14 @@ func (c *Channels) CreateNew(tid datatransfer.TransferID, baseCid cid.Cid, selec
 		return datatransfer.ChannelID{}, err
 	}
 	err = c.statemachines.Begin(chid, &internalChannelState{
-		TransferID: tid,
-		Initiator:  initiator,
-		Responder:  responder,
-		BaseCid:    baseCid,
-		Selector:   &cbg.Deferred{Raw: selBytes},
-		Sender:     dataSender,
-		Recipient:  dataReceiver,
+		ManagerPeer: managerPeer,
+		TransferID:  tid,
+		Initiator:   initiator,
+		Responder:   responder,
+		BaseCid:     baseCid,
+		Selector:    &cbg.Deferred{Raw: selBytes},
+		Sender:      dataSender,
+		Recipient:   dataReceiver,
 		Vouchers: []encodedVoucher{
 			{
 				Type: voucher.Type(),
