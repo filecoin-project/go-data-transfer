@@ -2,7 +2,6 @@ package impl_test
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -136,7 +135,7 @@ func TestRestartPush(t *testing.T) {
 				}
 
 				if event.Code == datatransfer.Restart {
-					fmt.Printf("\n Restart for peer %s", channelState.SelfPeer().Pretty())
+					t.Logf("got restart event for peer %s", channelState.SelfPeer().Pretty())
 				}
 			}
 			rh.dt1.SubscribeToEvents(subscriber)
@@ -244,6 +243,25 @@ func TestRestartPull(t *testing.T) {
 				require.NoError(rh.t, rh.dt2.RestartDataTransferChannel(rh.testCtx, chId))
 			},
 		},
+		"Restart peer receive pull": {
+			stopAt: 40,
+			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
+				voucher := testutil.FakeDTType{Data: "applesauce"}
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, &voucher, rh.rootCid, rh.gsData.AllSelector)
+				require.NoError(rh.t, err)
+				return chid
+			},
+			restartF: func(rh *restartHarness, chId datatransfer.ChannelID, subscriber datatransfer.Subscriber) {
+				var err error
+				tp1 := rh.gsData.SetupGSTransportHost1()
+				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1, rh.gsData.StoredCounter1)
+				require.NoError(rh.t, err)
+				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
+				require.NoError(rh.t, rh.dt1.Start(rh.testCtx))
+				rh.dt1.SubscribeToEvents(subscriber)
+				require.NoError(rh.t, rh.dt1.RestartDataTransferChannel(rh.testCtx, chId))
+			},
+		},
 	}
 
 	for name, tc := range tcs {
@@ -305,7 +323,7 @@ func TestRestartPull(t *testing.T) {
 				}
 
 				if event.Code == datatransfer.Restart {
-					fmt.Printf("\n Restart for peer %s", channelState.SelfPeer().Pretty())
+					t.Logf("got restart event for peer %s", channelState.SelfPeer().Pretty())
 				}
 			}
 			rh.dt1.SubscribeToEvents(subscriber)

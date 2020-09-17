@@ -45,6 +45,8 @@ var ChannelEvents = fsm.Events{
 		return nil
 	}),
 
+	fsm.Event(datatransfer.Disconnected).FromAny().To(datatransfer.PeerDisconnected),
+
 	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failing).Action(func(chst *internalChannelState, err error) error {
 		chst.Message = err.Error()
 		return nil

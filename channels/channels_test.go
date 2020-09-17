@@ -283,6 +283,27 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, peers[2], ch.SelfPeer())
 		require.Equal(t, peers[1], ch.OtherPeer())
 	})
+
+	t.Run("test disconnected", func(t *testing.T) {
+		ds := datastore.NewMapDatastore()
+		received := make(chan event)
+		notifier := func(evt datatransfer.Event, chst datatransfer.ChannelState) {
+			received <- event{evt, chst}
+		}
+
+		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{})
+		require.NoError(t, err)
+
+		chid, err := channelList.CreateNew(peers[3], tid1, cids[0], selector, fv1, peers[3], peers[0], peers[3])
+		require.NoError(t, err)
+		state := checkEvent(ctx, t, received, datatransfer.Open)
+		require.Equal(t, datatransfer.Requested, state.Status())
+
+		err = channelList.Disconnected(chid)
+		require.NoError(t, err)
+		state = checkEvent(ctx, t, received, datatransfer.Disconnected)
+		require.Equal(t, datatransfer.PeerDisconnected, state.Status())
+	})
 }
 
 func TestIsChannelTerminated(t *testing.T) {
