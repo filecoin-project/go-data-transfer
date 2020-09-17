@@ -182,6 +182,8 @@ func TestRestartPush(t *testing.T) {
 
 			// Connect the peers and restart
 			require.NoError(t, rh.gsData.Mn.LinkAll())
+			// let linking take effect
+			time.Sleep(500 * time.Millisecond)
 			conn, err := rh.gsData.Mn.ConnectPeers(rh.peer1, rh.peer2)
 			require.NoError(t, err)
 			require.NotNil(t, conn)
