@@ -47,6 +47,10 @@ type EventsHandler interface {
 	// OnResponseCompleted is called when we finish sending data for the given channel ID
 	// Error returns are logged but otherwise have not effect
 	OnChannelCompleted(chid ChannelID, success bool) error
+
+	// OnRequestTimedOut is called when a request we opened (with the given channel Id) to receive data times out.
+	// Error returns are logged but otherwise have no effect
+	OnRequestTimedOut(chid ChannelID) error
 }
 
 /*

@@ -15,6 +15,8 @@ import (
 
 // channelState is immutable channel data plus mutable state
 type channelState struct {
+	// peerId of the manager peer
+	managerPeer peer.ID
 	// an identifier for this channel shared by request and responder, set by requester through protocol
 	transferID datatransfer.TransferID
 	// base CID for the piece being transferred
@@ -152,6 +154,10 @@ func (c channelState) OtherParty(thisParty peer.ID) peer.ID {
 		return c.recipient
 	}
 	return c.sender
+}
+
+func (c channelState) ManagerPeer() peer.ID {
+	return c.managerPeer
 }
 
 var _ datatransfer.ChannelState = channelState{}

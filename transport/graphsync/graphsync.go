@@ -84,7 +84,12 @@ func (t *Transport) OpenChannel(ctx context.Context,
 		return err
 	}
 	internalCtx, internalCancel := context.WithCancel(ctx)
+
 	t.dataLock.Lock()
+	// if we have an existing request pending for the channelID, cancel it first.
+	if cancelF, ok := t.contextCancelMap[channelID]; ok {
+		cancelF()
+	}
 	t.pending[channelID] = make(chan struct{})
 	t.contextCancelMap[channelID] = internalCancel
 	t.dataLock.Unlock()
@@ -99,7 +104,8 @@ func (t *Transport) OpenChannel(ctx context.Context,
 		if err != nil {
 			return xerrors.Errorf("failed to encode cid set: %w", err)
 		}
-		doNotSendExt := graphsync.ExtensionData{graphsync.ExtensionDoNotSendCIDs, bz}
+		doNotSendExt := graphsync.ExtensionData{Name: graphsync.ExtensionDoNotSendCIDs,
+			Data: bz}
 		exts = append(exts, doNotSendExt)
 	}
 	_, errChan := t.gs.Request(internalCtx, dataSender, root, stor, exts...)
@@ -125,12 +131,20 @@ func (t *Transport) consumeResponses(ctx context.Context, errChan <-chan error) 
 
 func (t *Transport) executeGsRequest(ctx context.Context, channelID datatransfer.ChannelID, errChan <-chan error) {
 	lastError := t.consumeResponses(ctx, errChan)
+
 	if _, ok := lastError.(graphsync.RequestContextCancelledErr); ok {
+		log.Warnf("graphsync request context cancelled, channel Id: %v", channelID)
+		if err := t.events.OnRequestTimedOut(channelID); err != nil {
+			log.Error(err)
+		}
 		return
 	}
+
 	if _, ok := lastError.(graphsync.RequestCancelledErr); ok {
+		// TODO Should we do anything for RequestCancelledErr ?
 		return
 	}
+
 	if lastError != nil {
 		log.Warnf("graphsync error: %s", lastError.Error())
 	}

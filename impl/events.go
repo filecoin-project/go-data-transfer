@@ -160,6 +160,13 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 	return m.resumeOther(chid)
 }
 
+func (m *manager) OnRequestTimedOut(chid datatransfer.ChannelID) error {
+	// TODO Start a timer to cleanup state if this dosen't complete in a while
+	// TODO Should we introduce a new state for this ?
+	log.Warnf("channel %v has timed out", chid)
+	return nil
+}
+
 func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, success bool) error {
 	if success {
 		if chid.Initiator != m.peerID {
@@ -233,7 +240,7 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 
 	voucher, result, err := m.validateVoucher(initiator, incoming, incoming.IsPull(), incoming.BaseCid(), stor)
 	if err != nil && err != datatransfer.ErrPause {
-		return result, err
+		return result, xerrors.Errorf("failed to validate voucher: %w", err)
 	}
 	voucherErr := err
 
@@ -285,7 +292,7 @@ func (m *manager) acceptRequest(
 		dataReceiver = m.peerID
 	}
 
-	chid, err := m.channels.CreateNew(incoming.TransferID(), incoming.BaseCid(), stor, voucher, initiator, dataSender, dataReceiver)
+	chid, err := m.channels.CreateNew(m.peerID, incoming.TransferID(), incoming.BaseCid(), stor, voucher, initiator, dataSender, dataReceiver)
 	if err != nil {
 		return result, err
 	}

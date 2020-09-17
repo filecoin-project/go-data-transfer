@@ -46,6 +46,8 @@ import (
 
 var allSelector ipld.Node
 
+const loremFile = "lorem.txt"
+
 func init() {
 	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
 	allSelector = ssb.ExploreRecursive(selector.RecursionLimitNone(),
@@ -173,19 +175,19 @@ func (gsData *GraphsyncTestingData) LoadUnixFSFile(t *testing.T, useSecondNode b
 		dagService = gsData.DagService1
 	}
 
-	link, origBytes := LoadUnixFSFile(gsData.Ctx, t, dagService)
+	link, origBytes := LoadUnixFSFile(gsData.Ctx, t, dagService, loremFile)
 	gsData.OrigBytes = origBytes
 	return link
 }
 
 // LoadUnixFSFile loads a fixtures file into the given DAG Service, returning an ipld.Link for the file
 // and the original file bytes
-func LoadUnixFSFile(ctx context.Context, t *testing.T, dagService ipldformat.DAGService) (ipld.Link, []byte) {
+func LoadUnixFSFile(ctx context.Context, t *testing.T, dagService ipldformat.DAGService, fileName string) (ipld.Link, []byte) {
 	_, curFile, _, ok := runtime.Caller(0)
 	require.True(t, ok)
 
 	// read in a fixture file
-	path := filepath.Join(path.Dir(curFile), "fixtures", "lorem.txt")
+	path := filepath.Join(path.Dir(curFile), "fixtures", fileName)
 
 	f, err := os.Open(path)
 	require.NoError(t, err)
