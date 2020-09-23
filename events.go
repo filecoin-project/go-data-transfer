@@ -63,6 +63,10 @@ const (
 
 	// Complete is emitted when a data transfer is complete
 	Complete
+
+	// CompleteCleanupOnRestart is emitted when a data transfer channel is restarted to signal
+	// that channels that were cleaning up should finish cleanup
+	CompleteCleanupOnRestart
 )
 
 // Events are human readable names for data transfer events
@@ -85,6 +89,7 @@ var Events = map[EventCode]string{
 	ResponderCompletes:          "ResponderCompletes",
 	BeginFinalizing:             "BeginFinalizing",
 	Complete:                    "Complete",
+	CompleteCleanupOnRestart:    "CompleteCleanupOnRestart",
 }
 
 // Event is a struct containing information about a data transfer event

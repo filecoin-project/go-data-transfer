@@ -168,6 +168,10 @@ func (c *Channels) Restart(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.Restart)
 }
 
+func (c *Channels) CompleteCleanupOnRestart(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.CompleteCleanupOnRestart)
+}
+
 func (c *Channels) DataSent(chid datatransfer.ChannelID, cid cid.Cid, delta uint64) error {
 	return c.send(chid, datatransfer.DataSent, delta, cid)
 }

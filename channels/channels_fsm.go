@@ -99,6 +99,9 @@ var ChannelEvents = fsm.Events{
 		From(datatransfer.Cancelling).To(datatransfer.Cancelled).
 		From(datatransfer.Failing).To(datatransfer.Failed).
 		From(datatransfer.Completing).To(datatransfer.Completed),
+
+	// will kickoff state handlers for channels that were cleaning up
+	fsm.Event(datatransfer.CompleteCleanupOnRestart).FromAny().ToNoChange(),
 }
 
 // ChannelStateEntryFuncs are handlers called as we enter different states
@@ -119,6 +122,13 @@ func cleanupConnection(ctx fsm.Context, env ChannelEnvironment, channel internal
 	return ctx.Trigger(datatransfer.CleanupComplete)
 }
 
+// CleanupStates are the penultimate states for a channel
+var CleanupStates = []fsm.StateKey{
+	datatransfer.Cancelling,
+	datatransfer.Completing,
+	datatransfer.Failing,
+}
+
 // ChannelFinalityStates are the final states for a channel
 var ChannelFinalityStates = []fsm.StateKey{
 	datatransfer.Cancelled,
@@ -129,6 +139,17 @@ var ChannelFinalityStates = []fsm.StateKey{
 // IsChannelTerminated returns true if the channel is in a finality state
 func IsChannelTerminated(st datatransfer.Status) bool {
 	for _, s := range ChannelFinalityStates {
+		if s == st {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IsChannelCleaningUp returns true if channel was being cleaned up and finished
+func IsChannelCleaningUp(st datatransfer.Status) bool {
+	for _, s := range CleanupStates {
 		if s == st {
 			return true
 		}

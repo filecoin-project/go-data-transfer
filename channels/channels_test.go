@@ -291,6 +291,13 @@ func TestIsChannelTerminated(t *testing.T) {
 	require.False(t, channels.IsChannelTerminated(datatransfer.Ongoing))
 }
 
+func TestIsChannelCleaningUp(t *testing.T) {
+	require.True(t, channels.IsChannelCleaningUp(datatransfer.Cancelling))
+	require.True(t, channels.IsChannelCleaningUp(datatransfer.Failing))
+	require.True(t, channels.IsChannelCleaningUp(datatransfer.Completing))
+	require.False(t, channels.IsChannelCleaningUp(datatransfer.Cancelled))
+}
+
 type event struct {
 	event datatransfer.Event
 	state datatransfer.ChannelState
