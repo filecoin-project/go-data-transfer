@@ -198,7 +198,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 	if err != nil {
 		return err
 	}
-	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherParty(m.peerID), updateRequest); err != nil {
+	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherPeer(), updateRequest); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.channels.Error(channelID, err)
 		return err
@@ -217,7 +217,7 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 		return err
 	}
 
-	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherParty(m.peerID), m.cancelMessage(chid)); err != nil {
+	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherPeer(), m.cancelMessage(chid)); err != nil {
 		err = fmt.Errorf("Unable to send cancel message: %w", err)
 		_ = m.channels.Error(chid, err)
 		return err

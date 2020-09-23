@@ -63,13 +63,14 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, datatransfer.Requested, state.Status())
 
 		// can add for different id
-		chid, err = channelList.CreateNew(peers[0], tid2, cids[1], selector, fv2, peers[3], peers[2], peers[3])
+		chid, err = channelList.CreateNew(peers[2], tid2, cids[1], selector, fv2, peers[3], peers[2], peers[3])
 		require.NoError(t, err)
 		require.Equal(t, peers[3], chid.Initiator)
 		require.Equal(t, tid2, chid.ID)
 		state = checkEvent(ctx, t, received, datatransfer.Open)
 		require.Equal(t, datatransfer.Requested, state.Status())
-		require.Equal(t, peers[0], state.ManagerPeer())
+		require.Equal(t, peers[2], state.SelfPeer())
+		require.Equal(t, peers[3], state.OtherPeer())
 	})
 
 	t.Run("in progress channels", func(t *testing.T) {
@@ -99,7 +100,7 @@ func TestChannels(t *testing.T) {
 		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[3], Responder: peers[2], ID: tid2})
 		require.NotEqual(t, nil, state)
 		require.NoError(t, err)
-		require.Equal(t, peers[0], state.ManagerPeer())
+		require.Equal(t, peers[2], state.SelfPeer())
 	})
 
 	t.Run("accept", func(t *testing.T) {
@@ -263,6 +264,24 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, datatransfer.Cancelling, state.Status())
 		state = checkEvent(ctx, t, received, datatransfer.CleanupComplete)
 		require.Equal(t, datatransfer.Cancelled, state.Status())
+	})
+
+	t.Run("test self peer and other peer", func(t *testing.T) {
+		// sender is self peer
+		chid, err := channelList.CreateNew(peers[1], tid1, cids[0], selector, fv1, peers[1], peers[1], peers[2])
+		require.NoError(t, err)
+		ch, err := channelList.GetByID(context.Background(), chid)
+		require.NoError(t, err)
+		require.Equal(t, peers[1], ch.SelfPeer())
+		require.Equal(t, peers[2], ch.OtherPeer())
+
+		// recipient is self peer
+		chid, err = channelList.CreateNew(peers[2], datatransfer.TransferID(1001), cids[0], selector, fv1, peers[1], peers[2], peers[1])
+		require.NoError(t, err)
+		ch, err = channelList.GetByID(context.Background(), chid)
+		require.NoError(t, err)
+		require.Equal(t, peers[2], ch.SelfPeer())
+		require.Equal(t, peers[1], ch.OtherPeer())
 	})
 }
 
