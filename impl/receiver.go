@@ -3,12 +3,12 @@ package impl
 import (
 	"context"
 
-	"github.com/filecoin-project/go-data-transfer/channels"
 	"github.com/ipfs/go-cid"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/channels"
 )
 
 type receiver struct {
@@ -131,7 +131,7 @@ func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
 	}
 
 	// other peer should be the counter party on the channel
-	if channel.OtherParty(r.manager.peerID) != sender {
+	if channel.OtherPeer() != sender {
 		log.Error("channel counterparty is not the sender peer")
 		return
 	}

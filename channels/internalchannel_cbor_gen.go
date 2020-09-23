@@ -28,15 +28,15 @@ func (t *internalChannelState) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.ManagerPeer (peer.ID) (string)
-	if len(t.ManagerPeer) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.ManagerPeer was too long")
+	// t.SelfPeer (peer.ID) (string)
+	if len(t.SelfPeer) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.SelfPeer was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.ManagerPeer))); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.SelfPeer))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.ManagerPeer)); err != nil {
+	if _, err := io.WriteString(w, string(t.SelfPeer)); err != nil {
 		return err
 	}
 
@@ -203,7 +203,7 @@ func (t *internalChannelState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.ManagerPeer (peer.ID) (string)
+	// t.SelfPeer (peer.ID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -211,7 +211,7 @@ func (t *internalChannelState) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.ManagerPeer = peer.ID(sval)
+		t.SelfPeer = peer.ID(sval)
 	}
 	// t.TransferID (datatransfer.TransferID) (uint64)
 
