@@ -130,8 +130,8 @@ func NewGraphsyncTestingData(ctx context.Context, t *testing.T) *GraphsyncTestin
 	gsData.GsNet1 = gsnet.NewFromLibp2pHost(gsData.Host1)
 	gsData.GsNet2 = gsnet.NewFromLibp2pHost(gsData.Host2)
 
-	gsData.DtNet1 = network.NewFromLibp2pHost(gsData.Host1)
-	gsData.DtNet2 = network.NewFromLibp2pHost(gsData.Host2)
+	gsData.DtNet1 = network.NewFromLibp2pHost(gsData.Host1, network.RetryParameters(0, 0, 0))
+	gsData.DtNet2 = network.NewFromLibp2pHost(gsData.Host2, network.RetryParameters(0, 0, 0))
 
 	// create a selector for the whole UnixFS dag
 	gsData.AllSelector = allSelector

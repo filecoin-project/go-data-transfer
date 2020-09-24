@@ -61,6 +61,9 @@ const (
 	// initiator
 	BeginFinalizing
 
+	// Disconnected emits when we are not able to connect to the other party
+	Disconnected
+
 	// Complete is emitted when a data transfer is complete
 	Complete
 )

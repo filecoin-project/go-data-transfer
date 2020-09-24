@@ -7,10 +7,13 @@ import (
 	"time"
 
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/jpillora/backoff"
 	"github.com/libp2p/go-libp2p-core/helpers"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
+	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
@@ -20,10 +23,34 @@ var log = logging.Logger("data_transfer_network")
 
 var sendMessageTimeout = time.Minute * 10
 
+const defaultMaxStreamOpenAttempts = 5
+const defaultMinAttemptDuration = 1 * time.Second
+const defaultMaxAttemptDuration = 5 * time.Minute
+
+// Option is an option for configuring the libp2p storage market network
+type Option func(*libp2pDataTransferNetwork)
+
+// RetryParameters changes the default parameters around connection reopening
+func RetryParameters(minDuration time.Duration, maxDuration time.Duration, attempts float64) Option {
+	return func(impl *libp2pDataTransferNetwork) {
+		impl.maxStreamOpenAttempts = attempts
+		impl.minAttemptDuration = minDuration
+		impl.maxAttemptDuration = maxDuration
+	}
+}
+
 // NewFromLibp2pHost returns a GraphSyncNetwork supported by underlying Libp2p host.
-func NewFromLibp2pHost(host host.Host) DataTransferNetwork {
+func NewFromLibp2pHost(host host.Host, options ...Option) DataTransferNetwork {
 	dataTransferNetwork := libp2pDataTransferNetwork{
 		host: host,
+
+		maxStreamOpenAttempts: defaultMaxStreamOpenAttempts,
+		minAttemptDuration:    defaultMinAttemptDuration,
+		maxAttemptDuration:    defaultMaxAttemptDuration,
+	}
+
+	for _, option := range options {
+		option(&dataTransferNetwork)
 	}
 
 	return &dataTransferNetwork
@@ -35,10 +62,33 @@ type libp2pDataTransferNetwork struct {
 	host host.Host
 	// inbound messages from the network are forwarded to the receiver
 	receiver Receiver
+
+	maxStreamOpenAttempts float64
+	minAttemptDuration    time.Duration
+	maxAttemptDuration    time.Duration
 }
 
-func (dtnet *libp2pDataTransferNetwork) newStreamToPeer(ctx context.Context, p peer.ID) (network.Stream, error) {
-	return dtnet.host.NewStream(ctx, p, ProtocolDataTransfer)
+func (impl *libp2pDataTransferNetwork) openStream(ctx context.Context, id peer.ID, protocol protocol.ID) (network.Stream, error) {
+	b := &backoff.Backoff{
+		Min:    impl.minAttemptDuration,
+		Max:    impl.maxAttemptDuration,
+		Factor: impl.maxStreamOpenAttempts,
+		Jitter: true,
+	}
+
+	for {
+		s, err := impl.host.NewStream(ctx, id, protocol)
+		if err == nil {
+			return s, err
+		}
+
+		nAttempts := b.Attempt()
+		if nAttempts == impl.maxStreamOpenAttempts {
+			return nil, xerrors.Errorf("exhausted %d attempts but failed to open stream, err: %w", impl.maxStreamOpenAttempts, err)
+		}
+		d := b.Duration()
+		time.Sleep(d)
+	}
 }
 
 func (dtnet *libp2pDataTransferNetwork) SendMessage(
@@ -46,7 +96,7 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 	p peer.ID,
 	outgoing datatransfer.Message) error {
 
-	s, err := dtnet.newStreamToPeer(ctx, p)
+	s, err := dtnet.openStream(ctx, p, ProtocolDataTransfer)
 	if err != nil {
 		return err
 	}
