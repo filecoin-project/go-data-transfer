@@ -176,8 +176,8 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, success bool) 
 			}
 			if msg != nil {
 				if err := m.dataTransferNetwork.SendMessage(context.TODO(), chid.Initiator, msg); err != nil {
-					_ = m.channels.Error(chid, err)
-					return err
+					log.Warnf("failed to send completion message, err : %v", err)
+					return m.channels.Disconnected(chid)
 				}
 			}
 			if msg.Accepted() {

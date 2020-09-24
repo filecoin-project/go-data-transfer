@@ -249,6 +249,10 @@ func (c *Channels) Error(chid datatransfer.ChannelID, err error) error {
 	return c.send(chid, datatransfer.Error, err)
 }
 
+func (c *Channels) Disconnected(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.Disconnected)
+}
+
 // HasChannel returns true if the given channel id is being tracked
 func (c *Channels) HasChannel(chid datatransfer.ChannelID) (bool, error) {
 	return c.statemachines.Has(chid)
