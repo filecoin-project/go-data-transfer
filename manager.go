@@ -33,7 +33,7 @@ type Revalidator interface {
 	// OnPullDataSent is called on the responder side when more bytes are sent
 	// for a given pull request. The first value indicates whether the request was
 	// recognized by this revalidator and should be considered 'handled'. If true,
-	// the remaining to values are interpreted. If 'false' the request is passed on
+	// the remaining two values are interpreted. If 'false' the request is passed on
 	// to the next revalidators.
 	// It should return a VoucherResult + ErrPause to
 	// request revalidation or nil to continue uninterrupted,
@@ -42,7 +42,7 @@ type Revalidator interface {
 	// OnPushDataReceived is called on the responder side when more bytes are received
 	// for a given push request. The first value indicates whether the request was
 	// recognized by this revalidator and should be considered 'handled'. If true,
-	// the remaining to values are interpreted. If 'false' the request is passed on
+	// the remaining two values are interpreted. If 'false' the request is passed on
 	// to the next revalidators. It should return a VoucherResult + ErrPause to
 	// request revalidation or nil to continue uninterrupted,
 	// other errors will terminate the request
@@ -50,7 +50,7 @@ type Revalidator interface {
 	// OnComplete is called to make a final request for revalidation -- often for the
 	// purpose of settlement. The first value indicates whether the request was
 	// recognized by this revalidator and should be considered 'handled'. If true,
-	// the remaining to values are interpreted. If 'false' the request is passed on
+	// the remaining two values are interpreted. If 'false' the request is passed on
 	// to the next revalidators.
 	// if VoucherResult is non nil, the request will enter a settlement phase awaiting
 	// a final update
