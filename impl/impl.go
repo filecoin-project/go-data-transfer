@@ -328,6 +328,11 @@ func (m *manager) RestartDataTransferChannel(ctx context.Context, chid datatrans
 		return nil
 	}
 
+	// if channel is is cleanup state, finish it
+	if channels.IsChannelCleaningUp(channel.Status()) {
+		return m.channels.CompleteCleanupOnRestart(channel.ChannelID())
+	}
+
 	// initiate restart
 	chType := m.channelDataTransferType(channel)
 	switch chType {

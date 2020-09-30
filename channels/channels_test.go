@@ -304,12 +304,38 @@ func TestChannels(t *testing.T) {
 		state = checkEvent(ctx, t, received, datatransfer.Disconnected)
 		require.Equal(t, datatransfer.PeerDisconnected, state.Status())
 	})
+
+	t.Run("test self peer and other peer", func(t *testing.T) {
+		peers := testutil.GeneratePeers(3)
+		// sender is self peer
+		chid, err := channelList.CreateNew(peers[1], tid1, cids[0], selector, fv1, peers[1], peers[1], peers[2])
+		require.NoError(t, err)
+		ch, err := channelList.GetByID(context.Background(), chid)
+		require.NoError(t, err)
+		require.Equal(t, peers[1], ch.SelfPeer())
+		require.Equal(t, peers[2], ch.OtherPeer())
+
+		// recipient is self peer
+		chid, err = channelList.CreateNew(peers[2], datatransfer.TransferID(1001), cids[0], selector, fv1, peers[1], peers[2], peers[1])
+		require.NoError(t, err)
+		ch, err = channelList.GetByID(context.Background(), chid)
+		require.NoError(t, err)
+		require.Equal(t, peers[2], ch.SelfPeer())
+		require.Equal(t, peers[1], ch.OtherPeer())
+	})
 }
 
 func TestIsChannelTerminated(t *testing.T) {
 	require.True(t, channels.IsChannelTerminated(datatransfer.Cancelled))
 	require.True(t, channels.IsChannelTerminated(datatransfer.Failed))
 	require.False(t, channels.IsChannelTerminated(datatransfer.Ongoing))
+}
+
+func TestIsChannelCleaningUp(t *testing.T) {
+	require.True(t, channels.IsChannelCleaningUp(datatransfer.Cancelling))
+	require.True(t, channels.IsChannelCleaningUp(datatransfer.Failing))
+	require.True(t, channels.IsChannelCleaningUp(datatransfer.Completing))
+	require.False(t, channels.IsChannelCleaningUp(datatransfer.Cancelled))
 }
 
 type event struct {
