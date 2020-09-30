@@ -50,7 +50,7 @@ type EventsHandler interface {
 
 	// OnRequestTimedOut is called when a request we opened (with the given channel Id) to receive data times out.
 	// Error returns are logged but otherwise have no effect
-	OnRequestTimedOut(chid ChannelID) error
+	OnRequestTimedOut(ctx context.Context, chid ChannelID) error
 }
 
 /*

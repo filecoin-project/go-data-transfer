@@ -134,7 +134,7 @@ func (t *Transport) executeGsRequest(ctx context.Context, channelID datatransfer
 
 	if _, ok := lastError.(graphsync.RequestContextCancelledErr); ok {
 		log.Warnf("graphsync request context cancelled, channel Id: %v", channelID)
-		if err := t.events.OnRequestTimedOut(channelID); err != nil {
+		if err := t.events.OnRequestTimedOut(ctx, channelID); err != nil {
 			log.Error(err)
 		}
 		return

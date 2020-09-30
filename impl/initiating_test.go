@@ -82,6 +82,22 @@ func TestDataTransferInitiating(t *testing.T) {
 				testutil.AssertFakeDTVoucher(t, receivedRequest, h.voucher)
 			},
 		},
+		"Remove Timed-out request": {
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Cancel, datatransfer.CleanupComplete},
+			verify: func(t *testing.T, h *harness) {
+				orig := ChannelRemoveTimeout
+				ChannelRemoveTimeout = 10 * time.Millisecond
+				defer func() {
+					ChannelRemoveTimeout = orig
+				}()
+
+				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				require.NoError(t, err)
+				require.NoError(t, h.transport.EventHandler.OnRequestTimedOut(ctx, channelID))
+				// need time for the events to take place
+				time.Sleep(1 * time.Second)
+			},
+		},
 		"SendVoucher with no channel open": {
 			verify: func(t *testing.T, h *harness) {
 				err := h.dt.SendVoucher(h.ctx, datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: 999999}, h.voucher)

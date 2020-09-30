@@ -3,6 +3,7 @@ package impl
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -11,9 +12,12 @@ import (
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/channels"
 	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/registry"
 )
+
+var ChannelRemoveTimeout = 1 * time.Hour
 
 func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
 	has, err := m.channels.HasChannel(chid)
@@ -152,10 +156,27 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 	return m.resumeOther(chid)
 }
 
-func (m *manager) OnRequestTimedOut(chid datatransfer.ChannelID) error {
-	// TODO Start a timer to cleanup state if this dosen't complete in a while
-	// TODO Should we introduce a new state for this ?
-	log.Warnf("channel %v has timed out", chid)
+func (m *manager) OnRequestTimedOut(ctx context.Context, chid datatransfer.ChannelID) error {
+	log.Warnf("channel %+v has timed out", chid)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-time.After(ChannelRemoveTimeout):
+			channel, err := m.channels.GetByID(ctx, chid)
+			if err == nil {
+				if !(channels.IsChannelTerminated(channel.Status()) ||
+					channels.IsChannelCleaningUp(channel.Status())) {
+					if err := m.channels.Cancel(chid); err != nil {
+						log.Errorf("failed to cancel timed-out channel: %v", err)
+						return
+					}
+					log.Warnf("channel %+v has ben cancelled because of timeout", chid)
+				}
+			}
+		}
+	}()
+
 	return nil
 }
 
