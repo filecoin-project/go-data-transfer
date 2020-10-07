@@ -32,7 +32,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
 	. "github.com/filecoin-project/go-data-transfer/impl"
-	"github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/message/message1_1"
 	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 	tp "github.com/filecoin-project/go-data-transfer/transport/graphsync"
@@ -1078,7 +1078,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		requestReceived := messageReceived.message.(datatransfer.Request)
 
 		var buf bytes.Buffer
-		response, err := message.NewResponse(requestReceived.TransferID(), true, false, voucherResult.Type(), voucherResult)
+		response, err := message1_1.NewResponse(requestReceived.TransferID(), true, false, voucherResult.Type(), voucherResult)
 		require.NoError(t, err)
 		err = response.ToNet(&buf)
 		require.NoError(t, err)
@@ -1098,7 +1098,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 
 	t.Run("when no request is initiated", func(t *testing.T) {
 		var buf bytes.Buffer
-		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint64()), true, false, voucher.Type(), voucher)
+		response, err := message1_1.NewResponse(datatransfer.TransferID(rand.Uint64()), true, false, voucher.Type(), voucher)
 		require.NoError(t, err)
 		err = response.ToNet(&buf)
 		require.NoError(t, err)
@@ -1191,7 +1191,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 				voucher := testutil.NewFakeDTType()
-				request, err := message.NewRequest(id, false, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
+				request, err := message1_1.NewRequest(id, false, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
 				buf := new(bytes.Buffer)
 				err = request.ToNet(buf)
@@ -1221,7 +1221,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				voucher := testutil.NewFakeDTType()
-				dtRequest, err := message.NewRequest(id, false, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
+				dtRequest, err := message1_1.NewRequest(id, false, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
 
 				buf := new(bytes.Buffer)

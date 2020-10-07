@@ -9,7 +9,7 @@ import (
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/message/message1_1"
 	"github.com/filecoin-project/go-data-transfer/registry"
 )
 
@@ -37,7 +37,7 @@ func (m *manager) newRequest(ctx context.Context, selector ipld.Node, isPull boo
 		return nil, err
 	}
 	tid := datatransfer.TransferID(next)
-	return message.NewRequest(tid, false, isPull, voucher.Type(), voucher, baseCid, selector)
+	return message1_1.NewRequest(tid, false, isPull, voucher.Type(), voucher, baseCid, selector)
 }
 
 func (m *manager) response(isRestart bool, isNew bool, err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {
@@ -48,13 +48,13 @@ func (m *manager) response(isRestart bool, isNew bool, err error, tid datatransf
 		resultType = voucherResult.Type()
 	}
 	if isRestart {
-		return message.RestartResponse(tid, isAccepted, isPaused, resultType, voucherResult)
+		return message1_1.RestartResponse(tid, isAccepted, isPaused, resultType, voucherResult)
 	}
 
 	if isNew {
-		return message.NewResponse(tid, isAccepted, isPaused, resultType, voucherResult)
+		return message1_1.NewResponse(tid, isAccepted, isPaused, resultType, voucherResult)
 	}
-	return message.VoucherResultResponse(tid, isAccepted, isPaused, resultType, voucherResult)
+	return message1_1.VoucherResultResponse(tid, isAccepted, isPaused, resultType, voucherResult)
 }
 
 func (m *manager) completeResponse(err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {
@@ -64,7 +64,7 @@ func (m *manager) completeResponse(err error, tid datatransfer.TransferID, vouch
 	if voucherResult != nil {
 		resultType = voucherResult.Type()
 	}
-	return message.CompleteResponse(tid, isAccepted, isPaused, resultType, voucherResult)
+	return message1_1.CompleteResponse(tid, isAccepted, isPaused, resultType, voucherResult)
 }
 
 func (m *manager) resume(chid datatransfer.ChannelID) error {
@@ -97,23 +97,23 @@ func (m *manager) pauseOther(chid datatransfer.ChannelID) error {
 
 func (m *manager) resumeMessage(chid datatransfer.ChannelID) datatransfer.Message {
 	if chid.Initiator == m.peerID {
-		return message.UpdateRequest(chid.ID, false)
+		return message1_1.UpdateRequest(chid.ID, false)
 	}
-	return message.UpdateResponse(chid.ID, false)
+	return message1_1.UpdateResponse(chid.ID, false)
 }
 
 func (m *manager) pauseMessage(chid datatransfer.ChannelID) datatransfer.Message {
 	if chid.Initiator == m.peerID {
-		return message.UpdateRequest(chid.ID, true)
+		return message1_1.UpdateRequest(chid.ID, true)
 	}
-	return message.UpdateResponse(chid.ID, true)
+	return message1_1.UpdateResponse(chid.ID, true)
 }
 
 func (m *manager) cancelMessage(chid datatransfer.ChannelID) datatransfer.Message {
 	if chid.Initiator == m.peerID {
-		return message.CancelRequest(chid.ID)
+		return message1_1.CancelRequest(chid.ID)
 	}
-	return message.CancelResponse(chid.ID)
+	return message1_1.CancelResponse(chid.ID)
 }
 
 func (m *manager) decodeVoucherResult(response datatransfer.Response) (datatransfer.VoucherResult, error) {

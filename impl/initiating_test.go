@@ -19,7 +19,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"
 	. "github.com/filecoin-project/go-data-transfer/impl"
-	"github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/message/message1_1"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
 
@@ -150,7 +150,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
+				response, err := message1_1.NewResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, h.voucherResult.Type(), h.voucherResult)
+				response, err := message1_1.NewResponse(channelID.ID, true, false, h.voucherResult.Type(), h.voucherResult)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
+				response, err := message1_1.NewResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
@@ -227,7 +227,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
+				response, err := message1_1.NewResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
@@ -598,9 +598,9 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			h.baseCid = testutil.GenerateCids(1)[0]
 
 			h.id = datatransfer.TransferID(rand.Int31())
-			h.pushRequest, err = message.NewRequest(h.id, false, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pushRequest, err = message1_1.NewRequest(h.id, false, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
-			h.pullRequest, err = message.NewRequest(h.id, false, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pullRequest, err = message1_1.NewRequest(h.id, false, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
 
 			// run tests steps and verify

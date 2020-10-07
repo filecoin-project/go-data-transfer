@@ -1,4 +1,4 @@
-package message
+package message1_1
 
 import (
 	"io"
@@ -10,19 +10,7 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
-)
-
-type messageType uint64
-
-const (
-	newMessage messageType = iota
-	restartMessage
-	updateMessage
-	cancelMessage
-	completeMessage
-	voucherMessage
-	voucherResultMessage
-	restartExistingChannelRequestMessage
+	"github.com/filecoin-project/go-data-transfer/message/types"
 )
 
 // NewRequest generates a new request for the data transfer protocol
@@ -41,12 +29,12 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 
 	var typ uint64
 	if isRestart {
-		typ = uint64(restartMessage)
+		typ = uint64(types.RestartMessage)
 	} else {
-		typ = uint64(newMessage)
+		typ = uint64(types.NewMessage)
 	}
 
-	return &transferRequest{
+	return &transferRequest1_1{
 		Type:   typ,
 		Pull:   isPull,
 		Vouch:  &cborgen.Deferred{Raw: vbytes},
@@ -60,22 +48,22 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 // RestartExistingChannelRequest creates a request to ask the other side to restart an existing channel
 func RestartExistingChannelRequest(channelId datatransfer.ChannelID) datatransfer.Request {
 
-	return &transferRequest{Type: uint64(restartExistingChannelRequestMessage),
+	return &transferRequest1_1{Type: uint64(types.RestartExistingChannelRequestMessage),
 		RestartChannel: channelId}
 }
 
 // CancelRequest request generates a request to cancel an in progress request
 func CancelRequest(id datatransfer.TransferID) datatransfer.Request {
-	return &transferRequest{
-		Type:   uint64(cancelMessage),
+	return &transferRequest1_1{
+		Type:   uint64(types.CancelMessage),
 		XferID: uint64(id),
 	}
 }
 
 // UpdateRequest generates a new request update
 func UpdateRequest(id datatransfer.TransferID, isPaused bool) datatransfer.Request {
-	return &transferRequest{
-		Type:   uint64(updateMessage),
+	return &transferRequest1_1{
+		Type:   uint64(types.UpdateMessage),
 		Paus:   isPaused,
 		XferID: uint64(id),
 	}
@@ -87,8 +75,8 @@ func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifie
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
-	return &transferRequest{
-		Type:   uint64(voucherMessage),
+	return &transferRequest1_1{
+		Type:   uint64(types.VoucherMessage),
 		Vouch:  &cborgen.Deferred{Raw: vbytes},
 		VTyp:   vtype,
 		XferID: uint64(id),
@@ -101,9 +89,9 @@ func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, v
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
-	return &transferResponse{
+	return &transferResponse1_1{
 		Acpt:   accepted,
-		Type:   uint64(restartMessage),
+		Type:   uint64(types.RestartMessage),
 		Paus:   isPaused,
 		XferID: uint64(id),
 		VTyp:   voucherResultType,
@@ -117,9 +105,9 @@ func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, vouch
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
-	return &transferResponse{
+	return &transferResponse1_1{
 		Acpt:   accepted,
-		Type:   uint64(newMessage),
+		Type:   uint64(types.NewMessage),
 		Paus:   isPaused,
 		XferID: uint64(id),
 		VTyp:   voucherResultType,
@@ -133,9 +121,9 @@ func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused b
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
-	return &transferResponse{
+	return &transferResponse1_1{
 		Acpt:   accepted,
-		Type:   uint64(voucherResultMessage),
+		Type:   uint64(types.VoucherResultMessage),
 		Paus:   isPaused,
 		XferID: uint64(id),
 		VTyp:   voucherResultType,
@@ -145,8 +133,8 @@ func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused b
 
 // UpdateResponse returns a new update response
 func UpdateResponse(id datatransfer.TransferID, isPaused bool) datatransfer.Response {
-	return &transferResponse{
-		Type:   uint64(updateMessage),
+	return &transferResponse1_1{
+		Type:   uint64(types.UpdateMessage),
 		Paus:   isPaused,
 		XferID: uint64(id),
 	}
@@ -154,8 +142,8 @@ func UpdateResponse(id datatransfer.TransferID, isPaused bool) datatransfer.Resp
 
 // CancelResponse makes a new cancel response message
 func CancelResponse(id datatransfer.TransferID) datatransfer.Response {
-	return &transferResponse{
-		Type:   uint64(cancelMessage),
+	return &transferResponse1_1{
+		Type:   uint64(types.CancelMessage),
 		XferID: uint64(id),
 	}
 }
@@ -166,8 +154,8 @@ func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
-	return &transferResponse{
-		Type:   uint64(completeMessage),
+	return &transferResponse1_1{
+		Type:   uint64(types.CompleteMessage),
 		Acpt:   isAccepted,
 		Paus:   isPaused,
 		VTyp:   voucherResultType,
@@ -178,7 +166,7 @@ func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
 func FromNet(r io.Reader) (datatransfer.Message, error) {
-	tresp := transferMessage{}
+	tresp := transferMessage1_1{}
 	err := tresp.UnmarshalCBOR(r)
 	if err != nil {
 		return nil, err

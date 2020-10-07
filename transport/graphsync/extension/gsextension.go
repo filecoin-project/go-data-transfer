@@ -6,7 +6,7 @@ import (
 	"github.com/ipfs/go-graphsync"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/message/message1_1"
 )
 
 const (
@@ -44,5 +44,5 @@ func GetTransferData(extendedData GsExtended) (datatransfer.Message, error) {
 	}
 
 	reader := bytes.NewReader(data)
-	return message.FromNet(reader)
+	return message1_1.FromNet(reader)
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/message/message1_1"
 	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
@@ -97,7 +97,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
 		voucher := testutil.NewFakeDTType()
-		request, err := message.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+		request, err := message1_1.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
 		require.NoError(t, err)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 
@@ -126,7 +126,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		accepted := false
 		id := datatransfer.TransferID(rand.Int31())
 		voucherResult := testutil.NewFakeDTType()
-		response, err := message.NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
+		response, err := message1_1.NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
 		require.NoError(t, err)
 		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), response))
 
@@ -154,7 +154,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		chId := datatransfer.ChannelID{Initiator: peers[0],
 			Responder: peers[1], ID: id}
 
-		request := message.RestartExistingChannelRequest(chId)
+		request := message1_1.RestartExistingChannelRequest(chId)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 
 		select {
