@@ -47,3 +47,23 @@ func TestRequestMessageForProtocol(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, out)
 }
+
+func TestRequestMessageForProtocolRestartDowngradeFails(t *testing.T) {
+	baseCid := testutil.GenerateCids(1)[0]
+	selector := builder.NewSelectorSpecBuilder(basicnode.Style.Any).Matcher().Node()
+	isPull := true
+	id := datatransfer.TransferID(rand.Int31())
+	voucher := testutil.NewFakeDTType()
+
+	request, err := message1_1.NewRequest(id, true, isPull, voucher.Type(), voucher, baseCid, selector)
+	require.NoError(t, err)
+
+	out, err := request.MessageForProtocol(datatransfer.ProtocolDataTransfer1_0)
+	require.Nil(t, out)
+	require.EqualError(t, err, "restart not supported on 1.0")
+
+	req2 := message1_1.RestartExistingChannelRequest(datatransfer.ChannelID{})
+	out, err = req2.MessageForProtocol(datatransfer.ProtocolDataTransfer1_0)
+	require.Nil(t, out)
+	require.EqualError(t, err, "restart not supported on 1.0")
+}
