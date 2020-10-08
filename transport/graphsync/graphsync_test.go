@@ -859,7 +859,7 @@ type fakeEvents struct {
 	ResponseReceivedResponse datatransfer.Response
 }
 
-func (fe *fakeEvents) OnRequestTimedOut(chid datatransfer.ChannelID) error {
+func (fe *fakeEvents) OnRequestTimedOut(_ context.Context, chid datatransfer.ChannelID) error {
 	fe.OnRequestTimedOutCalled = true
 	fe.OnRequestTimedOutChannelId = chid
 
