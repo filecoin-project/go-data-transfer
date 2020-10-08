@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/filecoin-project/go-statemachine v0.0.0-20200714194326-a77c3ae20989
 	github.com/filecoin-project/go-storedcounter v0.0.0-20200421200003-1c99c62e8a5b
-	github.com/hannahhoward/cbor-gen-for v0.0.0-20191218204337-9ab7b1bcc099
+	github.com/hannahhoward/cbor-gen-for v0.0.0-20200817222906-ea96cece81f1
 	github.com/hannahhoward/go-pubsub v0.0.0-20200423002714-8d62886cc36e
 	github.com/hashicorp/go-multierror v1.1.0
 	github.com/ipfs/go-block-format v0.0.2
@@ -29,7 +29,7 @@ require (
 	github.com/libp2p/go-libp2p v0.6.0
 	github.com/libp2p/go-libp2p-core v0.5.0
 	github.com/stretchr/testify v1.5.1
-	github.com/whyrusleeping/cbor-gen v0.0.0-20200810223238-211df3b9e24c
+	github.com/whyrusleeping/cbor-gen v0.0.0-20200826160007-0b9f6c5fb163
 	go.uber.org/atomic v1.6.0
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 )

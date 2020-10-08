@@ -6,7 +6,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 )
 
-//go:generate cbor-gen-for transferMessage1_1
+//go:generate cbor-gen-for --map-encoding transferMessage1_1
 
 // transferMessage1_1 is the transfer message for the 1.1 Data Transfer Protocol.
 type transferMessage1_1 struct {

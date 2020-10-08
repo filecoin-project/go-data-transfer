@@ -18,7 +18,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/message/types"
 )
 
-//go:generate cbor-gen-for transferRequest1_1
+//go:generate cbor-gen-for --map-encoding transferRequest1_1
 
 // transferRequest1_1 is a struct for the 1.1 Data Transfer Protocol that fulfills the datatransfer.Request interface.
 // its members are exported to be used by cbor-gen
