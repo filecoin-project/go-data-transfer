@@ -94,6 +94,11 @@ func (trsp *transferResponse1_1) MessageForProtocol(targetProtocol protocol.ID) 
 	case datatransfer.ProtocolDataTransfer1_1:
 		return trsp, nil
 	case datatransfer.ProtocolDataTransfer1_0:
+		// this should never happen but dosen't hurt to have this here for sanity
+		if trsp.IsRestart() {
+			return nil, xerrors.New("restart not supported for 1.0 protocol")
+		}
+
 		lresp := message1_0.NewTransferResponse(
 			trsp.Type,
 			trsp.Acpt,

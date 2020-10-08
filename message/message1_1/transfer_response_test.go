@@ -36,3 +36,14 @@ func TestResponseMessageForProtocol(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, out)
 }
+
+func TestResponseMessageForProtocolFail(t *testing.T) {
+	id := datatransfer.TransferID(rand.Int31())
+	voucherResult := testutil.NewFakeDTType()
+	response, err := message1_1.RestartResponse(id, false, true, voucherResult.Type(), voucherResult) // not accepted
+	require.NoError(t, err)
+
+	out, err := response.MessageForProtocol(datatransfer.ProtocolDataTransfer1_0)
+	require.Nil(t, out)
+	require.EqualError(t, err, "restart not supported for 1.0 protocol")
+}
