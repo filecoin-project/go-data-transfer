@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message/message1_1"
+	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 	. "github.com/filecoin-project/go-data-transfer/transport/graphsync"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
@@ -1017,7 +1017,7 @@ func (grc *gsResponseConfig) makeResponse(t *testing.T, transferID datatransfer.
 
 func assertDecodesToMessage(t *testing.T, data []byte, expected datatransfer.Message) {
 	buf := bytes.NewReader(data)
-	actual, err := message1_1.FromNet(buf)
+	actual, err := message.FromNet(buf)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
 }

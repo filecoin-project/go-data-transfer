@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message/message1_1"
+	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
 )
 
@@ -31,7 +31,7 @@ func matchDtMessage(t *testing.T, extensions []graphsync.ExtensionData) datatran
 	}
 	require.NotNil(t, matchedExtension)
 	buf := bytes.NewReader(matchedExtension.Data)
-	received, err := message1_1.FromNet(buf)
+	received, err := message.FromNet(buf)
 	require.NoError(t, err)
 	return received
 }

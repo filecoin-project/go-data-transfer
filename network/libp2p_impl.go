@@ -16,8 +16,8 @@ import (
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/message/message1_0"
-	"github.com/filecoin-project/go-data-transfer/message/message1_1"
 )
 
 var log = logging.Logger("data_transfer_network")
@@ -28,8 +28,18 @@ const defaultMaxStreamOpenAttempts = 5
 const defaultMinAttemptDuration = 1 * time.Second
 const defaultMaxAttemptDuration = 5 * time.Minute
 
+var defaultDataTransferProtocols = []protocol.ID{datatransfer.ProtocolDataTransfer1_1, datatransfer.ProtocolDataTransfer1_0}
+
 // Option is an option for configuring the libp2p storage market network
 type Option func(*libp2pDataTransferNetwork)
+
+// DataTransferProtocols OVERWRITES the default libp2p protocols we use for data transfer with the given protocols.
+func DataTransferProtocols(protocols []protocol.ID) Option {
+	return func(impl *libp2pDataTransferNetwork) {
+		impl.dtProtocols = nil
+		impl.dtProtocols = append(impl.dtProtocols, protocols...)
+	}
+}
 
 // RetryParameters changes the default parameters around connection reopening
 func RetryParameters(minDuration time.Duration, maxDuration time.Duration, attempts float64) Option {
@@ -48,6 +58,7 @@ func NewFromLibp2pHost(host host.Host, options ...Option) DataTransferNetwork {
 		maxStreamOpenAttempts: defaultMaxStreamOpenAttempts,
 		minAttemptDuration:    defaultMinAttemptDuration,
 		maxAttemptDuration:    defaultMaxAttemptDuration,
+		dtProtocols:           defaultDataTransferProtocols,
 	}
 
 	for _, option := range options {
@@ -67,6 +78,7 @@ type libp2pDataTransferNetwork struct {
 	maxStreamOpenAttempts float64
 	minAttemptDuration    time.Duration
 	maxAttemptDuration    time.Duration
+	dtProtocols           []protocol.ID
 }
 
 func (impl *libp2pDataTransferNetwork) openStream(ctx context.Context, id peer.ID, protocols ...protocol.ID) (network.Stream, error) {
@@ -98,7 +110,7 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 	p peer.ID,
 	outgoing datatransfer.Message) error {
 
-	s, err := dtnet.openStream(ctx, p, datatransfer.ProtocolDataTransfer1_1, datatransfer.ProtocolDataTransfer1_0)
+	s, err := dtnet.openStream(ctx, p, dtnet.dtProtocols...)
 	if err != nil {
 		return err
 	}
@@ -123,8 +135,9 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 
 func (dtnet *libp2pDataTransferNetwork) SetDelegate(r Receiver) {
 	dtnet.receiver = r
-	dtnet.host.SetStreamHandler(datatransfer.ProtocolDataTransfer1_1, dtnet.handleNewStream)
-	dtnet.host.SetStreamHandler(datatransfer.ProtocolDataTransfer1_0, dtnet.handleNewStream)
+	for _, p := range dtnet.dtProtocols {
+		dtnet.host.SetStreamHandler(p, dtnet.handleNewStream)
+	}
 }
 
 func (dtnet *libp2pDataTransferNetwork) ConnectTo(ctx context.Context, p peer.ID) error {
@@ -144,7 +157,7 @@ func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 		var received datatransfer.Message
 		var err error
 		if s.Protocol() == datatransfer.ProtocolDataTransfer1_1 {
-			received, err = message1_1.FromNet(s)
+			received, err = message.FromNet(s)
 		} else {
 			received, err = message1_0.FromNet(s)
 		}

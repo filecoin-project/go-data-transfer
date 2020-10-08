@@ -19,7 +19,7 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	. "github.com/filecoin-project/go-data-transfer/impl"
-	"github.com/filecoin-project/go-data-transfer/message/message1_1"
+	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
 
@@ -552,17 +552,17 @@ func TestDataTransferResponding(t *testing.T) {
 			h.voucher = testutil.NewFakeDTType()
 			h.baseCid = testutil.GenerateCids(1)[0]
 			h.id = datatransfer.TransferID(rand.Int31())
-			h.pullRequest, err = message1_1.NewRequest(h.id, false, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pullRequest, err = message.NewRequest(h.id, false, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
-			h.pushRequest, err = message1_1.NewRequest(h.id, false, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pushRequest, err = message.NewRequest(h.id, false, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
-			h.pauseUpdate = message1_1.UpdateRequest(h.id, true)
+			h.pauseUpdate = message.UpdateRequest(h.id, true)
 			require.NoError(t, err)
-			h.resumeUpdate = message1_1.UpdateRequest(h.id, false)
+			h.resumeUpdate = message.UpdateRequest(h.id, false)
 			require.NoError(t, err)
 			updateVoucher := testutil.NewFakeDTType()
-			h.voucherUpdate, err = message1_1.VoucherRequest(h.id, updateVoucher.Type(), updateVoucher)
-			h.cancelUpdate = message1_1.CancelRequest(h.id)
+			h.voucherUpdate, err = message.VoucherRequest(h.id, updateVoucher.Type(), updateVoucher)
+			h.cancelUpdate = message.CancelRequest(h.id)
 			require.NoError(t, err)
 			h.sv = testutil.NewStubbedValidator()
 			if verify.configureValidator != nil {
@@ -599,7 +599,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 
-				response, err := message1_1.RestartResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
+				response, err := message.RestartResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
@@ -628,7 +628,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NoError(t, ev.OnDataReceived(chid, cidlink.Link{Cid: testCids[1]}, 12345))
 
 				// receive restart push request
-				req, err := message1_1.NewRequest(h.pushRequest.TransferID(), true, false, h.voucher.Type(), h.voucher,
+				req, err := message.NewRequest(h.pushRequest.TransferID(), true, false, h.voucher.Type(), h.voucher,
 					h.baseCid, h.stor)
 				require.NoError(t, err)
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], req)
@@ -681,7 +681,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 0)
 
 				// receive restart pull request
-				restartReq, err := message1_1.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+				restartReq, err := message.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				response, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), restartReq)
 				require.NoError(t, err)
@@ -723,7 +723,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 0)
 
 				// receive restart pull request
-				restartReq, err := message1_1.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+				restartReq, err := message.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				p := testutil.GeneratePeers(1)[0]
 				chid := datatransfer.ChannelID{ID: h.pullRequest.TransferID(), Initiator: p, Responder: h.peers[0]}
@@ -745,7 +745,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 
 				// receive restart pull request
 				h.sv.ExpectErrorPull()
-				restartReq, err := message1_1.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+				restartReq, err := message.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), restartReq)
 				require.EqualError(t, err, "failed to validate voucher: something went wrong")
@@ -767,7 +767,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 
 				// receive restart pull request
 				randCid := testutil.GenerateCids(1)[0]
-				restartReq, err := message1_1.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, randCid, h.stor)
+				restartReq, err := message.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, randCid, h.stor)
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), restartReq)
 				require.EqualError(t, err, "base cid does not match")
@@ -789,7 +789,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 
 				// receive restart pull request
 
-				restartReq, err := message1_1.NewRequest(h.id, true, true, "rand", h.voucher, h.baseCid, h.stor)
+				restartReq, err := message.NewRequest(h.id, true, true, "rand", h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), restartReq)
 				require.EqualError(t, err, "failed to decode request voucher: unknown voucher type: rand")
@@ -812,7 +812,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				// receive restart pull request
 				v := testutil.NewFakeDTType()
 				v.Data = "rand"
-				restartReq, err := message1_1.NewRequest(h.id, true, true, h.voucher.Type(), v, h.baseCid, h.stor)
+				restartReq, err := message.NewRequest(h.id, true, true, h.voucher.Type(), v, h.baseCid, h.stor)
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), restartReq)
 				require.EqualError(t, err, "channel and request vouchers do not match")
@@ -836,7 +836,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[1]}, 12345))
 
 				// send a request to restart the same pull channel
-				restartReq := message1_1.RestartExistingChannelRequest(channelID)
+				restartReq := message.RestartExistingChannelRequest(channelID)
 				h.network.Delegate.ReceiveRestartExistingChannelRequest(ctx, h.peers[1], restartReq)
 
 				require.Len(t, h.transport.OpenedChannels, 2)
@@ -881,7 +881,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NotEmpty(t, channelID)
 
 				// send a request to restart the same push request
-				restartReq := message1_1.RestartExistingChannelRequest(channelID)
+				restartReq := message.RestartExistingChannelRequest(channelID)
 				h.network.Delegate.ReceiveRestartExistingChannelRequest(ctx, h.peers[1], restartReq)
 
 				// assert correct message was sent in response to this
@@ -920,7 +920,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 
 				// restart req does not anything as we are not the initiator
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
-				restartReq := message1_1.RestartExistingChannelRequest(chid)
+				restartReq := message.RestartExistingChannelRequest(chid)
 				h.network.Delegate.ReceiveRestartExistingChannelRequest(ctx, h.peers[1], restartReq)
 
 				require.Len(t, h.transport.OpenedChannels, 1)
@@ -939,7 +939,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NotEmpty(t, channelID)
 
 				// sending peer is not the counter-party on the channel
-				restartReq := message1_1.RestartExistingChannelRequest(channelID)
+				restartReq := message.RestartExistingChannelRequest(channelID)
 				h.network.Delegate.ReceiveRestartExistingChannelRequest(ctx, h.peers[1], restartReq)
 
 				require.Len(t, h.transport.OpenedChannels, 0)
@@ -972,9 +972,9 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			h.voucher = testutil.NewFakeDTType()
 			h.baseCid = testutil.GenerateCids(1)[0]
 			h.id = datatransfer.TransferID(rand.Int31())
-			h.pullRequest, err = message1_1.NewRequest(h.id, false, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pullRequest, err = message.NewRequest(h.id, false, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
-			h.pushRequest, err = message1_1.NewRequest(h.id, false, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pushRequest, err = message.NewRequest(h.id, false, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
 
 			h.sv = testutil.NewStubbedValidator()

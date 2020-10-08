@@ -436,7 +436,7 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 
 	// Setup host
-	gsData := testutil.NewGraphsyncTestingData(ctx, t)
+	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
 	host1 := gsData.Host1 // initiator, data sender
 	host2 := gsData.Host2 // data recipient
 	peer1 := host1.ID()

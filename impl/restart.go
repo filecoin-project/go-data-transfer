@@ -12,7 +12,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"
 	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/message/message1_1"
+	"github.com/filecoin-project/go-data-transfer/message"
 )
 
 type ChannelDataTransferType int
@@ -37,7 +37,7 @@ func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel dat
 	}
 
 	// send a libp2p message to the other peer asking to send a "restart push request"
-	req := message1_1.RestartExistingChannelRequest(channel.ChannelID())
+	req := message.RestartExistingChannelRequest(channel.ChannelID())
 
 	return m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req)
 }
@@ -47,7 +47,7 @@ func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel dat
 		return xerrors.Errorf("failed to restart channel, validation error: %w", err)
 	}
 
-	req := message1_1.RestartExistingChannelRequest(channel.ChannelID())
+	req := message.RestartExistingChannelRequest(channel.ChannelID())
 
 	// send a libp2p message to the other peer asking to send a "restart pull request"
 	return m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req)
@@ -58,7 +58,7 @@ func (m *manager) validateRestartVoucher(channel datatransfer.ChannelState, isPu
 	chid := channel.ChannelID()
 
 	// recreate the request that would have led to this pull channel being created for validation
-	req, err := message1_1.NewRequest(chid.ID, false, isPull, channel.Voucher().Type(), channel.Voucher(),
+	req, err := message.NewRequest(chid.ID, false, isPull, channel.Voucher().Type(), channel.Voucher(),
 		channel.BaseCID(), channel.Selector())
 	if err != nil {
 		return err
@@ -79,7 +79,7 @@ func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransf
 	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
 
-	req, err := message1_1.NewRequest(chid.ID, true, false, voucher.Type(), voucher, baseCid, selector)
+	req, err := message.NewRequest(chid.ID, true, false, voucher.Type(), voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransf
 	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
 
-	req, err := message1_1.NewRequest(chid.ID, true, true, voucher.Type(), voucher, baseCid, selector)
+	req, err := message.NewRequest(chid.ID, true, true, voucher.Type(), voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}

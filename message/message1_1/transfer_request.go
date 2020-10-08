@@ -41,6 +41,10 @@ func (trq *transferRequest1_1) MessageForProtocol(targetProtocol protocol.ID) (d
 	case datatransfer.ProtocolDataTransfer1_1:
 		return trq, nil
 	case datatransfer.ProtocolDataTransfer1_0:
+		if trq.IsRestart() || trq.IsRestartExistingChannelRequest() {
+			return nil, xerrors.New("restart not supported on 1.0")
+		}
+
 		lreq := message1_0.NewTransferRequest(
 			trq.BCid,
 			trq.Type,

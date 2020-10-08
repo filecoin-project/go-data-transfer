@@ -20,7 +20,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"
 	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/message/message1_1"
+	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/registry"
 )
@@ -194,7 +194,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 	if channelID.Initiator != m.peerID {
 		return errors.New("cannot send voucher for request we did not initiate")
 	}
-	updateRequest, err := message1_1.VoucherRequest(channelID.ID, voucher.Type(), voucher)
+	updateRequest, err := message.VoucherRequest(channelID.ID, voucher.Type(), voucher)
 	if err != nil {
 		return err
 	}
