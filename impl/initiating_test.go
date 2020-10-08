@@ -332,6 +332,8 @@ func TestDataTransferInitiating(t *testing.T) {
 		},
 	}
 	for testCase, verify := range testCases {
+
+		// test for new protocol -> new protocol
 		t.Run(testCase, func(t *testing.T) {
 			h := &harness{}
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)

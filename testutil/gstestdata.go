@@ -34,6 +34,7 @@ import (
 	"github.com/ipld/go-ipld-prime/traversal/selector"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
@@ -85,7 +86,7 @@ type GraphsyncTestingData struct {
 }
 
 // NewGraphsyncTestingData returns a new GraphsyncTestingData instance
-func NewGraphsyncTestingData(ctx context.Context, t *testing.T) *GraphsyncTestingData {
+func NewGraphsyncTestingData(ctx context.Context, t *testing.T, host1Protocols []protocol.ID, host2Protocols []protocol.ID) *GraphsyncTestingData {
 
 	gsData := &GraphsyncTestingData{}
 	gsData.Ctx = ctx
@@ -130,8 +131,19 @@ func NewGraphsyncTestingData(ctx context.Context, t *testing.T) *GraphsyncTestin
 	gsData.GsNet1 = gsnet.NewFromLibp2pHost(gsData.Host1)
 	gsData.GsNet2 = gsnet.NewFromLibp2pHost(gsData.Host2)
 
-	gsData.DtNet1 = network.NewFromLibp2pHost(gsData.Host1, network.RetryParameters(0, 0, 0))
-	gsData.DtNet2 = network.NewFromLibp2pHost(gsData.Host2, network.RetryParameters(0, 0, 0))
+	opts1 := []network.Option{network.RetryParameters(0, 0, 0)}
+	opts2 := []network.Option{network.RetryParameters(0, 0, 0)}
+
+	if len(host1Protocols) != 0 {
+		opts1 = append(opts1, network.DataTransferProtocols(host1Protocols))
+	}
+
+	if len(host2Protocols) != 0 {
+		opts2 = append(opts2, network.DataTransferProtocols(host2Protocols))
+	}
+
+	gsData.DtNet1 = network.NewFromLibp2pHost(gsData.Host1, opts1...)
+	gsData.DtNet2 = network.NewFromLibp2pHost(gsData.Host2, opts2...)
 
 	// create a selector for the whole UnixFS dag
 	gsData.AllSelector = allSelector
