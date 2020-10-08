@@ -3,7 +3,6 @@ package impl
 import (
 	"bytes"
 	"context"
-	"fmt"
 
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -39,7 +38,11 @@ func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel dat
 	// send a libp2p message to the other peer asking to send a "restart push request"
 	req := message.RestartExistingChannelRequest(channel.ChannelID())
 
-	return m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req)
+	if err := m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req); err != nil {
+		return xerrors.Errorf("unable to send restart request: %w", err)
+	}
+
+	return nil
 }
 
 func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel datatransfer.ChannelState) error {
@@ -50,7 +53,11 @@ func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel dat
 	req := message.RestartExistingChannelRequest(channel.ChannelID())
 
 	// send a libp2p message to the other peer asking to send a "restart pull request"
-	return m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req)
+	if err := m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req); err != nil {
+		return xerrors.Errorf("unable to send restart request: %w", err)
+	}
+
+	return nil
 }
 
 func (m *manager) validateRestartVoucher(channel datatransfer.ChannelState, isPull bool) error {
@@ -91,9 +98,7 @@ func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransf
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	if err := m.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
-		err = fmt.Errorf("Unable to send request: %w", err)
-		_ = m.channels.Error(chid, err)
-		return err
+		return xerrors.Errorf("Unable to send restart request: %w", err)
 	}
 
 	return nil
@@ -118,9 +123,7 @@ func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransf
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, channel.ReceivedCids(), req); err != nil {
-		err = fmt.Errorf("Unable to send request: %w", err)
-		_ = m.channels.Error(chid, err)
-		return err
+		return xerrors.Errorf("Unable to send open channel restart request: %w", err)
 	}
 
 	return nil

@@ -17,6 +17,7 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
+	"github.com/filecoin-project/go-data-transfer/message/message1_0"
 )
 
 var log = logging.Logger("data_transfer_network")
@@ -27,8 +28,18 @@ const defaultMaxStreamOpenAttempts = 5
 const defaultMinAttemptDuration = 1 * time.Second
 const defaultMaxAttemptDuration = 5 * time.Minute
 
+var defaultDataTransferProtocols = []protocol.ID{datatransfer.ProtocolDataTransfer1_1, datatransfer.ProtocolDataTransfer1_0}
+
 // Option is an option for configuring the libp2p storage market network
 type Option func(*libp2pDataTransferNetwork)
+
+// DataTransferProtocols OVERWRITES the default libp2p protocols we use for data transfer with the given protocols.
+func DataTransferProtocols(protocols []protocol.ID) Option {
+	return func(impl *libp2pDataTransferNetwork) {
+		impl.dtProtocols = nil
+		impl.dtProtocols = append(impl.dtProtocols, protocols...)
+	}
+}
 
 // RetryParameters changes the default parameters around connection reopening
 func RetryParameters(minDuration time.Duration, maxDuration time.Duration, attempts float64) Option {
@@ -47,6 +58,7 @@ func NewFromLibp2pHost(host host.Host, options ...Option) DataTransferNetwork {
 		maxStreamOpenAttempts: defaultMaxStreamOpenAttempts,
 		minAttemptDuration:    defaultMinAttemptDuration,
 		maxAttemptDuration:    defaultMaxAttemptDuration,
+		dtProtocols:           defaultDataTransferProtocols,
 	}
 
 	for _, option := range options {
@@ -66,9 +78,10 @@ type libp2pDataTransferNetwork struct {
 	maxStreamOpenAttempts float64
 	minAttemptDuration    time.Duration
 	maxAttemptDuration    time.Duration
+	dtProtocols           []protocol.ID
 }
 
-func (impl *libp2pDataTransferNetwork) openStream(ctx context.Context, id peer.ID, protocol protocol.ID) (network.Stream, error) {
+func (impl *libp2pDataTransferNetwork) openStream(ctx context.Context, id peer.ID, protocols ...protocol.ID) (network.Stream, error) {
 	b := &backoff.Backoff{
 		Min:    impl.minAttemptDuration,
 		Max:    impl.maxAttemptDuration,
@@ -77,7 +90,8 @@ func (impl *libp2pDataTransferNetwork) openStream(ctx context.Context, id peer.I
 	}
 
 	for {
-		s, err := impl.host.NewStream(ctx, id, protocol)
+		// will use the first among the given protocols that the remote peer supports
+		s, err := impl.host.NewStream(ctx, id, protocols...)
 		if err == nil {
 			return s, err
 		}
@@ -96,9 +110,14 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 	p peer.ID,
 	outgoing datatransfer.Message) error {
 
-	s, err := dtnet.openStream(ctx, p, ProtocolDataTransfer)
+	s, err := dtnet.openStream(ctx, p, dtnet.dtProtocols...)
 	if err != nil {
 		return err
+	}
+
+	outgoing, err = outgoing.MessageForProtocol(s.Protocol())
+	if err != nil {
+		return xerrors.Errorf("failed to convert message for protocol: %w", err)
 	}
 
 	if err = msgToStream(ctx, s, outgoing); err != nil {
@@ -112,12 +131,13 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 	// TODO(https://github.com/libp2p/go-libp2p-net/issues/28): Avoid this goroutine.
 	go helpers.AwaitEOF(s) // nolint: errcheck,gosec
 	return s.Close()
-
 }
 
 func (dtnet *libp2pDataTransferNetwork) SetDelegate(r Receiver) {
 	dtnet.receiver = r
-	dtnet.host.SetStreamHandler(ProtocolDataTransfer, dtnet.handleNewStream)
+	for _, p := range dtnet.dtProtocols {
+		dtnet.host.SetStreamHandler(p, dtnet.handleNewStream)
+	}
 }
 
 func (dtnet *libp2pDataTransferNetwork) ConnectTo(ctx context.Context, p peer.ID) error {
@@ -134,7 +154,14 @@ func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 	}
 
 	for {
-		received, err := message.FromNet(s)
+		var received datatransfer.Message
+		var err error
+		if s.Protocol() == datatransfer.ProtocolDataTransfer1_1 {
+			received, err = message.FromNet(s)
+		} else {
+			received, err = message1_0.FromNet(s)
+		}
+
 		if err != nil {
 			if err != io.EOF {
 				s.Reset() // nolint: errcheck,gosec
@@ -192,13 +219,15 @@ func msgToStream(ctx context.Context, s network.Stream, msg datatransfer.Message
 	}
 
 	switch s.Protocol() {
-	case ProtocolDataTransfer:
-		if err := msg.ToNet(s); err != nil {
-			log.Debugf("error: %s", err)
-			return err
-		}
+	case datatransfer.ProtocolDataTransfer1_1:
+	case datatransfer.ProtocolDataTransfer1_0:
 	default:
 		return fmt.Errorf("unrecognized protocol on remote: %s", s.Protocol())
+	}
+
+	if err := msg.ToNet(s); err != nil {
+		log.Debugf("error: %s", err)
+		return err
 	}
 
 	if err := s.SetWriteDeadline(time.Time{}); err != nil {
