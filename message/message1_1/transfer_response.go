@@ -13,7 +13,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/message/types"
 )
 
-//go:generate cbor-gen-for transferResponse1_1
+//go:generate cbor-gen-for --map-encoding transferResponse1_1
 
 // transferResponse1_1 is a private struct that satisfies the datatransfer.Response interface
 // It is the response message for the Data Transfer 1.1 Protocol.

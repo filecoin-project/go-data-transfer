@@ -29,7 +29,7 @@ require (
 	github.com/libp2p/go-libp2p v0.6.0
 	github.com/libp2p/go-libp2p-core v0.5.0
 	github.com/stretchr/testify v1.5.1
-	github.com/whyrusleeping/cbor-gen v0.0.0-20200810223238-211df3b9e24c
+	github.com/whyrusleeping/cbor-gen v0.0.0-20200826160007-0b9f6c5fb163
 	go.uber.org/atomic v1.6.0
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 )

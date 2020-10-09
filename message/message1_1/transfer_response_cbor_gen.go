@@ -13,47 +13,109 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBuftransferResponse1_1 = []byte{134}
-
 func (t *transferResponse1_1) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBuftransferResponse1_1); err != nil {
+	if _, err := w.Write([]byte{166}); err != nil {
 		return err
 	}
 
 	scratch := make([]byte, 9)
 
 	// t.Type (uint64) (uint64)
+	if len("Type") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Type\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Type"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Type")); err != nil {
+		return err
+	}
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Type)); err != nil {
 		return err
 	}
 
 	// t.Acpt (bool) (bool)
+	if len("Acpt") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Acpt\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Acpt"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Acpt")); err != nil {
+		return err
+	}
+
 	if err := cbg.WriteBool(w, t.Acpt); err != nil {
 		return err
 	}
 
 	// t.Paus (bool) (bool)
+	if len("Paus") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Paus\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Paus"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Paus")); err != nil {
+		return err
+	}
+
 	if err := cbg.WriteBool(w, t.Paus); err != nil {
 		return err
 	}
 
 	// t.XferID (uint64) (uint64)
+	if len("XferID") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"XferID\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("XferID"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("XferID")); err != nil {
+		return err
+	}
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.XferID)); err != nil {
 		return err
 	}
 
 	// t.VRes (typegen.Deferred) (struct)
+	if len("VRes") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"VRes\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("VRes"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("VRes")); err != nil {
+		return err
+	}
+
 	if err := t.VRes.MarshalCBOR(w); err != nil {
 		return err
 	}
 
 	// t.VTyp (datatransfer.TypeIdentifier) (string)
+	if len("VTyp") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"VTyp\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("VTyp"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("VTyp")); err != nil {
+		return err
+	}
+
 	if len(t.VTyp) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.VTyp was too long")
 	}
@@ -77,95 +139,122 @@ func (t *transferResponse1_1) UnmarshalCBOR(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
+	if maj != cbg.MajMap {
+		return fmt.Errorf("cbor input should be of type map")
 	}
 
-	if extra != 6 {
-		return fmt.Errorf("cbor input had wrong number of fields")
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("transferResponse1_1: map struct too large (%d)", extra)
 	}
 
-	// t.Type (uint64) (uint64)
+	var name string
+	n := extra
 
-	{
+	for i := uint64(0); i < n; i++ {
 
-		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-		if err != nil {
-			return err
-		}
-		if maj != cbg.MajUnsignedInt {
-			return fmt.Errorf("wrong type for uint64 field")
-		}
-		t.Type = uint64(extra)
+		{
+			sval, err := cbg.ReadStringBuf(br, scratch)
+			if err != nil {
+				return err
+			}
 
-	}
-	// t.Acpt (bool) (bool)
-
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajOther {
-		return fmt.Errorf("booleans must be major type 7")
-	}
-	switch extra {
-	case 20:
-		t.Acpt = false
-	case 21:
-		t.Acpt = true
-	default:
-		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
-	}
-	// t.Paus (bool) (bool)
-
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajOther {
-		return fmt.Errorf("booleans must be major type 7")
-	}
-	switch extra {
-	case 20:
-		t.Paus = false
-	case 21:
-		t.Paus = true
-	default:
-		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
-	}
-	// t.XferID (uint64) (uint64)
-
-	{
-
-		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-		if err != nil {
-			return err
-		}
-		if maj != cbg.MajUnsignedInt {
-			return fmt.Errorf("wrong type for uint64 field")
-		}
-		t.XferID = uint64(extra)
-
-	}
-	// t.VRes (typegen.Deferred) (struct)
-
-	{
-
-		t.VRes = new(cbg.Deferred)
-
-		if err := t.VRes.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("failed to read deferred field: %w", err)
-		}
-	}
-	// t.VTyp (datatransfer.TypeIdentifier) (string)
-
-	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
-		if err != nil {
-			return err
+			name = string(sval)
 		}
 
-		t.VTyp = datatransfer.TypeIdentifier(sval)
+		switch name {
+		// t.Type (uint64) (uint64)
+		case "Type":
+
+			{
+
+				maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+				if maj != cbg.MajUnsignedInt {
+					return fmt.Errorf("wrong type for uint64 field")
+				}
+				t.Type = uint64(extra)
+
+			}
+			// t.Acpt (bool) (bool)
+		case "Acpt":
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.Acpt = false
+			case 21:
+				t.Acpt = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+			}
+			// t.Paus (bool) (bool)
+		case "Paus":
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.Paus = false
+			case 21:
+				t.Paus = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+			}
+			// t.XferID (uint64) (uint64)
+		case "XferID":
+
+			{
+
+				maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+				if maj != cbg.MajUnsignedInt {
+					return fmt.Errorf("wrong type for uint64 field")
+				}
+				t.XferID = uint64(extra)
+
+			}
+			// t.VRes (typegen.Deferred) (struct)
+		case "VRes":
+
+			{
+
+				t.VRes = new(cbg.Deferred)
+
+				if err := t.VRes.UnmarshalCBOR(br); err != nil {
+					return xerrors.Errorf("failed to read deferred field: %w", err)
+				}
+			}
+			// t.VTyp (datatransfer.TypeIdentifier) (string)
+		case "VTyp":
+
+			{
+				sval, err := cbg.ReadStringBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+
+				t.VTyp = datatransfer.TypeIdentifier(sval)
+			}
+
+		default:
+			return fmt.Errorf("unknown struct field %d: '%s'", i, name)
+		}
 	}
+
 	return nil
 }
