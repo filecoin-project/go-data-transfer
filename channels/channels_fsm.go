@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/go-statemachine/fsm"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/channels/internal"
 )
 
 var log = logging.Logger("data-transfer")
@@ -27,7 +28,7 @@ var ChannelEvents = fsm.Events{
 		datatransfer.ResponderPaused,
 		datatransfer.BothPaused,
 		datatransfer.ResponderCompleted,
-		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, delta uint64, c cid.Cid) error {
+		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internal.ChannelState, delta uint64, c cid.Cid) error {
 		chst.Received += delta
 		chst.ReceivedCids = append(chst.ReceivedCids, c)
 		return nil
@@ -40,26 +41,26 @@ var ChannelEvents = fsm.Events{
 		datatransfer.ResponderPaused,
 		datatransfer.BothPaused,
 		datatransfer.ResponderCompleted,
-		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internalChannelState, delta uint64, c cid.Cid) error {
+		datatransfer.ResponderFinalizing).ToNoChange().Action(func(chst *internal.ChannelState, delta uint64, c cid.Cid) error {
 		chst.Sent += delta
 		return nil
 	}),
 
 	fsm.Event(datatransfer.Disconnected).FromAny().To(datatransfer.PeerDisconnected),
 
-	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failing).Action(func(chst *internalChannelState, err error) error {
+	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failing).Action(func(chst *internal.ChannelState, err error) error {
 		chst.Message = err.Error()
 		return nil
 	}),
 	fsm.Event(datatransfer.NewVoucher).FromAny().ToNoChange().
-		Action(func(chst *internalChannelState, vtype datatransfer.TypeIdentifier, voucherBytes []byte) error {
-			chst.Vouchers = append(chst.Vouchers, encodedVoucher{Type: vtype, Voucher: &cbg.Deferred{Raw: voucherBytes}})
+		Action(func(chst *internal.ChannelState, vtype datatransfer.TypeIdentifier, voucherBytes []byte) error {
+			chst.Vouchers = append(chst.Vouchers, internal.EncodedVoucher{Type: vtype, Voucher: &cbg.Deferred{Raw: voucherBytes}})
 			return nil
 		}),
 	fsm.Event(datatransfer.NewVoucherResult).FromAny().ToNoChange().
-		Action(func(chst *internalChannelState, vtype datatransfer.TypeIdentifier, voucherResultBytes []byte) error {
+		Action(func(chst *internal.ChannelState, vtype datatransfer.TypeIdentifier, voucherResultBytes []byte) error {
 			chst.VoucherResults = append(chst.VoucherResults,
-				encodedVoucherResult{Type: vtype, VoucherResult: &cbg.Deferred{Raw: voucherResultBytes}})
+				internal.EncodedVoucherResult{Type: vtype, VoucherResult: &cbg.Deferred{Raw: voucherResultBytes}})
 			return nil
 		}),
 	fsm.Event(datatransfer.PauseInitiator).
@@ -114,7 +115,7 @@ var ChannelStateEntryFuncs = fsm.StateEntryFuncs{
 	datatransfer.Completing: cleanupConnection,
 }
 
-func cleanupConnection(ctx fsm.Context, env ChannelEnvironment, channel internalChannelState) error {
+func cleanupConnection(ctx fsm.Context, env ChannelEnvironment, channel internal.ChannelState) error {
 	otherParty := channel.Initiator
 	if otherParty == env.ID() {
 		otherParty = channel.Responder

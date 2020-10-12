@@ -1,20 +1,25 @@
 package channels_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
+	cbg "github.com/whyrusleeping/cbor-gen"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"
+	"github.com/filecoin-project/go-data-transfer/channels/internal/migrations"
 	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
@@ -23,24 +28,11 @@ func TestChannels(t *testing.T) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	decoderByType := func(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool) {
-		if identifier == testutil.NewFakeDTType().Type() {
-			decoder, err := encoding.NewDecoder(testutil.NewFakeDTType())
-			if err != nil {
-				return nil, false
-			}
-			return decoder, true
-		}
-		return nil, false
-	}
 	ds := datastore.NewMapDatastore()
 	received := make(chan event)
 	notifier := func(evt datatransfer.Event, chst datatransfer.ChannelState) {
 		received <- event{evt, chst}
 	}
-
-	channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{})
-	require.NoError(t, err)
 
 	tid1 := datatransfer.TransferID(0)
 	tid2 := datatransfer.TransferID(1)
@@ -50,6 +42,11 @@ func TestChannels(t *testing.T) {
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	peers := testutil.GeneratePeers(4)
 
+	channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+	require.NoError(t, err)
+
+	err = channelList.Start(ctx)
+	require.NoError(t, err)
 	t.Run("adding channels", func(t *testing.T) {
 		chid, err := channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
 		require.NoError(t, err)
@@ -119,7 +116,9 @@ func TestChannels(t *testing.T) {
 
 	t.Run("updating send/receive values", func(t *testing.T) {
 		ds := datastore.NewMapDatastore()
-		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{})
+		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+		require.NoError(t, err)
+		err = channelList.Start(ctx)
 		require.NoError(t, err)
 
 		_, err = channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
@@ -291,7 +290,9 @@ func TestChannels(t *testing.T) {
 			received <- event{evt, chst}
 		}
 
-		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{})
+		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+		require.NoError(t, err)
+		err = channelList.Start(ctx)
 		require.NoError(t, err)
 
 		chid, err := channelList.CreateNew(peers[3], tid1, cids[0], selector, fv1, peers[3], peers[0], peers[3])
@@ -338,6 +339,124 @@ func TestIsChannelCleaningUp(t *testing.T) {
 	require.False(t, channels.IsChannelCleaningUp(datatransfer.Cancelled))
 }
 
+func TestMigratins(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	ds := datastore.NewMapDatastore()
+	received := make(chan event)
+	notifier := func(evt datatransfer.Event, chst datatransfer.ChannelState) {
+		received <- event{evt, chst}
+	}
+	numChannels := 5
+	transferIDs := make([]datatransfer.TransferID, numChannels)
+	initiators := make([]peer.ID, numChannels)
+	responders := make([]peer.ID, numChannels)
+	baseCids := make([]cid.Cid, numChannels)
+
+	totalSizes := make([]uint64, numChannels)
+	sents := make([]uint64, numChannels)
+	receiveds := make([]uint64, numChannels)
+	messages := make([]string, numChannels)
+	vouchers := make([]datatransfer.Voucher, numChannels)
+	voucherResults := make([]datatransfer.VoucherResult, numChannels)
+
+	allSelector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
+	allSelectorBuf := new(bytes.Buffer)
+	err := dagcbor.Encoder(allSelector, allSelectorBuf)
+	require.NoError(t, err)
+	allSelectorBytes := allSelectorBuf.Bytes()
+
+	for i := 0; i < numChannels; i++ {
+		transferIDs[i] = datatransfer.TransferID(rand.Uint64())
+		initiators[i] = testutil.GeneratePeers(1)[0]
+		responders[i] = testutil.GeneratePeers(1)[0]
+		baseCids[i] = testutil.GenerateCids(1)[0]
+		totalSizes[i] = rand.Uint64()
+		sents[i] = rand.Uint64()
+		receiveds[i] = rand.Uint64()
+		messages[i] = string(testutil.RandomBytes(20))
+		vouchers[i] = testutil.NewFakeDTType()
+		vBytes, err := encoding.Encode(vouchers[i])
+		require.NoError(t, err)
+		voucherResults[i] = testutil.NewFakeDTType()
+		vrBytes, err := encoding.Encode(voucherResults[i])
+		require.NoError(t, err)
+		channel := migrations.ChannelState0{
+			TransferID: transferIDs[i],
+			Initiator:  initiators[i],
+			Responder:  responders[i],
+			BaseCid:    baseCids[i],
+			Selector: &cbg.Deferred{
+				Raw: allSelectorBytes,
+			},
+			Sender:    initiators[i],
+			Recipient: responders[i],
+			TotalSize: totalSizes[i],
+			Status:    datatransfer.Ongoing,
+			Sent:      sents[i],
+			Received:  receiveds[i],
+			Message:   messages[i],
+			Vouchers: []migrations.EncodedVoucher0{
+				{
+					Type: vouchers[i].Type(),
+					Voucher: &cbg.Deferred{
+						Raw: vBytes,
+					},
+				},
+			},
+			VoucherResults: []migrations.EncodedVoucherResult0{
+				{
+					Type: voucherResults[i].Type(),
+					VoucherResult: &cbg.Deferred{
+						Raw: vrBytes,
+					},
+				},
+			},
+		}
+		buf := new(bytes.Buffer)
+		err = channel.MarshalCBOR(buf)
+		require.NoError(t, err)
+		err = ds.Put(datastore.NewKey(datatransfer.ChannelID{
+			Initiator: initiators[i],
+			Responder: responders[i],
+			ID:        transferIDs[i],
+		}.String()), buf.Bytes())
+		require.NoError(t, err)
+	}
+
+	selfPeer := testutil.GeneratePeers(1)[0]
+	channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, selfPeer)
+	require.NoError(t, err)
+	err = channelList.Start(ctx)
+	require.NoError(t, err)
+
+	for i := 0; i < numChannels; i++ {
+
+		channel, err := channelList.GetByID(ctx, datatransfer.ChannelID{
+			Initiator: initiators[i],
+			Responder: responders[i],
+			ID:        transferIDs[i],
+		})
+		require.NoError(t, err)
+		require.Equal(t, selfPeer, channel.SelfPeer())
+		require.Equal(t, transferIDs[i], channel.TransferID())
+		require.Equal(t, baseCids[i], channel.BaseCID())
+		require.Equal(t, allSelector, channel.Selector())
+		require.Equal(t, initiators[i], channel.Sender())
+		require.Equal(t, responders[i], channel.Recipient())
+		require.Equal(t, totalSizes[i], channel.TotalSize())
+		require.Equal(t, datatransfer.Ongoing, channel.Status())
+		require.Equal(t, sents[i], channel.Sent())
+		require.Equal(t, receiveds[i], channel.Received())
+		require.Equal(t, messages[i], channel.Message())
+		require.Equal(t, vouchers[i], channel.LastVoucher())
+		require.Equal(t, voucherResults[i], channel.LastVoucherResult())
+		require.Len(t, channel.ReceivedCids(), 0)
+	}
+}
+
 type event struct {
 	event datatransfer.Event
 	state datatransfer.ChannelState
@@ -369,4 +488,15 @@ func (fe *fakeEnv) ID() peer.ID {
 }
 
 func (fe *fakeEnv) CleanupChannel(chid datatransfer.ChannelID) {
+}
+
+func decoderByType(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool) {
+	if identifier == testutil.NewFakeDTType().Type() {
+		decoder, err := encoding.NewDecoder(testutil.NewFakeDTType())
+		if err != nil {
+			return nil, false
+		}
+		return decoder, true
+	}
+	return nil, false
 }

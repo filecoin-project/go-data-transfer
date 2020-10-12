@@ -65,8 +65,8 @@ type GraphsyncTestingData struct {
 	Mn             mocknet.Mocknet
 	StoredCounter1 *storedcounter.StoredCounter
 	StoredCounter2 *storedcounter.StoredCounter
-	DtDs1          datastore.Datastore
-	DtDs2          datastore.Datastore
+	DtDs1          datastore.Batching
+	DtDs2          datastore.Batching
 	Bs1            bstore.Blockstore
 	Bs2            bstore.Blockstore
 	DagService1    ipldformat.DAGService

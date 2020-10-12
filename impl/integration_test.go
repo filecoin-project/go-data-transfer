@@ -106,12 +106,10 @@ func TestRoundTrip(t *testing.T) {
 
 				dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 				require.NoError(t, err)
-				err = dt1.Start(ctx)
-				require.NoError(t, err)
+				testutil.StartAndWaitForReady(ctx, t, dt1)
 				dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 				require.NoError(t, err)
-				err = dt2.Start(ctx)
-				require.NoError(t, err)
+				testutil.StartAndWaitForReady(ctx, t, dt2)
 
 				finished := make(chan struct{}, 2)
 				errChan := make(chan struct{}, 2)
@@ -263,12 +261,10 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 
 			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 			require.NoError(t, err)
-			err = dt1.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt1)
 			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 			require.NoError(t, err)
-			err = dt2.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt2)
 
 			finished := make(chan struct{}, 2*data.requestCount)
 			errChan := make(chan string, 2*data.requestCount)
@@ -387,8 +383,7 @@ func TestManyReceiversAtOnce(t *testing.T) {
 			tp1 := gsData.SetupGSTransportHost1()
 			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 			require.NoError(t, err)
-			err = dt1.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt1)
 
 			destDagServices := make([]ipldformat.DAGService, 0, data.receiverCount)
 			receivers := make([]datatransfer.Manager, 0, data.receiverCount)
@@ -525,12 +520,10 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 
 			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 			require.NoError(t, err)
-			err = dt1.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt1)
 			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 			require.NoError(t, err)
-			err = dt2.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt2)
 
 			finished := make(chan struct{}, 2)
 			errChan := make(chan string, 2)
@@ -669,12 +662,10 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 
 			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 			require.NoError(t, err)
-			err = dt1.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt1)
 			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 			require.NoError(t, err)
-			err = dt2.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt2)
 			var chid datatransfer.ChannelID
 			errChan := make(chan struct{}, 2)
 			clientPausePoint := 0
@@ -799,12 +790,10 @@ func TestPauseAndResume(t *testing.T) {
 
 			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 			require.NoError(t, err)
-			err = dt1.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt1)
 			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 			require.NoError(t, err)
-			err = dt2.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt2)
 			finished := make(chan struct{}, 2)
 			errChan := make(chan struct{}, 2)
 			opened := make(chan struct{}, 2)
@@ -940,12 +929,10 @@ func TestUnrecognizedVoucherRoundTrip(t *testing.T) {
 
 			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 			require.NoError(t, err)
-			err = dt1.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt1)
 			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 			require.NoError(t, err)
-			err = dt2.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt2)
 
 			finished := make(chan struct{}, 2)
 			errChan := make(chan string, 2)
@@ -1012,16 +999,14 @@ func TestDataTransferSubscribing(t *testing.T) {
 	sv.StubErrorPush()
 	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 	require.NoError(t, err)
-	err = dt2.Start(ctx)
-	require.NoError(t, err)
+	testutil.StartAndWaitForReady(ctx, t, dt2)
 	require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 	voucher := testutil.FakeDTType{Data: "applesauce"}
 	baseCid := testutil.GenerateCids(1)[0]
 
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 	require.NoError(t, err)
-	err = dt1.Start(ctx)
-	require.NoError(t, err)
+	testutil.StartAndWaitForReady(ctx, t, dt1)
 	subscribe1Calls := make(chan struct{}, 1)
 	subscribe1 := func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 		if event.Code == datatransfer.Error {
@@ -1153,8 +1138,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	tp1 := gsData.SetupGSTransportHost1()
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 	require.NoError(t, err)
-	err = dt1.Start(ctx)
-	require.NoError(t, err)
+	testutil.StartAndWaitForReady(ctx, t, dt1)
 	voucherResult := testutil.NewFakeDTType()
 	err = dt1.RegisterVoucherResultType(voucherResult)
 	require.NoError(t, err)
@@ -1238,8 +1222,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 	tp1 := tp.NewTransport(host1.ID(), gs1)
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
 	require.NoError(t, err)
-	err = dt1.Start(ctx)
-	require.NoError(t, err)
+	testutil.StartAndWaitForReady(ctx, t, dt1)
 	t.Run("when it's not our extension, does not error and does not validate", func(t *testing.T) {
 		//register a hook that validates the request so we don't fail in gs because the request
 		//never gets processed
@@ -1280,8 +1263,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 
 				dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 				require.NoError(t, err)
-				err = dt1.Start(ctx)
-				require.NoError(t, err)
+				testutil.StartAndWaitForReady(ctx, t, dt1)
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 				voucher := testutil.NewFakeDTType()
@@ -1311,8 +1293,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				sv.ExpectErrorPull()
 				dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
 				require.NoError(t, err)
-				err = dt1.Start(ctx)
-				require.NoError(t, err)
+				testutil.StartAndWaitForReady(ctx, t, dt1)
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				voucher := testutil.NewFakeDTType()
 				dtRequest, err := message.NewRequest(id, false, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)

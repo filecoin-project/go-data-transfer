@@ -11,6 +11,7 @@ import (
 	cbg "github.com/whyrusleeping/cbor-gen"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/channels/internal"
 )
 
 // channelState is immutable channel data plus mutable state
@@ -40,9 +41,9 @@ type channelState struct {
 	// more informative status on a channel
 	message string
 	// additional vouchers
-	vouchers []encodedVoucher
+	vouchers []internal.EncodedVoucher
 	// additional voucherResults
-	voucherResults       []encodedVoucherResult
+	voucherResults       []internal.EncodedVoucherResult
 	voucherResultDecoder DecoderByTypeFunc
 	voucherDecoder       DecoderByTypeFunc
 
@@ -108,9 +109,8 @@ func (c channelState) IsPull() bool {
 func (c channelState) ChannelID() datatransfer.ChannelID {
 	if c.isPull {
 		return datatransfer.ChannelID{ID: c.transferID, Initiator: c.recipient, Responder: c.sender}
-	} else {
-		return datatransfer.ChannelID{ID: c.transferID, Initiator: c.sender, Responder: c.recipient}
 	}
+	return datatransfer.ChannelID{ID: c.transferID, Initiator: c.sender, Responder: c.recipient}
 }
 
 func (c channelState) Message() string {
@@ -158,6 +158,29 @@ func (c channelState) OtherPeer() peer.ID {
 		return c.recipient
 	}
 	return c.sender
+}
+
+func fromInternalChannelState(c internal.ChannelState, voucherDecoder DecoderByTypeFunc, voucherResultDecoder DecoderByTypeFunc) datatransfer.ChannelState {
+	return channelState{
+		selfPeer:             c.SelfPeer,
+		isPull:               c.Initiator == c.Recipient,
+		transferID:           c.TransferID,
+		baseCid:              c.BaseCid,
+		selector:             c.Selector,
+		sender:               c.Sender,
+		recipient:            c.Recipient,
+		totalSize:            c.TotalSize,
+		status:               c.Status,
+		sent:                 c.Sent,
+		received:             c.Received,
+		message:              c.Message,
+		vouchers:             c.Vouchers,
+		voucherResults:       c.VoucherResults,
+		voucherResultDecoder: voucherResultDecoder,
+		voucherDecoder:       voucherDecoder,
+
+		receivedCids: c.ReceivedCids,
+	}
 }
 
 var _ datatransfer.ChannelState = channelState{}

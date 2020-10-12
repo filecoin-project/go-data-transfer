@@ -60,12 +60,18 @@ type Revalidator interface {
 // TransportConfigurer provides a mechanism to provide transport specific configuration for a given voucher type
 type TransportConfigurer func(chid ChannelID, voucher Voucher, transport Transport)
 
+// ReadyFunc is function that gets called once when the data transfer module is ready
+type ReadyFunc func(error)
+
 // Manager is the core interface presented by all implementations of
 // of the data transfer sub system
 type Manager interface {
 
 	// Start initializes data transfer processing
 	Start(ctx context.Context) error
+
+	// OnReady registers a listener for when the data transfer comes on line
+	OnReady(ReadyFunc)
 
 	// Stop terminates all data transfers and ends processing
 	Stop(ctx context.Context) error

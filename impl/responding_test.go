@@ -561,8 +561,7 @@ func TestDataTransferResponding(t *testing.T) {
 			h.storedCounter = storedcounter.New(h.ds, datastore.NewKey("counter"))
 			dt, err := NewDataTransfer(h.ds, h.network, h.transport, h.storedCounter)
 			require.NoError(t, err)
-			err = dt.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt)
 			h.dt = dt
 			ev := eventVerifier{
 				expectedEvents: verify.expectedEvents,
@@ -981,8 +980,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			h.storedCounter = storedcounter.New(h.ds, datastore.NewKey("counter"))
 			dt, err := NewDataTransfer(h.ds, h.network, h.transport, h.storedCounter)
 			require.NoError(t, err)
-			err = dt.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt)
 			h.dt = dt
 			ev := eventVerifier{
 				expectedEvents: verify.expectedEvents,
@@ -1025,7 +1023,7 @@ type receiverHarness struct {
 	transport     *testutil.FakeTransport
 	sv            *testutil.StubbedValidator
 	srv           *testutil.StubbedRevalidator
-	ds            datastore.Datastore
+	ds            datastore.Batching
 	storedCounter *storedcounter.StoredCounter
 	dt            datatransfer.Manager
 	stor          ipld.Node

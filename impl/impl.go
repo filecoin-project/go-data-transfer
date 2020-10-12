@@ -34,6 +34,7 @@ type manager struct {
 	revalidators         *registry.Registry
 	transportConfigurers *registry.Registry
 	pubSub               *pubsub.PubSub
+	readySub             *pubsub.PubSub
 	channels             *channels.Channels
 	peerID               peer.ID
 	transport            datatransfer.Transport
@@ -58,8 +59,21 @@ func dispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
 	return nil
 }
 
+func readyDispatcher(evt pubsub.Event, fn pubsub.SubscriberFn) error {
+	migrateErr, ok := evt.(error)
+	if !ok && evt != nil {
+		return errors.New("wrong type of event")
+	}
+	cb, ok := fn.(datatransfer.ReadyFunc)
+	if !ok {
+		return errors.New("wrong type of event")
+	}
+	cb(migrateErr)
+	return nil
+}
+
 // NewDataTransfer initializes a new instance of a data transfer manager
-func NewDataTransfer(ds datastore.Datastore, dataTransferNetwork network.DataTransferNetwork, transport datatransfer.Transport, storedCounter *storedcounter.StoredCounter) (datatransfer.Manager, error) {
+func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTransferNetwork, transport datatransfer.Transport, storedCounter *storedcounter.StoredCounter) (datatransfer.Manager, error) {
 	m := &manager{
 		dataTransferNetwork:  dataTransferNetwork,
 		validatedTypes:       registry.NewRegistry(),
@@ -67,11 +81,12 @@ func NewDataTransfer(ds datastore.Datastore, dataTransferNetwork network.DataTra
 		revalidators:         registry.NewRegistry(),
 		transportConfigurers: registry.NewRegistry(),
 		pubSub:               pubsub.New(dispatcher),
+		readySub:             pubsub.New(readyDispatcher),
 		peerID:               dataTransferNetwork.ID(),
 		transport:            transport,
 		storedCounter:        storedCounter,
 	}
-	channels, err := channels.New(ds, m.notifier, m.voucherDecoder, m.resultTypes.Decoder, &channelEnvironment{m})
+	channels, err := channels.New(ds, m.notifier, m.voucherDecoder, m.resultTypes.Decoder, &channelEnvironment{m}, dataTransferNetwork.ID())
 	if err != nil {
 		return nil, err
 	}
@@ -96,9 +111,24 @@ func (m *manager) notifier(evt datatransfer.Event, chst datatransfer.ChannelStat
 
 // Start initializes data transfer processing
 func (m *manager) Start(ctx context.Context) error {
+	go func() {
+		err := m.channels.Start(ctx)
+		if err != nil {
+			log.Errorf("Migrating data transfer state machines: %s", err.Error())
+		}
+		err = m.readySub.Publish(err)
+		if err != nil {
+			log.Warnf("Publish data transfer ready event: %s", err.Error())
+		}
+	}()
 	dtReceiver := &receiver{m}
 	m.dataTransferNetwork.SetDelegate(dtReceiver)
 	return m.transport.SetEventHandler(m)
+}
+
+// OnReady registers a listener for when the data transfer manager has finished starting up
+func (m *manager) OnReady(ready datatransfer.ReadyFunc) {
+	m.readySub.Subscribe(ready)
 }
 
 // Stop terminates all data transfers and ends processing
