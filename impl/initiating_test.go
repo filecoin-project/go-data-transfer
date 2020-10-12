@@ -346,8 +346,7 @@ func TestDataTransferInitiating(t *testing.T) {
 			h.storedCounter = storedcounter.New(h.ds, datastore.NewKey("counter"))
 			dt, err := NewDataTransfer(h.ds, h.network, h.transport, h.storedCounter)
 			require.NoError(t, err)
-			err = dt.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt)
 			h.dt = dt
 			ev := eventVerifier{
 				expectedEvents: verify.expectedEvents,
@@ -595,8 +594,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			// setup data transfer``
 			dt, err := NewDataTransfer(h.ds, h.network, h.transport, h.storedCounter)
 			require.NoError(t, err)
-			err = dt.Start(ctx)
-			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt)
 			h.dt = dt
 
 			// setup eventing
@@ -634,7 +632,7 @@ type harness struct {
 	peers            []peer.ID
 	network          *testutil.FakeNetwork
 	transport        *testutil.FakeTransport
-	ds               datastore.Datastore
+	ds               datastore.Batching
 	storedCounter    *storedcounter.StoredCounter
 	dt               datatransfer.Manager
 	voucherValidator *testutil.StubbedValidator

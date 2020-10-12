@@ -50,7 +50,7 @@ func TestRestartPush(t *testing.T) {
 				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1, rh.gsData.StoredCounter1)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
-				require.NoError(rh.t, rh.dt1.Start(rh.testCtx))
+				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
 				rh.dt1.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt1.RestartDataTransferChannel(rh.testCtx, chId))
 			},
@@ -69,7 +69,7 @@ func TestRestartPush(t *testing.T) {
 				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.DtNet2, tp2, rh.gsData.StoredCounter2)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt2.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
-				require.NoError(rh.t, rh.dt2.Start(rh.testCtx))
+				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 				rh.dt2.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt2.RestartDataTransferChannel(rh.testCtx, chId))
 			},
@@ -84,8 +84,8 @@ func TestRestartPush(t *testing.T) {
 
 			// START DATA TRANSFER INSTANCES
 			rh.sv.ExpectSuccessPush()
-			require.NoError(t, rh.dt1.Start(rh.testCtx))
-			require.NoError(t, rh.dt2.Start(rh.testCtx))
+			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
+			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 
 			// SETUP DATA TRANSFER SUBSCRIBERS AND SUBSCRIBE
 			finished := make(chan peer.ID, 2)
@@ -238,7 +238,7 @@ func TestRestartPull(t *testing.T) {
 				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.DtNet2, tp2, rh.gsData.StoredCounter2)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt2.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
-				require.NoError(rh.t, rh.dt2.Start(rh.testCtx))
+				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 				rh.dt2.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt2.RestartDataTransferChannel(rh.testCtx, chId))
 			},
@@ -257,7 +257,7 @@ func TestRestartPull(t *testing.T) {
 				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1, rh.gsData.StoredCounter1)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
-				require.NoError(rh.t, rh.dt1.Start(rh.testCtx))
+				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
 				rh.dt1.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt1.RestartDataTransferChannel(rh.testCtx, chId))
 			},
@@ -272,8 +272,8 @@ func TestRestartPull(t *testing.T) {
 
 			// START DATA TRANSFER INSTANCES
 			rh.sv.ExpectSuccessPull()
-			require.NoError(t, rh.dt1.Start(rh.testCtx))
-			require.NoError(t, rh.dt2.Start(rh.testCtx))
+			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
+			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 
 			// SETUP DATA TRANSFER SUBSCRIBERS AND SUBSCRIBE
 			finished := make(chan peer.ID, 2)
