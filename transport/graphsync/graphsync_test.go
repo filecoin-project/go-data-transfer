@@ -1051,9 +1051,6 @@ func (ha *harness) responseCompletedListener() {
 func (ha *harness) requestorCancelledListener() {
 	ha.fgs.RequestorCancelledListener(ha.other, ha.request)
 }
-func (ha *harness) blockSentListener() {
-	ha.fgs.BlockSentListener(ha.other, ha.request, ha.block)
-}
 func (ha *harness) networkErrorListener(err error) {
 	ha.fgs.NetworkErrorListener(ha.other, ha.request, err)
 }
