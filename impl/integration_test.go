@@ -56,7 +56,7 @@ var protocolsForTest = map[string]struct {
 	"(new, old -> old)": {nil, []protocol.ID{datatransfer.ProtocolDataTransfer1_0}},
 }
 
-/*func TestRoundTrip(t *testing.T) {
+func TestRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	testCases := map[string]struct {
 		isPull            bool
@@ -117,9 +117,9 @@ var protocolsForTest = map[string]struct {
 				sent := make(chan uint64, 21)
 				received := make(chan uint64, 21)
 				var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-					if event.Code == datatransfer.DataSent {
-						if channelState.Sent() > 0 {
-							sent <- channelState.Sent()
+					if event.Code == datatransfer.DataQueued {
+						if channelState.Queued() > 0 {
+							sent <- channelState.Queued()
 						}
 					}
 
@@ -231,7 +231,7 @@ var protocolsForTest = map[string]struct {
 			})
 		}
 	} //
-}*/
+}
 
 func TestMultipleRoundTripMultipleStores(t *testing.T) {
 	ctx := context.Background()
@@ -805,9 +805,9 @@ func TestPauseAndResume(t *testing.T) {
 			resumeResponder := make(chan struct{}, 2)
 			var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 
-				if event.Code == datatransfer.DataSent {
-					if channelState.Sent() > 0 {
-						sent <- channelState.Sent()
+				if event.Code == datatransfer.DataQueued {
+					if channelState.Queued() > 0 {
+						sent <- channelState.Queued()
 					}
 				}
 

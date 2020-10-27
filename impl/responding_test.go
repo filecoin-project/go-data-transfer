@@ -395,6 +395,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.NewVoucherResult,
 				datatransfer.Accept,
+				datatransfer.DataQueued,
 				datatransfer.NewVoucherResult,
 				datatransfer.PauseResponder,
 				datatransfer.NewVoucher,

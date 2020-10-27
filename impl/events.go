@@ -59,6 +59,9 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 }
 
 func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size uint64) (datatransfer.Message, error) {
+	if err := m.channels.DataQueued(chid, link.(cidlink.Link).Cid, size); err != nil {
+		return nil, err
+	}
 	if chid.Initiator != m.peerID {
 		var result datatransfer.VoucherResult
 		var err error
