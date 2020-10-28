@@ -10,22 +10,22 @@ import (
 	"github.com/ipfs/go-datastore/namespace"
 	ds_sync "github.com/ipfs/go-datastore/sync"
 	badgerds "github.com/ipfs/go-ds-badger"
+	graphsync "github.com/ipfs/go-graphsync"
+	gsimpl "github.com/ipfs/go-graphsync/impl"
+	"github.com/ipfs/go-graphsync/storeutil"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	delay "github.com/ipfs/go-ipfs-delay"
 	"github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 
-	tn "github.com/filecoin-project/go-data-transfer/benchmarks/testnet"
-	"github.com/filecoin-project/go-data-transfer/testutil"
-	graphsync "github.com/ipfs/go-graphsync"
-	gsimpl "github.com/ipfs/go-graphsync/impl"
-	"github.com/ipfs/go-graphsync/storeutil"
+	"github.com/filecoin-project/go-storedcounter"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	tn "github.com/filecoin-project/go-data-transfer/benchmarks/testnet"
 	dtimpl "github.com/filecoin-project/go-data-transfer/impl"
 	dtnet "github.com/filecoin-project/go-data-transfer/network"
+	"github.com/filecoin-project/go-data-transfer/testutil"
 	gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
-	"github.com/filecoin-project/go-storedcounter"
 )
 
 // TempDirGenerator is any interface that can generate temporary directories

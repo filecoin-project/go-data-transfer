@@ -3,11 +3,11 @@ package testnet
 import (
 	"context"
 
-	dtnet "github.com/filecoin-project/go-data-transfer/network"
+	gsnet "github.com/ipfs/go-graphsync/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	mockpeernet "github.com/libp2p/go-libp2p/p2p/net/mock"
 
-	gsnet "github.com/ipfs/go-graphsync/network"
+	dtnet "github.com/filecoin-project/go-data-transfer/network"
 )
 
 type peernet struct {

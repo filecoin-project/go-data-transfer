@@ -1,10 +1,10 @@
 package testnet
 
 import (
+	gsnet "github.com/ipfs/go-graphsync/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	dtnet "github.com/filecoin-project/go-data-transfer/network"
-	gsnet "github.com/ipfs/go-graphsync/network"
 )
 
 // Network is an interface for generating graphsync network interfaces
