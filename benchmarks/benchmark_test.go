@@ -58,15 +58,14 @@ func BenchmarkRoundtripSuccess(b *testing.B) {
 	b.Run("test-p2p-stress-1-1GB", func(b *testing.B) {
 		p2pStrestTest(ctx, b, 1, allFilesUniformSize(1*(1<<30), 1<<20, 1024, true), tdm, true)
 	})
-	b.Run("test-p2p-stress-1-1GB", func(b *testing.B) {
+	b.Run("test-p2p-stress-1-1GB-no-raw-nodes", func(b *testing.B) {
 		p2pStrestTest(ctx, b, 1, allFilesUniformSize(1*(1<<30), 1<<20, 1024, false), tdm, true)
 	})
 }
 
 func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc, tdm *tempDirMaker, diskBasedDatastore bool) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	mn := mocknet.New(ctx)
+	mn.SetLinkDefaults(mocknet.LinkOptions{Latency: 100 * time.Millisecond, Bandwidth: 16 << 20})
 	net := tn.StreamNet(ctx, mn)
 	ig := testinstance.NewTestInstanceGenerator(ctx, net, tdm, diskBasedDatastore)
 	instances, err := ig.Instances(1 + b.N)
@@ -85,34 +84,42 @@ func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc,
 	b.ResetTimer()
 	b.ReportAllocs()
 	pusher := instances[0]
+	done := make(chan struct{}, numfiles*2)
+	pusher.Manager.SubscribeToEvents(func(event datatransfer.Event, state datatransfer.ChannelState) {
+		if state.Status() == datatransfer.Completed {
+			done <- struct{}{}
+		}
+	})
 	for i := 0; i < b.N; i++ {
 		receiver := instances[i+1]
-		var wg sync.WaitGroup
 		receiver.Manager.SubscribeToEvents(func(event datatransfer.Event, state datatransfer.ChannelState) {
 			if state.Status() == datatransfer.Completed {
-				wg.Done()
-			}
-			if state.Status() == datatransfer.Failed || state.Status() == datatransfer.Cancelled {
-				b.Fatalf("received error on request: %s", state.Message())
+				done <- struct{}{}
 			}
 		})
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		require.NoError(b, err)
+		timer := time.NewTimer(10 * time.Second)
 		start := time.Now()
 		for j := 0; j < numfiles; j++ {
-			wg.Add(1)
 			_, err := pusher.Manager.OpenPushDataChannel(ctx, receiver.Peer, testutil.NewFakeDTType(), allCids[j], allSelector)
 			if err != nil {
 				b.Fatalf("received error on request: %s", err.Error())
 			}
 		}
-		wg.Wait()
+		finished := 0
+		for finished < numfiles*2 {
+			select {
+			case <-done:
+				finished++
+			case <-timer.C:
+				runtime.GC()
+				b.Fatalf("did not complete requests in time")
+			}
+		}
 		result := runStats{
 			Time: time.Since(start),
 			Name: b.Name(),
 		}
 		benchmarkLog = append(benchmarkLog, result)
-		cancel()
 		receiver.Close()
 	}
 	testinstance.Close(instances)
