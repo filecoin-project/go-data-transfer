@@ -1,6 +1,6 @@
 module github.com/filecoin-project/go-data-transfer
 
-go 1.13
+go 1.14
 
 require (
 	github.com/filecoin-project/go-ds-versioning v0.1.0
