@@ -27,5 +27,4 @@ func (ce *channelEnvironment) CleanupChannel(chid datatransfer.ChannelID) {
 	delete(ce.m.reconnects, chid)
 	ce.m.reconnectsLk.Unlock()
 	ce.m.transport.CleanupChannel(chid)
-	ce.m.cidLists.DeleteList(chid)
 }
