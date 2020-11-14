@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
-	versionedds "github.com/filecoin-project/go-ds-versioning/pkg/datastore"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
@@ -19,6 +17,9 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 	cbg "github.com/whyrusleeping/cbor-gen"
+
+	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
+	versionedds "github.com/filecoin-project/go-ds-versioning/pkg/datastore"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"

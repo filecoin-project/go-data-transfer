@@ -1,10 +1,11 @@
 package v0
 
 import (
-	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 )
 
 //go:generate cbor-gen-for ChannelState EncodedVoucher EncodedVoucherResult

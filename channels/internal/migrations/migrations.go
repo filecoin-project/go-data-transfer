@@ -3,10 +3,10 @@ package migrations
 import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
 	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
 	"github.com/filecoin-project/go-ds-versioning/pkg/versioned"
 
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels/internal"
 	v0 "github.com/filecoin-project/go-data-transfer/channels/internal/migrations/v0"
 	v1 "github.com/filecoin-project/go-data-transfer/channels/internal/migrations/v1"

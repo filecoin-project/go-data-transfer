@@ -7,11 +7,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ipfs/go-cid"
+	"github.com/stretchr/testify/require"
+
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/cidlists"
 	"github.com/filecoin-project/go-data-transfer/testutil"
-	"github.com/ipfs/go-cid"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCIDLists(t *testing.T) {

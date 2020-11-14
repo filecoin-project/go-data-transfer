@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/ipfs/go-cid"
 )
 
 // CIDLists maintains files that contain a list of CIDs received for different data transfers
