@@ -2,6 +2,7 @@ package impl_test
 
 import (
 	"context"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -49,7 +50,7 @@ func TestRestartPush(t *testing.T) {
 				require.NoError(t, rh.dt1.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp1 := rh.gsData.SetupGSTransportHost1()
-				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1, rh.gsData.StoredCounter1)
+				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, os.TempDir(), rh.gsData.DtNet1, tp1, rh.gsData.StoredCounter1)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
@@ -70,7 +71,7 @@ func TestRestartPush(t *testing.T) {
 				require.NoError(t, rh.dt2.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp2 := rh.gsData.SetupGSTransportHost2()
-				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.DtNet2, tp2, rh.gsData.StoredCounter2)
+				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, os.TempDir(), rh.gsData.DtNet2, tp2, rh.gsData.StoredCounter2)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt2.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
@@ -240,7 +241,7 @@ func TestRestartPull(t *testing.T) {
 				require.NoError(t, rh.dt2.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp2 := rh.gsData.SetupGSTransportHost2()
-				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.DtNet2, tp2, rh.gsData.StoredCounter2)
+				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, os.TempDir(), rh.gsData.DtNet2, tp2, rh.gsData.StoredCounter2)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt2.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
@@ -261,7 +262,7 @@ func TestRestartPull(t *testing.T) {
 				require.NoError(t, rh.dt1.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp1 := rh.gsData.SetupGSTransportHost1()
-				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1, rh.gsData.StoredCounter1)
+				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, os.TempDir(), rh.gsData.DtNet1, tp1, rh.gsData.StoredCounter1)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
@@ -451,10 +452,10 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	tp1 := gsData.SetupGSTransportHost1()
 	tp2 := gsData.SetupGSTransportHost2()
 
-	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1, gsData.StoredCounter1)
+	dt1, err := NewDataTransfer(gsData.DtDs1, os.TempDir(), gsData.DtNet1, tp1, gsData.StoredCounter1)
 	require.NoError(t, err)
 
-	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2, gsData.StoredCounter2)
+	dt2, err := NewDataTransfer(gsData.DtDs2, os.TempDir(), gsData.DtNet2, tp2, gsData.StoredCounter2)
 	require.NoError(t, err)
 
 	sv := testutil.NewStubbedValidator()

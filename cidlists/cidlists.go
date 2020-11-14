@@ -13,12 +13,19 @@ import (
 )
 
 // CIDLists maintains files that contain a list of CIDs received for different data transfers
-type CIDLists struct {
+type CIDLists interface {
+	CreateList(chid datatransfer.ChannelID, initalCids []cid.Cid) error
+	AppendList(chid datatransfer.ChannelID, c cid.Cid) error
+	ReadList(chid datatransfer.ChannelID) ([]cid.Cid, error)
+	DeleteList(chid datatransfer.ChannelID) error
+}
+
+type cidLists struct {
 	baseDir string
 }
 
 // NewCIDLists initializes a new set of cid lists in a given directory
-func NewCIDLists(baseDir string) (*CIDLists, error) {
+func NewCIDLists(baseDir string) (CIDLists, error) {
 	base := filepath.Clean(string(baseDir))
 	info, err := os.Stat(string(base))
 	if err != nil {
@@ -27,13 +34,13 @@ func NewCIDLists(baseDir string) (*CIDLists, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("%s is not a directory", base)
 	}
-	return &CIDLists{
+	return &cidLists{
 		baseDir: base,
 	}, nil
 }
 
 // CreateList initializes a new CID list with the given initial cids (or can be empty) for a data transfer channel
-func (cl *CIDLists) CreateList(chid datatransfer.ChannelID, initalCids []cid.Cid) error {
+func (cl *cidLists) CreateList(chid datatransfer.ChannelID, initalCids []cid.Cid) error {
 	f, err := os.Create(transferFilename(cl.baseDir, chid))
 	if err != nil {
 		return err
@@ -51,7 +58,7 @@ func (cl *CIDLists) CreateList(chid datatransfer.ChannelID, initalCids []cid.Cid
 }
 
 // AppendList appends a single CID to the list for a given data transfer channel
-func (cl *CIDLists) AppendList(chid datatransfer.ChannelID, c cid.Cid) error {
+func (cl *cidLists) AppendList(chid datatransfer.ChannelID, c cid.Cid) error {
 	f, err := os.OpenFile(transferFilename(cl.baseDir, chid), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		return err
@@ -63,7 +70,7 @@ func (cl *CIDLists) AppendList(chid datatransfer.ChannelID, c cid.Cid) error {
 }
 
 // ReadList reads an on disk list of cids for the given data transfer channel
-func (cl *CIDLists) ReadList(chid datatransfer.ChannelID) ([]cid.Cid, error) {
+func (cl *cidLists) ReadList(chid datatransfer.ChannelID) ([]cid.Cid, error) {
 	f, err := os.Open(transferFilename(cl.baseDir, chid))
 	if err != nil {
 		return nil, err
@@ -85,7 +92,7 @@ func (cl *CIDLists) ReadList(chid datatransfer.ChannelID) ([]cid.Cid, error) {
 }
 
 // DeleteList deletes the lsit for the given data transfer channel
-func (cl *CIDLists) DeleteList(chid datatransfer.ChannelID) error {
+func (cl *cidLists) DeleteList(chid datatransfer.ChannelID) error {
 	return os.Remove(transferFilename(cl.baseDir, chid))
 }
 
