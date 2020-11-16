@@ -96,7 +96,10 @@ func (c channelState) Voucher() datatransfer.Voucher {
 
 // ReceivedCids returns the cids received so far on this channel
 func (c channelState) ReceivedCids() []cid.Cid {
-	receivedCids, _ := c.channelCIDsReader(c.ChannelID())
+	receivedCids, err := c.channelCIDsReader(c.ChannelID())
+	if err != nil {
+		log.Error(err)
+	}
 	return receivedCids
 }
 

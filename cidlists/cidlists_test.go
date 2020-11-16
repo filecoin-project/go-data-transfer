@@ -2,6 +2,7 @@ package cidlists_test
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -17,28 +18,28 @@ import (
 
 func TestCIDLists(t *testing.T) {
 
-	err := os.MkdirAll("_test", 0755)
+	baseDir, err := ioutil.TempDir("", "cidlisttest")
 	require.NoError(t, err)
 
 	chid1 := datatransfer.ChannelID{ID: datatransfer.TransferID(rand.Uint64()), Initiator: testutil.GeneratePeers(1)[0], Responder: testutil.GeneratePeers(1)[0]}
 	chid2 := datatransfer.ChannelID{ID: datatransfer.TransferID(rand.Uint64()), Initiator: testutil.GeneratePeers(1)[0], Responder: testutil.GeneratePeers(1)[0]}
 	initialCids1 := testutil.GenerateCids(100)
 
-	cidLists, err := cidlists.NewCIDLists("_test")
+	cidLists, err := cidlists.NewCIDLists(baseDir)
 	require.NoError(t, err)
 
 	t.Run("creating lists", func(t *testing.T) {
 		require.NoError(t, cidLists.CreateList(chid1, initialCids1))
 
 		filename := fmt.Sprintf("%d-%s-%s", chid1.ID, chid1.Initiator, chid1.Responder)
-		f, err := os.Open(filepath.Join("_test", filename))
+		f, err := os.Open(filepath.Join(baseDir, filename))
 		require.NoError(t, err)
 		f.Close()
 
 		require.NoError(t, cidLists.CreateList(chid2, nil))
 
 		filename = fmt.Sprintf("%d-%s-%s", chid2.ID, chid2.Initiator, chid2.Responder)
-		f, err = os.Open(filepath.Join("_test", filename))
+		f, err = os.Open(filepath.Join(baseDir, filename))
 		require.NoError(t, err)
 		f.Close()
 	})
@@ -71,13 +72,13 @@ func TestCIDLists(t *testing.T) {
 		require.NoError(t, cidLists.DeleteList(chid1))
 
 		filename := fmt.Sprintf("%d-%s-%s", chid1.ID, chid1.Initiator, chid1.Responder)
-		_, err := os.Open(filepath.Join("_test", filename))
+		_, err := os.Open(filepath.Join(baseDir, filename))
 		require.Error(t, err)
 
 		require.NoError(t, cidLists.DeleteList(chid2))
 
 		filename = fmt.Sprintf("%d-%s-%s", chid2.ID, chid2.Initiator, chid2.Responder)
-		_, err = os.Open(filepath.Join("_test", filename))
+		_, err = os.Open(filepath.Join(baseDir, filename))
 		require.Error(t, err)
 	})
 }
