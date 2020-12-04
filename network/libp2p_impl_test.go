@@ -199,7 +199,7 @@ func (w wrappedHost) NewStream(ctx context.Context, p peer.ID, pids ...protocol.
 	return w.Host.NewStream(ctx, p, pids...)
 }
 
-// TestSendMessageRetry verifies that the if the number of retry attempts
+// TestSendMessageRetry verifies that if the number of retry attempts
 // is greater than the number of errors, SendMessage will succeed.
 func TestSendMessageRetry(t *testing.T) {
 	tcases := []struct {
