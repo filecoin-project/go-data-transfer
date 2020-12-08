@@ -3,6 +3,7 @@ package impl_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math/rand"
 	"os"
 	"testing"
@@ -52,9 +53,9 @@ var protocolsForTest = map[string]struct {
 	host1Protocols []protocol.ID
 	host2Protocols []protocol.ID
 }{
-	"(new -> new)":      {nil, nil},
-	"(old -> new, old)": {[]protocol.ID{datatransfer.ProtocolDataTransfer1_0}, nil},
-	"(new, old -> old)": {nil, []protocol.ID{datatransfer.ProtocolDataTransfer1_0}},
+	"(new -> new)": {nil, nil},
+	//"(old -> new, old)": {[]protocol.ID{datatransfer.ProtocolDataTransfer1_0}, nil},
+	//"(new, old -> old)": {nil, []protocol.ID{datatransfer.ProtocolDataTransfer1_0}},
 }
 
 func TestRoundTrip(t *testing.T) {
@@ -232,6 +233,116 @@ func TestRoundTrip(t *testing.T) {
 			})
 		}
 	} //
+}
+
+func TestDataSentEvents(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+	host1 := gsData.Host1 // initiator, data sender
+	host2 := gsData.Host2 // data recipient
+
+	tp1 := gsData.SetupGSTransportHost1()
+	tp2 := gsData.SetupGSTransportHost2()
+
+	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1, gsData.StoredCounter1)
+	require.NoError(t, err)
+	testutil.StartAndWaitForReady(ctx, t, dt1)
+	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, tp2, gsData.StoredCounter2)
+	require.NoError(t, err)
+	testutil.StartAndWaitForReady(ctx, t, dt2)
+
+	finished := make(chan struct{}, 2)
+	errChan := make(chan struct{}, 2)
+	opened := make(chan struct{}, 2)
+	queued := make(chan uint64, 21)
+	sent := make(chan uint64, 21)
+	received := make(chan uint64, 21)
+	subscribeSide := func(name string) datatransfer.Subscriber {
+		var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+			fmt.Printf("%s [%s] %s: qd %d, rcvd %d, sent %d, total: %d\n",
+				name,
+				datatransfer.Statuses[channelState.Status()],
+				datatransfer.Events[event.Code],
+				channelState.Queued(),
+				channelState.Received(),
+				channelState.Sent(),
+				channelState.TotalSize())
+
+			if event.Code == datatransfer.DataQueued {
+				if channelState.Queued() > 0 {
+					queued <- channelState.Queued()
+				}
+			}
+
+			if event.Code == datatransfer.DataSent {
+				if channelState.Sent() > 0 {
+					sent <- channelState.Sent()
+				}
+			}
+
+			if event.Code == datatransfer.DataReceived {
+				if channelState.Received() > 0 {
+					received <- channelState.Received()
+				}
+			}
+
+			if channelState.Status() == datatransfer.Completed {
+				finished <- struct{}{}
+			}
+			if event.Code == datatransfer.Error {
+				errChan <- struct{}{}
+			}
+			if event.Code == datatransfer.Open {
+				opened <- struct{}{}
+			}
+		}
+		return subscriber
+	}
+	dt1.SubscribeToEvents(subscribeSide("clnt"))
+	dt2.SubscribeToEvents(subscribeSide("prov"))
+	voucher := testutil.FakeDTType{Data: "applesauce"}
+	sv := testutil.NewStubbedValidator()
+
+	sourceDagService := gsData.DagService1
+	root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService, loremFile)
+	rootCid := root.(cidlink.Link).Cid
+
+	destDagService := gsData.DagService2
+	var chid datatransfer.ChannelID
+	sv.ExpectSuccessPush()
+	require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+	chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
+	require.NoError(t, err)
+	opens := 0
+	completes := 0
+	queuedIncrements := make([]uint64, 0, 21)
+	sentIncrements := make([]uint64, 0, 21)
+	receivedIncrements := make([]uint64, 0, 21)
+	for opens < 2 || completes < 2 || len(queuedIncrements) < 21 || len(receivedIncrements) < 21 {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Did not complete succcessful data transfer")
+		case <-finished:
+			completes++
+		case <-opened:
+			opens++
+		case queuedIncrement := <-queued:
+			queuedIncrements = append(queuedIncrements, queuedIncrement)
+		case sentIncrement := <-sent:
+			sentIncrements = append(sentIncrements, sentIncrement)
+		case receivedIncrement := <-received:
+			receivedIncrements = append(receivedIncrements, receivedIncrement)
+		case <-errChan:
+			t.Fatal("received error on data transfer")
+		}
+	}
+	require.Equal(t, queuedIncrements, sentIncrements)
+	require.Equal(t, queuedIncrements, receivedIncrements)
+	testutil.VerifyHasFile(ctx, t, destDagService, root, origBytes)
+	assert.Equal(t, chid.Initiator, host1.ID())
 }
 
 func TestMultipleRoundTripMultipleStores(t *testing.T) {
