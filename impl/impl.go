@@ -45,6 +45,7 @@ type manager struct {
 	reconnectsLk         sync.RWMutex
 	reconnects           map[datatransfer.ChannelID]chan struct{}
 	cidLists             cidlists.CIDLists
+	pushChannelMonitor   *pushChannelMonitor
 }
 
 type internalEvent struct {
@@ -88,6 +89,21 @@ func ChannelRemoveTimeout(timeout time.Duration) DataTransferOption {
 	}
 }
 
+// PushChannelRestartConfig sets the configuration options for automatically
+// restarting push channels
+// - interval is the time between checking data rate
+// - minBytesSent is the minimum amount of data that must have been sent over the interval
+// - restartBackoff is the time to wait before checking again for restarts
+func PushChannelRestartConfig(interval time.Duration, minBytesSent uint64, restartBackoff time.Duration) DataTransferOption {
+	return func(m *manager) {
+		m.pushChannelMonitor.setConfig(&pushMonitorConfig{
+			Interval:       interval,
+			MinBytesSent:   minBytesSent,
+			RestartBackoff: restartBackoff,
+		})
+	}
+}
+
 const defaultChannelRemoveTimeout = 1 * time.Hour
 
 // NewDataTransfer initializes a new instance of a data transfer manager
@@ -106,6 +122,8 @@ func NewDataTransfer(ds datastore.Batching, cidListsDir string, dataTransferNetw
 		channelRemoveTimeout: defaultChannelRemoveTimeout,
 		reconnects:           make(map[datatransfer.ChannelID]chan struct{}),
 	}
+	m.pushChannelMonitor = newPushChannelMonitor(m)
+
 	cidLists, err := cidlists.NewCIDLists(cidListsDir)
 	if err != nil {
 		return nil, err
@@ -116,9 +134,16 @@ func NewDataTransfer(ds datastore.Batching, cidListsDir string, dataTransferNetw
 		return nil, err
 	}
 	m.channels = channels
+
+	// Apply config options
 	for _, option := range options {
 		option(m)
 	}
+
+	// Start push channel monitor after applying config options as the config
+	// options may apply to the monitor
+	m.pushChannelMonitor.start()
+
 	return m, nil
 }
 
@@ -161,6 +186,7 @@ func (m *manager) OnReady(ready datatransfer.ReadyFunc) {
 
 // Stop terminates all data transfers and ends processing
 func (m *manager) Stop(ctx context.Context) error {
+	m.pushChannelMonitor.shutdown()
 	return m.transport.Shutdown(ctx)
 }
 
@@ -196,11 +222,14 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 		transportConfigurer(chid, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
+	monitor := m.pushChannelMonitor.add(chid)
 	if err := m.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.channels.Error(chid, err)
+		monitor.shutdown()
 		return chid, err
 	}
+
 	return chid, nil
 }
 

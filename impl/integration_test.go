@@ -497,6 +497,101 @@ func TestManyReceiversAtOnce(t *testing.T) {
 	}
 }
 
+// TestPushRequestAutoRestart tests that if the connection for a push request
+// goes down, it will automatically restart (given the right config options)
+func TestPushRequestAutoRestart(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+	netRetry := network.RetryParameters(time.Second, time.Second, 5, 1)
+	gsData.DtNet1 = network.NewFromLibp2pHost(gsData.Host1, netRetry)
+	host1 := gsData.Host1 // initiator, data sender
+	host2 := gsData.Host2 // data recipient
+
+	tp1 := gsData.SetupGSTransportHost1()
+	tp2 := gsData.SetupGSTransportHost2()
+
+	restartConf := PushChannelRestartConfig(100*time.Millisecond, 1, 200*time.Millisecond)
+	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1, gsData.StoredCounter1, restartConf)
+	require.NoError(t, err)
+	testutil.StartAndWaitForReady(ctx, t, dt1)
+	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, tp2, gsData.StoredCounter2)
+	require.NoError(t, err)
+	testutil.StartAndWaitForReady(ctx, t, dt2)
+
+	received := make(chan struct{})
+	finished := make(chan struct{}, 2)
+	var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+		//t.Logf("%s: %s\n", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
+
+		if event.Code == datatransfer.DataReceived {
+			received <- struct{}{}
+		}
+
+		if channelState.Status() == datatransfer.Completed {
+			finished <- struct{}{}
+		}
+	}
+	dt1.SubscribeToEvents(subscriber)
+	dt2.SubscribeToEvents(subscriber)
+	voucher := testutil.FakeDTType{Data: "applesauce"}
+	sv := testutil.NewStubbedValidator()
+
+	sourceDagService := gsData.DagService1
+	destDagService := gsData.DagService2
+
+	root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService, loremFile)
+	rootCid := root.(cidlink.Link).Cid
+
+	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+	require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+	chid, err := dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
+	require.NoError(t, err)
+
+	// Wait for a block to be received
+	<-received
+
+	// Break connection
+	t.Logf("Breaking connection to peer")
+	require.NoError(t, gsData.Mn.UnlinkPeers(host1.ID(), host2.ID()))
+	require.NoError(t, gsData.Mn.DisconnectPeers(host1.ID(), host2.ID()))
+
+	t.Logf("Sleep for a second")
+	time.Sleep(1 * time.Second)
+
+	// Restore connection
+	t.Logf("Restore connection")
+	require.NoError(t, gsData.Mn.LinkAll())
+	time.Sleep(200 * time.Millisecond)
+	conn, err := gsData.Mn.ConnectPeers(host1.ID(), host2.ID())
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+
+	t.Logf("Waiting for auto-restart on push channel %s", chid)
+
+	(func() {
+		finishedCount := 0
+		for {
+			select {
+			case <-ctx.Done():
+				t.Fatal("Did not complete succcessful data transfer")
+				return
+			case <-received:
+			case <-finished:
+				finishedCount++
+				if finishedCount == 2 {
+					return
+				}
+			}
+		}
+	})()
+
+	// Verify that the file was transferred to the destination node
+	testutil.VerifyHasFile(ctx, t, destDagService, root, origBytes)
+}
+
 func TestRoundTripCancelledRequest(t *testing.T) {
 	ctx := context.Background()
 	testCases := map[string]struct {
