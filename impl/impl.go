@@ -24,28 +24,30 @@ import (
 	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
+	"github.com/filecoin-project/go-data-transfer/pushchannelmonitor"
 	"github.com/filecoin-project/go-data-transfer/registry"
 )
 
 var log = logging.Logger("dt-impl")
 
 type manager struct {
-	dataTransferNetwork  network.DataTransferNetwork
-	validatedTypes       *registry.Registry
-	resultTypes          *registry.Registry
-	revalidators         *registry.Registry
-	transportConfigurers *registry.Registry
-	pubSub               *pubsub.PubSub
-	readySub             *pubsub.PubSub
-	channels             *channels.Channels
-	peerID               peer.ID
-	transport            datatransfer.Transport
-	storedCounter        *storedcounter.StoredCounter
-	channelRemoveTimeout time.Duration
-	reconnectsLk         sync.RWMutex
-	reconnects           map[datatransfer.ChannelID]chan struct{}
-	cidLists             cidlists.CIDLists
-	pushChannelMonitor   *pushChannelMonitor
+	dataTransferNetwork   network.DataTransferNetwork
+	validatedTypes        *registry.Registry
+	resultTypes           *registry.Registry
+	revalidators          *registry.Registry
+	transportConfigurers  *registry.Registry
+	pubSub                *pubsub.PubSub
+	readySub              *pubsub.PubSub
+	channels              *channels.Channels
+	peerID                peer.ID
+	transport             datatransfer.Transport
+	storedCounter         *storedcounter.StoredCounter
+	channelRemoveTimeout  time.Duration
+	reconnectsLk          sync.RWMutex
+	reconnects            map[datatransfer.ChannelID]chan struct{}
+	cidLists              cidlists.CIDLists
+	pushChannelMonitor    *pushchannelmonitor.PushChannelMonitor
+	pushChannelMonitorCfg *pushchannelmonitor.PushMonitorConfig
 }
 
 type internalEvent struct {
@@ -96,11 +98,11 @@ func ChannelRemoveTimeout(timeout time.Duration) DataTransferOption {
 // - restartBackoff is the time to wait before checking again for restarts
 func PushChannelRestartConfig(interval time.Duration, minBytesSent uint64, restartBackoff time.Duration) DataTransferOption {
 	return func(m *manager) {
-		m.pushChannelMonitor.setConfig(&pushMonitorConfig{
+		m.pushChannelMonitorCfg = &pushchannelmonitor.PushMonitorConfig{
 			Interval:       interval,
 			MinBytesSent:   minBytesSent,
 			RestartBackoff: restartBackoff,
-		})
+		}
 	}
 }
 
@@ -122,7 +124,6 @@ func NewDataTransfer(ds datastore.Batching, cidListsDir string, dataTransferNetw
 		channelRemoveTimeout: defaultChannelRemoveTimeout,
 		reconnects:           make(map[datatransfer.ChannelID]chan struct{}),
 	}
-	m.pushChannelMonitor = newPushChannelMonitor(m)
 
 	cidLists, err := cidlists.NewCIDLists(cidListsDir)
 	if err != nil {
@@ -142,7 +143,8 @@ func NewDataTransfer(ds datastore.Batching, cidListsDir string, dataTransferNetw
 
 	// Start push channel monitor after applying config options as the config
 	// options may apply to the monitor
-	m.pushChannelMonitor.start()
+	m.pushChannelMonitor = pushchannelmonitor.NewPushChannelMonitor(m, m.pushChannelMonitorCfg)
+	m.pushChannelMonitor.Start()
 
 	return m, nil
 }
@@ -186,7 +188,7 @@ func (m *manager) OnReady(ready datatransfer.ReadyFunc) {
 
 // Stop terminates all data transfers and ends processing
 func (m *manager) Stop(ctx context.Context) error {
-	m.pushChannelMonitor.shutdown()
+	m.pushChannelMonitor.Shutdown()
 	return m.transport.Shutdown(ctx)
 }
 
@@ -222,11 +224,17 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 		transportConfigurer(chid, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
-	monitor := m.pushChannelMonitor.add(chid)
+	monitoredChan := m.pushChannelMonitor.AddChannel(chid)
 	if err := m.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.channels.Error(chid, err)
-		monitor.shutdown()
+
+		// If push channel monitoring is enabled, shutdown the monitor as it
+		// wasn't possible to start the data transfer
+		if monitoredChan != nil {
+			monitoredChan.Shutdown()
+		}
+
 		return chid, err
 	}
 

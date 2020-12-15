@@ -209,7 +209,7 @@ func TestRoundTrip(t *testing.T) {
 				for opens < 2 || completes < 2 || len(sentIncrements) < 21 || len(receivedIncrements) < 21 {
 					select {
 					case <-ctx.Done():
-						t.Fatal("Did not complete succcessful data transfer")
+						t.Fatal("Did not complete successful data transfer")
 					case <-finished:
 						completes++
 					case <-opened:
@@ -343,7 +343,7 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 			for opens < 2*data.requestCount || completes < 2*data.requestCount {
 				select {
 				case <-ctx.Done():
-					t.Fatal("Did not complete succcessful data transfer")
+					t.Fatal("Did not complete successful data transfer")
 				case <-finished:
 					completes++
 				case <-opened:
@@ -481,7 +481,7 @@ func TestManyReceiversAtOnce(t *testing.T) {
 			for opens < 2*data.receiverCount || completes < 2*data.receiverCount {
 				select {
 				case <-ctx.Done():
-					t.Fatal("Did not complete succcessful data transfer")
+					t.Fatal("Did not complete successful data transfer")
 				case <-finished:
 					completes++
 				case <-opened:
@@ -576,7 +576,7 @@ func TestPushRequestAutoRestart(t *testing.T) {
 		for {
 			select {
 			case <-ctx.Done():
-				t.Fatal("Did not complete succcessful data transfer")
+				t.Fatal("Did not complete successful data transfer")
 				return
 			case <-received:
 			case <-finished:
@@ -846,7 +846,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			for providerFinished != nil || clientFinished != nil {
 				select {
 				case <-ctx.Done():
-					t.Fatal("Did not complete succcessful data transfer")
+					t.Fatal("Did not complete successful data transfer")
 				case <-providerFinished:
 					providerFinished = nil
 				case <-clientFinished:
@@ -963,7 +963,7 @@ func TestPauseAndResume(t *testing.T) {
 				pauseInitiators < 1 || pauseResponders < 1 || resumeInitiators < 1 || resumeResponders < 1 {
 				select {
 				case <-ctx.Done():
-					t.Fatal("Did not complete succcessful data transfer")
+					t.Fatal("Did not complete successful data transfer")
 				case <-finished:
 					completes++
 				case <-opened:
@@ -1063,7 +1063,7 @@ func TestUnrecognizedVoucherRoundTrip(t *testing.T) {
 			for opens < 1 || finishes < 1 {
 				select {
 				case <-ctx.Done():
-					t.Fatal("Did not complete succcessful data transfer")
+					t.Fatal("Did not complete successful data transfer")
 				case <-finished:
 					finishes++
 				case <-opened:

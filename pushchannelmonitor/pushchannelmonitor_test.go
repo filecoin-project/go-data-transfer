@@ -1,4 +1,4 @@
-package impl
+package pushchannelmonitor
 
 import (
 	"context"
@@ -65,13 +65,12 @@ func TestPushChannelMonitor(t *testing.T) {
 			ch := &mockChannelState{chid: ch1}
 			mockAPI := newMockMonitorAPI(ch, tc.restartErrs)
 
-			m := newPushChannelMonitor(mockAPI)
-			m.setConfig(&pushMonitorConfig{
+			m := NewPushChannelMonitor(mockAPI, &PushMonitorConfig{
 				Interval:     10 * time.Millisecond,
 				MinBytesSent: 1,
 			})
-			m.start()
-			m.add(ch1)
+			m.Start()
+			m.AddChannel(ch1)
 
 			mockAPI.dataQueued(tc.dataQueued)
 			mockAPI.dataSent(tc.dataSent)
