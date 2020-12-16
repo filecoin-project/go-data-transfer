@@ -57,7 +57,7 @@ func TestPushChannelMonitorAutoRestart(t *testing.T) {
 			ch := &mockChannelState{chid: ch1}
 			mockAPI := newMockMonitorAPI(ch, tc.errOnRestart)
 
-			m := NewPushChannelMonitor(mockAPI, &PushMonitorConfig{
+			m := NewMonitor(mockAPI, &Config{
 				Interval:          10 * time.Millisecond,
 				ChecksPerInterval: 10,
 				MinBytesSent:      1,
@@ -235,7 +235,7 @@ func TestPushChannelMonitorDataRate(t *testing.T) {
 			ch := &mockChannelState{chid: ch1}
 			mockAPI := newMockMonitorAPI(ch, false)
 
-			m := NewPushChannelMonitor(mockAPI, &PushMonitorConfig{
+			m := NewMonitor(mockAPI, &Config{
 				Interval:          time.Hour,
 				ChecksPerInterval: tc.checksPerInterval,
 				MinBytesSent:      tc.minBytesSent,

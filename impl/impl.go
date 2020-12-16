@@ -46,8 +46,8 @@ type manager struct {
 	reconnectsLk          sync.RWMutex
 	reconnects            map[datatransfer.ChannelID]chan struct{}
 	cidLists              cidlists.CIDLists
-	pushChannelMonitor    *pushchannelmonitor.PushChannelMonitor
-	pushChannelMonitorCfg *pushchannelmonitor.PushMonitorConfig
+	pushChannelMonitor    *pushchannelmonitor.Monitor
+	pushChannelMonitorCfg *pushchannelmonitor.Config
 }
 
 type internalEvent struct {
@@ -104,7 +104,7 @@ func PushChannelRestartConfig(
 	restartBackoff time.Duration,
 ) DataTransferOption {
 	return func(m *manager) {
-		m.pushChannelMonitorCfg = &pushchannelmonitor.PushMonitorConfig{
+		m.pushChannelMonitorCfg = &pushchannelmonitor.Config{
 			Interval:          interval,
 			ChecksPerInterval: checksPerInterval,
 			MinBytesSent:      minBytesSent,
@@ -150,7 +150,7 @@ func NewDataTransfer(ds datastore.Batching, cidListsDir string, dataTransferNetw
 
 	// Start push channel monitor after applying config options as the config
 	// options may apply to the monitor
-	m.pushChannelMonitor = pushchannelmonitor.NewPushChannelMonitor(m, m.pushChannelMonitorCfg)
+	m.pushChannelMonitor = pushchannelmonitor.NewMonitor(m, m.pushChannelMonitorCfg)
 	m.pushChannelMonitor.Start()
 
 	return m, nil

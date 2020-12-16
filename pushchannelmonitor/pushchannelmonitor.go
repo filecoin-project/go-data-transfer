@@ -20,29 +20,29 @@ type monitorAPI interface {
 	CloseDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error
 }
 
-// PushChannelMonitor watches the data-rate for push channels, and restarts
+// Monitor watches the data-rate for push channels, and restarts
 // a channel if the data-rate falls too low
-type PushChannelMonitor struct {
+type Monitor struct {
 	ctx  context.Context
 	stop context.CancelFunc
 	mgr  monitorAPI
-	cfg  *PushMonitorConfig
+	cfg  *Config
 
 	lk       sync.RWMutex
 	channels map[*monitoredChannel]struct{}
 }
 
-type PushMonitorConfig struct {
+type Config struct {
 	Interval          time.Duration
 	MinBytesSent      uint64
 	ChecksPerInterval uint32
 	RestartBackoff    time.Duration
 }
 
-func NewPushChannelMonitor(mgr monitorAPI, cfg *PushMonitorConfig) *PushChannelMonitor {
+func NewMonitor(mgr monitorAPI, cfg *Config) *Monitor {
 	checkConfig(cfg)
 	ctx, cancel := context.WithCancel(context.Background())
-	return &PushChannelMonitor{
+	return &Monitor{
 		ctx:      ctx,
 		stop:     cancel,
 		mgr:      mgr,
@@ -51,7 +51,7 @@ func NewPushChannelMonitor(mgr monitorAPI, cfg *PushMonitorConfig) *PushChannelM
 	}
 }
 
-func checkConfig(cfg *PushMonitorConfig) {
+func checkConfig(cfg *Config) {
 	if cfg == nil {
 		return
 	}
@@ -69,7 +69,7 @@ func checkConfig(cfg *PushMonitorConfig) {
 }
 
 // AddChannel adds a channel to the push channel monitor
-func (m *PushChannelMonitor) AddChannel(chid datatransfer.ChannelID) *monitoredChannel {
+func (m *Monitor) AddChannel(chid datatransfer.ChannelID) *monitoredChannel {
 	if !m.enabled() {
 		return nil
 	}
@@ -82,14 +82,14 @@ func (m *PushChannelMonitor) AddChannel(chid datatransfer.ChannelID) *monitoredC
 	return mpc
 }
 
-func (m *PushChannelMonitor) Shutdown() {
+func (m *Monitor) Shutdown() {
 	// Causes the run loop to exit
 	m.stop()
 }
 
 // onShutdown shuts down all monitored channels. It is called when the run
 // loop exits.
-func (m *PushChannelMonitor) onShutdown() {
+func (m *Monitor) onShutdown() {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
@@ -99,7 +99,7 @@ func (m *PushChannelMonitor) onShutdown() {
 }
 
 // onMonitoredChannelShutdown is called when a monitored channel shuts down
-func (m *PushChannelMonitor) onMonitoredChannelShutdown(mpc *monitoredChannel) {
+func (m *Monitor) onMonitoredChannelShutdown(mpc *monitoredChannel) {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 
@@ -107,11 +107,11 @@ func (m *PushChannelMonitor) onMonitoredChannelShutdown(mpc *monitoredChannel) {
 }
 
 // enabled indicates whether the push channel monitor is running
-func (m *PushChannelMonitor) enabled() bool {
+func (m *Monitor) enabled() bool {
 	return m.cfg != nil
 }
 
-func (m *PushChannelMonitor) Start() {
+func (m *Monitor) Start() {
 	if !m.enabled() {
 		return
 	}
@@ -119,7 +119,7 @@ func (m *PushChannelMonitor) Start() {
 	go m.run()
 }
 
-func (m *PushChannelMonitor) run() {
+func (m *Monitor) run() {
 	defer m.onShutdown()
 
 	// Check data-rate ChecksPerInterval times per interval
@@ -138,7 +138,7 @@ func (m *PushChannelMonitor) run() {
 }
 
 // check data rate for all monitored channels
-func (m *PushChannelMonitor) checkDataRate() {
+func (m *Monitor) checkDataRate() {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
@@ -154,7 +154,7 @@ type monitoredChannel struct {
 	cancel     context.CancelFunc
 	mgr        monitorAPI
 	chid       datatransfer.ChannelID
-	cfg        *PushMonitorConfig
+	cfg        *Config
 	unsub      datatransfer.Unsubscribe
 	onShutdown func(*monitoredChannel)
 
@@ -170,7 +170,7 @@ type monitoredChannel struct {
 func newMonitoredChannel(
 	mgr monitorAPI,
 	chid datatransfer.ChannelID,
-	cfg *PushMonitorConfig,
+	cfg *Config,
 	onShutdown func(*monitoredChannel),
 ) *monitoredChannel {
 	ctx, cancel := context.WithCancel(context.Background())
