@@ -93,15 +93,22 @@ func ChannelRemoveTimeout(timeout time.Duration) DataTransferOption {
 
 // PushChannelRestartConfig sets the configuration options for automatically
 // restarting push channels
-// - interval is the time between checking data rate
+// - interval is the time over which minBytesSent must have been sent
+// - checksPerInterval is the number of times to check per interval
 // - minBytesSent is the minimum amount of data that must have been sent over the interval
 // - restartBackoff is the time to wait before checking again for restarts
-func PushChannelRestartConfig(interval time.Duration, minBytesSent uint64, restartBackoff time.Duration) DataTransferOption {
+func PushChannelRestartConfig(
+	interval time.Duration,
+	checksPerInterval uint32,
+	minBytesSent uint64,
+	restartBackoff time.Duration,
+) DataTransferOption {
 	return func(m *manager) {
 		m.pushChannelMonitorCfg = &pushchannelmonitor.PushMonitorConfig{
-			Interval:       interval,
-			MinBytesSent:   minBytesSent,
-			RestartBackoff: restartBackoff,
+			Interval:          interval,
+			ChecksPerInterval: checksPerInterval,
+			MinBytesSent:      minBytesSent,
+			RestartBackoff:    restartBackoff,
 		}
 	}
 }

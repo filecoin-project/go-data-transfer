@@ -15,44 +15,36 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 )
 
-func TestPushChannelMonitor(t *testing.T) {
+func TestPushChannelMonitorAutoRestart(t *testing.T) {
 	type testCase struct {
-		name                 string
-		restartErrs          int
-		expRestartAttempts   int
-		dataQueued           uint64
-		dataSent             uint64
-		errorEvent           bool
-		completeAfterRestart bool
+		name         string
+		errOnRestart bool
+		dataQueued   uint64
+		dataSent     uint64
+		errorEvent   bool
 	}
 	testCases := []testCase{{
-		name:                 "attempt restart",
-		restartErrs:          0,
-		expRestartAttempts:   1,
-		dataQueued:           10,
-		dataSent:             5,
-		completeAfterRestart: true,
+		name:         "attempt restart",
+		errOnRestart: false,
+		dataQueued:   10,
+		dataSent:     5,
 	}, {
-		name:               "fail attempt restart",
-		restartErrs:        1,
-		expRestartAttempts: 1,
-		dataQueued:         10,
-		dataSent:           5,
+		name:         "fail attempt restart",
+		errOnRestart: true,
+		dataQueued:   10,
+		dataSent:     5,
 	}, {
-		name:                 "error event",
-		restartErrs:          0,
-		expRestartAttempts:   1,
-		dataQueued:           10,
-		dataSent:             10,
-		errorEvent:           true,
-		completeAfterRestart: true,
+		name:         "error event",
+		errOnRestart: false,
+		dataQueued:   10,
+		dataSent:     10,
+		errorEvent:   true,
 	}, {
-		name:               "error event then fail attempt restart",
-		restartErrs:        1,
-		expRestartAttempts: 1,
-		dataQueued:         10,
-		dataSent:           10,
-		errorEvent:         true,
+		name:         "error event then fail attempt restart",
+		errOnRestart: true,
+		dataQueued:   10,
+		dataSent:     10,
+		errorEvent:   true,
 	}}
 
 	ch1 := datatransfer.ChannelID{
@@ -63,11 +55,12 @@ func TestPushChannelMonitor(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ch := &mockChannelState{chid: ch1}
-			mockAPI := newMockMonitorAPI(ch, tc.restartErrs)
+			mockAPI := newMockMonitorAPI(ch, tc.errOnRestart)
 
 			m := NewPushChannelMonitor(mockAPI, &PushMonitorConfig{
-				Interval:     10 * time.Millisecond,
-				MinBytesSent: 1,
+				Interval:          10 * time.Millisecond,
+				ChecksPerInterval: 10,
+				MinBytesSent:      1,
 			})
 			m.Start()
 			m.AddChannel(ch1)
@@ -78,12 +71,18 @@ func TestPushChannelMonitor(t *testing.T) {
 				mockAPI.errorEvent()
 			}
 
-			if !tc.completeAfterRestart {
+			if tc.errOnRestart {
 				// If there is no recovery from restart, wait for the push
 				// channel to be closed
 				<-mockAPI.closed
-				require.Equal(t, tc.expRestartAttempts, mockAPI.restartAttempts)
 				return
+			}
+
+			// Verify that channel was restarted
+			select {
+			case <-time.After(100 * time.Millisecond):
+				require.Fail(t, "failed to restart channel")
+			case <-mockAPI.restarted:
 			}
 
 			require.Len(t, m.channels, 1)
@@ -110,24 +109,189 @@ func TestPushChannelMonitor(t *testing.T) {
 	}
 }
 
-type mockMonitorAPI struct {
-	ch              *mockChannelState
-	lk              sync.Mutex
-	subscriber      datatransfer.Subscriber
-	restartAttempts int
-	restartErrors   chan error
-	closed          chan struct{}
+func TestPushChannelMonitorDataRate(t *testing.T) {
+	type dataPoint struct {
+		queued uint64
+		sent   uint64
+	}
+	type testCase struct {
+		name              string
+		checksPerInterval uint32
+		minBytesSent      uint64
+		dataPoints        []dataPoint
+		expectRestart     bool
+	}
+	testCases := []testCase{{
+		name:              "restart when min sent (1) < pending (10)",
+		checksPerInterval: 2,
+		minBytesSent:      1,
+		dataPoints: []dataPoint{{
+			queued: 20,
+			sent:   10,
+		}},
+		expectRestart: true,
+	}, {
+		name:              "dont restart when min sent (20) >= pending (10)",
+		checksPerInterval: 2,
+		minBytesSent:      1,
+		dataPoints: []dataPoint{{
+			queued: 20,
+			sent:   10,
+		}, {
+			queued: 20,
+			sent:   20,
+		}},
+		expectRestart: false,
+	}, {
+		name:              "restart when min sent (5) < pending (10)",
+		checksPerInterval: 2,
+		minBytesSent:      10,
+		dataPoints: []dataPoint{{
+			queued: 20,
+			sent:   10,
+		}, {
+			queued: 20,
+			sent:   15,
+		}},
+		expectRestart: true,
+	}, {
+		name:              "dont restart when pending is zero",
+		checksPerInterval: 2,
+		minBytesSent:      1,
+		dataPoints: []dataPoint{{
+			queued: 20,
+			sent:   20,
+		}},
+		expectRestart: false,
+	}, {
+		name:              "dont restart when pending increases but sent also increases within interval",
+		checksPerInterval: 2,
+		minBytesSent:      1,
+		dataPoints: []dataPoint{{
+			queued: 10,
+			sent:   10,
+		}, {
+			queued: 20,
+			sent:   10,
+		}, {
+			queued: 20,
+			sent:   20,
+		}},
+		expectRestart: false,
+	}, {
+		name:              "restart when pending increases and sent doesn't increase within interval",
+		checksPerInterval: 2,
+		minBytesSent:      1,
+		dataPoints: []dataPoint{{
+			queued: 10,
+			sent:   10,
+		}, {
+			queued: 20,
+			sent:   10,
+		}, {
+			queued: 20,
+			sent:   10,
+		}, {
+			queued: 20,
+			sent:   10,
+		}, {
+			queued: 20,
+			sent:   20,
+		}},
+		expectRestart: true,
+	}, {
+		name:              "dont restart with typical progression",
+		checksPerInterval: 2,
+		minBytesSent:      1,
+		dataPoints: []dataPoint{{
+			queued: 10,
+			sent:   10,
+		}, {
+			queued: 20,
+			sent:   10,
+		}, {
+			queued: 20,
+			sent:   15,
+		}, {
+			queued: 30,
+			sent:   25,
+		}, {
+			queued: 35,
+			sent:   30,
+		}, {
+			queued: 35,
+			sent:   35,
+		}},
+		expectRestart: false,
+	}}
+
+	ch1 := datatransfer.ChannelID{
+		Initiator: "initiator",
+		Responder: "responder",
+		ID:        1,
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ch := &mockChannelState{chid: ch1}
+			mockAPI := newMockMonitorAPI(ch, false)
+
+			m := NewPushChannelMonitor(mockAPI, &PushMonitorConfig{
+				Interval:          time.Hour,
+				ChecksPerInterval: tc.checksPerInterval,
+				MinBytesSent:      tc.minBytesSent,
+			})
+
+			// Note: Don't start monitor, we'll call checkDataRate() manually
+
+			m.AddChannel(ch1)
+
+			totalChecks := tc.checksPerInterval + uint32(len(tc.dataPoints))
+			for i := uint32(0); i < totalChecks; i++ {
+				if i < uint32(len(tc.dataPoints)) {
+					dp := tc.dataPoints[i]
+					mockAPI.dataQueued(dp.queued)
+					mockAPI.dataSent(dp.sent)
+				}
+				m.checkDataRate()
+			}
+
+			// Check if channel was restarted
+			select {
+			case <-time.After(5 * time.Millisecond):
+				if tc.expectRestart {
+					require.Fail(t, "failed to restart channel")
+				}
+			case <-mockAPI.restarted:
+				if !tc.expectRestart {
+					require.Fail(t, "expected no channel restart")
+				}
+			}
+		})
+	}
 }
 
-func newMockMonitorAPI(ch *mockChannelState, restartErrsCount int) *mockMonitorAPI {
+type mockMonitorAPI struct {
+	ch            *mockChannelState
+	restartErrors chan error
+	restarted     chan struct{}
+	closed        chan struct{}
+
+	lk         sync.Mutex
+	subscriber datatransfer.Subscriber
+}
+
+func newMockMonitorAPI(ch *mockChannelState, errOnRestart bool) *mockMonitorAPI {
 	m := &mockMonitorAPI{
 		ch:            ch,
+		restarted:     make(chan struct{}),
 		closed:        make(chan struct{}),
-		restartErrors: make(chan error, restartErrsCount),
+		restartErrors: make(chan error, 1),
 	}
-	for i := 0; i < restartErrsCount; i++ {
-		m.restartErrors <- xerrors.Errorf("restart err")
+	var restartErr error
+	if errOnRestart {
+		restartErr = xerrors.Errorf("restart err")
 	}
+	m.restartErrors <- restartErr
 	return m
 }
 
@@ -150,10 +314,13 @@ func (m *mockMonitorAPI) callSubscriber(e datatransfer.Event, state datatransfer
 }
 
 func (m *mockMonitorAPI) RestartDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	m.lk.Lock()
-	defer m.lk.Unlock()
-
-	m.restartAttempts++
+	defer func() {
+		select {
+		case <-m.restarted:
+		default:
+			close(m.restarted)
+		}
+	}()
 
 	select {
 	case err := <-m.restartErrors:
