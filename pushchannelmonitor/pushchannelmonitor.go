@@ -248,6 +248,8 @@ func (mc *monitoredChannel) checkDataRate() {
 	mc.statsLk.Lock()
 	defer mc.statsLk.Unlock()
 
+	log.Debugf("%s: check data rate", mc.chid)
+
 	// Before returning, add the current data rate stats to the queue
 	defer func() {
 		var pending uint64
