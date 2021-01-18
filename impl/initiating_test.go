@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +19,6 @@ import (
 	"github.com/filecoin-project/go-storedcounter"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/channels"
 	. "github.com/filecoin-project/go-data-transfer/impl"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/testutil"
@@ -156,7 +156,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"SendVoucher with no channel open": {
 			verify: func(t *testing.T, h *harness) {
 				err := h.dt.SendVoucher(h.ctx, datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: 999999}, h.voucher)
-				require.EqualError(t, err, channels.ErrNotFound.Error())
+				require.True(t, isNotFoundError(err))
 			},
 		},
 		"SendVoucher with channel open, push succeeds": {
@@ -418,6 +418,11 @@ func TestDataTransferInitiating(t *testing.T) {
 			ev.verify(ctx, t)
 		})
 	}
+}
+
+func isNotFoundError(err error) bool {
+	prefix := "No channel for channel ID"
+	return strings.Contains(err.Error(), prefix)
 }
 
 func TestDataTransferRestartInitiating(t *testing.T) {

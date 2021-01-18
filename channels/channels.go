@@ -10,6 +10,7 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
+	"golang.org/x/xerrors"
 
 	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
 	versionedfsm "github.com/filecoin-project/go-ds-versioning/pkg/fsm"
@@ -28,8 +29,10 @@ type ChannelCIDsReader func(chid datatransfer.ChannelID) ([]cid.Cid, error)
 
 type Notifier func(datatransfer.Event, datatransfer.ChannelState)
 
-// ErrNotFound is returned when a channel cannot be found with a given channel ID
-var ErrNotFound = errors.New("No channel for this channel ID")
+// errNotFound is returned when a channel cannot be found with a given channel ID
+func errNotFound(chid datatransfer.ChannelID) error {
+	return xerrors.Errorf("No channel for channel ID %s", chid)
+}
 
 // ErrWrongType is returned when a caller attempts to change the type of implementation data after setting it
 var ErrWrongType = errors.New("Cannot change type of implementation specific data after setting it")
@@ -176,7 +179,7 @@ func (c *Channels) GetByID(ctx context.Context, chid datatransfer.ChannelID) (da
 	var internalChannel internal.ChannelState
 	err := c.stateMachines.GetSync(ctx, chid, &internalChannel)
 	if err != nil {
-		return nil, ErrNotFound
+		return nil, errNotFound(chid)
 	}
 	return fromInternalChannelState(internalChannel, c.voucherDecoder, c.voucherResultDecoder, c.cidLists.ReadList), nil
 }
@@ -299,7 +302,8 @@ func (c *Channels) send(chid datatransfer.ChannelID, code datatransfer.EventCode
 		return err
 	}
 	if !has {
-		return ErrNotFound
+		return xerrors.Errorf("cannot send FSM event %s to data-transfer channel %s: %w",
+			datatransfer.Events[code], chid, errNotFound(chid))
 	}
 	return c.stateMachines.Send(chid, code, args...)
 }

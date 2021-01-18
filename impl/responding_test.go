@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -749,7 +750,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				p := testutil.GeneratePeers(1)[0]
 				chid := datatransfer.ChannelID{ID: h.pullRequest.TransferID(), Initiator: p, Responder: h.peers[0]}
 				_, err = h.transport.EventHandler.OnRequestReceived(chid, restartReq)
-				require.EqualError(t, err, "No channel for this channel ID")
+				require.True(t, strings.Contains(err.Error(), "No channel"))
 			},
 		},
 		"restart request fails if voucher validation fails": {
