@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/rand"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,10 +15,12 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-storedcounter"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/channels"
 	. "github.com/filecoin-project/go-data-transfer/impl"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/testutil"
@@ -750,7 +751,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				p := testutil.GeneratePeers(1)[0]
 				chid := datatransfer.ChannelID{ID: h.pullRequest.TransferID(), Initiator: p, Responder: h.peers[0]}
 				_, err = h.transport.EventHandler.OnRequestReceived(chid, restartReq)
-				require.True(t, strings.Contains(err.Error(), "No channel"))
+				require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
 			},
 		},
 		"restart request fails if voucher validation fails": {

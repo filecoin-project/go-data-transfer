@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/rand"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,10 +14,12 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-storedcounter"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/channels"
 	. "github.com/filecoin-project/go-data-transfer/impl"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/testutil"
@@ -156,7 +157,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"SendVoucher with no channel open": {
 			verify: func(t *testing.T, h *harness) {
 				err := h.dt.SendVoucher(h.ctx, datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: 999999}, h.voucher)
-				require.True(t, isNotFoundError(err))
+				require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
 			},
 		},
 		"SendVoucher with channel open, push succeeds": {
@@ -418,11 +419,6 @@ func TestDataTransferInitiating(t *testing.T) {
 			ev.verify(ctx, t)
 		})
 	}
-}
-
-func isNotFoundError(err error) bool {
-	prefix := "No channel for channel ID"
-	return strings.Contains(err.Error(), prefix)
 }
 
 func TestDataTransferRestartInitiating(t *testing.T) {

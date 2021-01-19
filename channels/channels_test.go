@@ -6,7 +6,6 @@ import (
 	"errors"
 	"math/rand"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 	cbg "github.com/whyrusleeping/cbor-gen"
+	"golang.org/x/xerrors"
 
 	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
 	versionedds "github.com/filecoin-project/go-ds-versioning/pkg/datastore"
@@ -103,7 +103,7 @@ func TestChannels(t *testing.T) {
 		// empty if channel does not exist
 		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[1], Responder: peers[1], ID: tid1})
 		require.Equal(t, nil, state)
-		require.True(t, isNotFoundError(err))
+		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
 
 		// works for other channel as well
 		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[3], Responder: peers[2], ID: tid2})
@@ -123,7 +123,7 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, state.Status(), datatransfer.Ongoing)
 
 		err = channelList.Accept(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
-		require.True(t, isNotFoundError(err))
+		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
 	})
 
 	t.Run("updating send/receive values", func(t *testing.T) {
@@ -160,9 +160,9 @@ func TestChannels(t *testing.T) {
 
 		// errors if channel does not exist
 		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200)
-		require.True(t, isNotFoundError(err))
+		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
 		err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200)
-		require.True(t, isNotFoundError(err))
+		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
 		require.Equal(t, []cid.Cid{cids[0]}, state.ReceivedCids())
 
 		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 50)
@@ -341,11 +341,6 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, peers[2], ch.SelfPeer())
 		require.Equal(t, peers[1], ch.OtherPeer())
 	})
-}
-
-func isNotFoundError(err error) bool {
-	prefix := "No channel for channel ID"
-	return strings.Contains(err.Error(), prefix)
 }
 
 func TestIsChannelTerminated(t *testing.T) {
