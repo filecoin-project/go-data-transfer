@@ -73,6 +73,10 @@ const (
 
 	// DataQueued is emmited is read and queued for sending to the remote peer
 	DataQueued
+
+	DataQueuedProgress
+	DataSentProgress
+	DataReceivedProgress
 )
 
 // Events are human readable names for data transfer events
@@ -97,6 +101,9 @@ var Events = map[EventCode]string{
 	Complete:                    "Complete",
 	CompleteCleanupOnRestart:    "CompleteCleanupOnRestart",
 	DataQueued:                  "DataQueued",
+	DataQueuedProgress:          "DataQueuedProgress",
+	DataSentProgress:            "DataSentProgress",
+	DataReceivedProgress:        "DataReceivedProgress",
 }
 
 // Event is a struct containing information about a data transfer event

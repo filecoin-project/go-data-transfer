@@ -400,6 +400,10 @@ func (t *Transport) gsIncomingBlockHook(p peer.ID, response graphsync.ResponseDa
 }
 
 func (t *Transport) gsBlockSentHook(p peer.ID, request graphsync.RequestData, block graphsync.BlockData) {
+	if block.BlockSizeOnWire() == 0 {
+		return
+	}
+
 	t.dataLock.RLock()
 	chid, ok := t.graphsyncRequestMap[graphsyncKey{request.ID(), p}]
 	t.dataLock.RUnlock()
@@ -413,6 +417,10 @@ func (t *Transport) gsBlockSentHook(p peer.ID, request graphsync.RequestData, bl
 }
 
 func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData, block graphsync.BlockData, hookActions graphsync.OutgoingBlockHookActions) {
+	if block.BlockSizeOnWire() == 0 {
+		return
+	}
+
 	t.dataLock.RLock()
 	chid, ok := t.graphsyncRequestMap[graphsyncKey{request.ID(), p}]
 	if !ok {
