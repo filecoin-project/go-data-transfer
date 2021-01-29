@@ -71,11 +71,22 @@ const (
 	// that channels that were cleaning up should finish cleanup
 	CompleteCleanupOnRestart
 
-	// DataQueued is emmited is read and queued for sending to the remote peer
+	// DataQueued is emitted when data is read and queued for sending to the remote peer
 	DataQueued
 
+	// DataQueuedProgress is emitted the first time a block is queued for
+	// sending to the remote peer. It is used to measure progress of how much
+	// of the total data has been queued.
 	DataQueuedProgress
+
+	// DataSentProgress is emitted the first time a block is sent to the remote
+	// peer. It is used to measure progress of how much of the total data has
+	// been sent.
 	DataSentProgress
+
+	// DataReceivedProgress is emitted the first time a block is received from
+	// the remote peer. It is used to measure progress of how much of the total
+	// data has been received.
 	DataReceivedProgress
 )
 

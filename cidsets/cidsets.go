@@ -3,11 +3,10 @@ package cidsets
 import (
 	"sync"
 
+	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
 	"github.com/ipfs/go-datastore/query"
-
-	"github.com/ipfs/go-cid"
 )
 
 // SetID is a unique ID for a CID set
