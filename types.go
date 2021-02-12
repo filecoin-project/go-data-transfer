@@ -1,6 +1,7 @@
 package datatransfer
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/ipfs/go-cid"
@@ -50,6 +51,9 @@ type ChannelID struct {
 }
 
 func (c ChannelID) String() string {
+	if c.Initiator == "" || c.Responder == "" {
+		return "Undefined data-transfer ChannelID"
+	}
 	return fmt.Sprintf("%s-%s-%d", c.Initiator, c.Responder, c.ID)
 }
 
@@ -60,6 +64,23 @@ func (c ChannelID) OtherParty(thisPeer peer.ID) peer.ID {
 		return c.Responder
 	}
 	return c.Initiator
+}
+
+func (c *ChannelID) UnmarshalJSON(data []byte) error {
+	// First check if the Initiator or Responder are the empty string
+	var v map[string]interface{}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+
+	if v["Initiator"] == "" || v["Responder"] == "" {
+		// This is an Undefined ChannelID
+		return nil
+	}
+
+	// Initiator and Responder are present so just unmarshal normally
+	type chid ChannelID
+	return json.Unmarshal(data, (*chid)(c))
 }
 
 // Channel represents all the parameters for a single data transfer
