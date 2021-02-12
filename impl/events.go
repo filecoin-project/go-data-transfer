@@ -316,7 +316,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	}
 	// send an error, but only if we haven't already errored for some reason
 	if chst.Status() != datatransfer.Failing && chst.Status() != datatransfer.Failed {
-		err := xerrors.Errorf("data transfer channel %s failed to transfer data: %w", completeErr)
+		err := xerrors.Errorf("data transfer channel %s failed to transfer data: %w", chid, completeErr)
 		log.Warnf(err.Error())
 		return m.channels.Error(chid, err)
 	}
