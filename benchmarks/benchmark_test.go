@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -49,24 +50,34 @@ func BenchmarkRoundtripSuccess(b *testing.B) {
 	ctx := context.Background()
 	tdm, err := newTempDirMaker(b)
 	require.NoError(b, err)
-	b.Run("test-p2p-stress-10-128MB", func(b *testing.B) {
-		p2pStrestTest(ctx, b, 10, allFilesUniformSize(128*(1<<20), 1<<20, 1024, true), tdm, false, false)
-	})
-	b.Run("test-p2p-stress-10-128MB-1KB-chunks", func(b *testing.B) {
-		p2pStrestTest(ctx, b, 10, allFilesUniformSize(128*(1<<20), 1<<10, 1024, true), tdm, false, false)
-	})
-	b.Run("test-p2p-stress-1-1GB", func(b *testing.B) {
-		p2pStrestTest(ctx, b, 1, allFilesUniformSize(1*(1<<30), 1<<20, 1024, true), tdm, true, true)
-	})
-	b.Run("test-p2p-stress-1-1GB-no-raw-nodes", func(b *testing.B) {
-		p2pStrestTest(ctx, b, 1, allFilesUniformSize(1*(1<<30), 1<<20, 1024, false), tdm, true, true)
+	//b.Run("test-p2p-stress-10-128MB", func(b *testing.B) {
+	//	p2pStrestTest(ctx, b, 10, allFilesUniformSize(128*(1<<20), 1<<20, 1024, true), tdm, false, false)
+	//})
+	//b.Run("test-p2p-stress-10-128MB-1KB-chunks", func(b *testing.B) {
+	//	p2pStrestTest(ctx, b, 10, allFilesUniformSize(128*(1<<20), 1<<10, 1024, true), tdm, false, false)
+	//})
+	//b.Run("test-p2p-stress-1-1GB", func(b *testing.B) {
+	//	p2pStrestTest(ctx, b, 1, allFilesUniformSize(1*(1<<30), 1<<20, 1024, true), tdm, true, true)
+	//})
+	//b.Run("test-p2p-stress-1-1GB-no-raw-nodes", func(b *testing.B) {
+	//	p2pStrestTest(ctx, b, 1, allFilesUniformSize(1*(1<<30), 1<<20, 1024, false), tdm, true, true)
+	//})
+}
+
+func BenchmarkRoundtrip512MB(b *testing.B) {
+	ctx := context.Background()
+	tdm, err := newTempDirMaker(b)
+	require.NoError(b, err)
+	b.Run("test-p2p-stress-512MB", func(b *testing.B) {
+		p2pStrestTest(ctx, b, 100, allFilesUniformSize(128*(1<<20), 1<<20, 1024, true), tdm, true, true)
 	})
 }
 
 func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc, tdm *tempDirMaker, diskBasedDatastore bool, limitBandwidth bool) {
 	mn := mocknet.New(ctx)
 	if limitBandwidth {
-		mn.SetLinkDefaults(mocknet.LinkOptions{Latency: 100 * time.Millisecond, Bandwidth: 16 << 20})
+		//mn.SetLinkDefaults(mocknet.LinkOptions{Latency: 100 * time.Millisecond, Bandwidth: 16 << 20})
+		mn.SetLinkDefaults(mocknet.LinkOptions{Bandwidth: 256 << 20})
 	}
 	net := tn.StreamNet(ctx, mn)
 	ig := testinstance.NewTestInstanceGenerator(ctx, net, tdm, diskBasedDatastore)
@@ -92,18 +103,36 @@ func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc,
 			done <- struct{}{}
 		}
 	})
+
+	recordHeapProfile := func(path string) {
+		f, err := os.Create(path + "_heap.prof")
+		if err != nil {
+			panic(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+	}
+	recordHeapProfile("start")
+
 	for i := 0; i < b.N; i++ {
+		var start time.Time
+		rcvdCount := 0
 		receiver := instances[i+1]
 		receiver.Manager.SubscribeToEvents(func(event datatransfer.Event, state datatransfer.ChannelState) {
 			if state.Received() > 0 {
-				b.Logf("transferred: %d", state.Received())
+				rcvdCount++
+				if rcvdCount == (260*numfiles)/2 {
+					fmt.Printf("Taking heap profile after %s\n", time.Since(start))
+					recordHeapProfile("half")
+				}
+				//b.Logf("transferred: %d", state.Received())
 			}
 			if state.Status() == datatransfer.Completed {
 				done <- struct{}{}
 			}
 		})
-		timer := time.NewTimer(30 * time.Second)
-		start := time.Now()
+		timer := time.NewTimer(60 * time.Second)
+		start = time.Now()
 		for j := 0; j < numfiles; j++ {
 			_, err := pusher.Manager.OpenPushDataChannel(ctx, receiver.Peer, testutil.NewFakeDTType(), allCids[j], allSelector)
 			if err != nil {
@@ -126,6 +155,8 @@ func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc,
 		}
 		benchmarkLog = append(benchmarkLog, result)
 		receiver.Close()
+
+		fmt.Printf("Sent %d 128MB files in %s %d\n", numfiles, result.Time, rcvdCount)
 	}
 	testinstance.Close(instances)
 	ig.Close()
