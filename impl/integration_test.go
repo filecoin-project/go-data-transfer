@@ -3,6 +3,7 @@ package impl_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math/rand"
 	"os"
 	"testing"
@@ -860,6 +861,187 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			gsData.VerifyFileTransferred(t, root, true)
 			require.Equal(t, srv.providerPausePoint, len(config.pausePoints))
 			require.Equal(t, clientPausePoint, len(config.pausePoints))
+		})
+	}
+}
+
+func TestGSDoubleSend(t *testing.T) {
+	ctx := context.Background()
+	testCases := map[string]struct {
+		unpauseRequestorDelay time.Duration
+		unpauseResponderDelay time.Duration
+		pausePoints           []uint64
+	}{
+		"fast unseal, payment channel ready": {
+			pausePoints: []uint64{1000, 3000, 6000, 10000, 15000},
+		},
+	}
+	for testCase, config := range testCases {
+		t.Run(testCase, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+			defer cancel()
+
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			provHost := gsData.Host1
+
+			root := gsData.LoadUnixFSFile(t, false)
+			rootCid := root.(cidlink.Link).Cid
+
+			// Set up data transfer for provider
+			tp1 := gsData.SetupGSTransportHost1()
+			prvDT, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1, gsData.StoredCounter1)
+			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, prvDT)
+
+			// Set up data transfer for client
+			tp2 := gsData.SetupGSTransportHost2()
+			clDT, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, tp2, gsData.StoredCounter2)
+			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, clDT)
+
+			// Watch for client events
+			var chid datatransfer.ChannelID
+			errChan := make(chan struct{}, 2)
+			clientPausePoint := 0
+			clientFinished := make(chan struct{}, 1)
+			finalVoucherResult := testutil.NewFakeDTType()
+			encodedFVR, err := encoding.Encode(finalVoucherResult)
+			require.NoError(t, err)
+			var clientSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				//fmt.Printf("client %s %s\n", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
+				// When the client receives an Accept message
+				if event.Code == datatransfer.Accept {
+					// Pause the data transfer channel to simulate waiting for
+					// the payment channel to be ready, then resume
+					//fmt.Printf("  client pause data channel\n")
+					err := clDT.PauseDataTransferChannel(ctx, chid)
+					require.NoError(t, err)
+					timer := time.NewTimer(config.unpauseRequestorDelay)
+					go func() {
+						<-timer.C
+						//fmt.Printf("  client resume data channel\n")
+						err := clDT.ResumeDataTransferChannel(ctx, chid)
+						require.NoError(t, err)
+					}()
+				}
+
+				if event.Code == datatransfer.Error {
+					errChan <- struct{}{}
+				}
+
+				// When the final voucher is received from the provider,
+				// send a voucher from the client
+				if event.Code == datatransfer.NewVoucherResult {
+					lastVoucherResult := channelState.LastVoucherResult()
+					encodedLVR, err := encoding.Encode(lastVoucherResult)
+					require.NoError(t, err)
+					if bytes.Equal(encodedLVR, encodedFVR) {
+						//fmt.Printf("  client received last voucher, sending voucher\n")
+						_ = clDT.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+					} else {
+						//fmt.Printf("  client received voucher RQ, sending voucher\n")
+						//_ = clDT.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+					}
+				}
+
+				if event.Code == datatransfer.DataReceivedProgress {
+					//fmt.Printf("  rcvd %d\n", channelState.Received())
+				}
+				// If the amount of data received exceeds the pause point
+				// threshold, send a voucher
+				if event.Code == datatransfer.DataReceivedProgress &&
+					clientPausePoint < len(config.pausePoints) &&
+					channelState.Received() > config.pausePoints[clientPausePoint] {
+					//fmt.Printf("  received > pause point %d (%d) - send voucher\n", config.pausePoints[clientPausePoint], channelState.Received())
+					_ = clDT.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+					clientPausePoint++
+				}
+
+				if channelState.Status() == datatransfer.Completed {
+					fmt.Printf("  client completed\n")
+					clientFinished <- struct{}{}
+				}
+			}
+			clDT.SubscribeToEvents(clientSubscriber)
+
+			// Watch for provider events
+			providerFinished := make(chan struct{}, 1)
+			providerAccepted := false
+			var providerSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				//fmt.Printf("provider %s %s\n", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
+				if event.Code == datatransfer.DataQueued {
+					//fmt.Printf("  qued %d\n", channelState.Queued())
+				}
+				if event.Code == datatransfer.DataQueuedProgress {
+					//fmt.Printf("  qxxd %d\n", channelState.Queued())
+				}
+				if event.Code == datatransfer.DataSentProgress {
+					//fmt.Printf("  sent %d\n", channelState.Sent())
+				}
+				// The provider accepts and then immediately pauses while
+				// unsealing
+				if event.Code == datatransfer.PauseResponder {
+					if !providerAccepted {
+						//fmt.Printf("  provider accepted\n")
+						providerAccepted = true
+
+						// Simulate delaying for the time taken to unseal the
+						// data then resume the data transfer
+						timer := time.NewTimer(config.unpauseResponderDelay)
+						go func() {
+							<-timer.C
+							//fmt.Printf("  provider resume\n")
+							_ = prvDT.ResumeDataTransferChannel(ctx, chid)
+						}()
+					}
+				}
+
+				if event.Code == datatransfer.Error {
+					errChan <- struct{}{}
+				}
+
+				if channelState.Status() == datatransfer.Completed {
+					fmt.Printf("  provider completed\n")
+					providerFinished <- struct{}{}
+				}
+			}
+			prvDT.SubscribeToEvents(providerSubscriber)
+
+			voucher := testutil.FakeDTType{Data: "applesauce"}
+			sv := testutil.NewStubbedValidator()
+			sv.ExpectPausePull()
+			require.NoError(t, prvDT.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+
+			srv := &retrievalRevalidator{
+				testutil.NewStubbedRevalidator(), 0, 0, config.pausePoints, finalVoucherResult,
+			}
+			srv.ExpectSuccessRevalidation()
+			require.NoError(t, prvDT.RegisterRevalidator(testutil.NewFakeDTType(), srv))
+			require.NoError(t, clDT.RegisterVoucherResultType(testutil.NewFakeDTType()))
+
+			// Client opens a pull data-channel to fetch data from provider
+			chid, err = clDT.OpenPullDataChannel(ctx, provHost.ID(), &voucher, rootCid, gsData.AllSelector)
+			require.NoError(t, err)
+
+			for providerFinished != nil || clientFinished != nil {
+				select {
+				case <-ctx.Done():
+					t.Fatal("Did not complete successful data transfer")
+				case <-providerFinished:
+					providerFinished = nil
+				case <-clientFinished:
+					clientFinished = nil
+				case <-errChan:
+					t.Fatal("received unexpected error")
+				}
+			}
+			sv.VerifyExpectations(t)
+			srv.VerifyExpectations(t)
+			gsData.VerifyFileTransferred(t, root, true)
+			require.Equal(t, srv.providerPausePoint, len(config.pausePoints))
+			require.Equal(t, clientPausePoint, len(config.pausePoints))
+			//require.Equal(t, clientPausePoint, 0)
+			fmt.Printf("\n\n")
 		})
 	}
 }

@@ -3,6 +3,7 @@ package graphsync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/ipfs/go-cid"
@@ -54,6 +55,7 @@ type Transport struct {
 	stores                map[datatransfer.ChannelID]struct{}
 	supportedExtensions   []graphsync.ExtensionName
 	unregisterFuncs       []graphsync.UnregisterHookFunc
+	seenBlocks            map[string]int
 }
 
 // NewTransport makes a new hooks manager with the given hook events interface
@@ -69,6 +71,7 @@ func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, options ...Option)
 		pending:               make(map[datatransfer.ChannelID]chan struct{}),
 		stores:                make(map[datatransfer.ChannelID]struct{}),
 		supportedExtensions:   defaultSupportedExtensions,
+		seenBlocks:            make(map[string]int),
 	}
 	for _, option := range options {
 		option(t)
@@ -427,6 +430,13 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 	// going to be sent over the wire before firing the data queued event.
 	if block.BlockSizeOnWire() == 0 {
 		return
+	}
+
+	fmt.Printf("%d: %s\n", len(t.seenBlocks), block.Link().String())
+	pos, ok := t.seenBlocks[block.Link().String()]
+	t.seenBlocks[block.Link().String()] = len(t.seenBlocks)
+	if ok {
+		fmt.Printf("    Already saw this CID - it was sent in position %d\n", pos)
 	}
 
 	t.dataLock.RLock()
