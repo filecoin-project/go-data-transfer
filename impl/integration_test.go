@@ -497,99 +497,194 @@ func TestManyReceiversAtOnce(t *testing.T) {
 	}
 }
 
+// disconnectCoordinator is used by TestPushRequestAutoRestart to allow
+// test cases to signal when a disconnect should start, and whether
+// to wait for the disconnect to take effect before continuing
+type disconnectCoordinator struct {
+	readyForDisconnect chan struct{}
+	disconnected       chan struct{}
+}
+
+func newDisconnectCoordinator() *disconnectCoordinator {
+	return &disconnectCoordinator{
+		readyForDisconnect: make(chan struct{}),
+		disconnected:       make(chan struct{}),
+	}
+}
+
+func (dc *disconnectCoordinator) signalReadyForDisconnect(awaitDisconnect bool) {
+	dc.readyForDisconnect <- struct{}{}
+	if awaitDisconnect {
+		<-dc.disconnected
+	}
+}
+
+func (dc *disconnectCoordinator) onDisconnect() {
+	close(dc.disconnected)
+}
+
 // TestPushRequestAutoRestart tests that if the connection for a push request
 // goes down, it will automatically restart (given the right config options)
 func TestPushRequestAutoRestart(t *testing.T) {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	testCases := []struct {
+		name                        string
+		disconnectOnRequestComplete bool
+		registerResponder           func(responder datatransfer.Manager, dc *disconnectCoordinator)
+	}{{
+		// Test what happens when the disconnect happens right when the
+		// responder receives the open channel request (ie the responder
+		// doesn't get a chance to respond to the open channel request)
+		name: "when responder receives incoming request",
+		registerResponder: func(responder datatransfer.Manager, dc *disconnectCoordinator) {
+			subscriber := func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				t.Logf("%s: %s\n", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
 
-	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
-	netRetry := network.RetryParameters(time.Second, time.Second, 5, 1)
-	gsData.DtNet1 = network.NewFromLibp2pHost(gsData.Host1, netRetry)
-	host1 := gsData.Host1 // initiator, data sender
-	host2 := gsData.Host2 // data recipient
-
-	tp1 := gsData.SetupGSTransportHost1()
-	tp2 := gsData.SetupGSTransportHost2()
-
-	restartConf := PushChannelRestartConfig(100*time.Millisecond, 1, 10, 200*time.Millisecond, 5)
-	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1, gsData.StoredCounter1, restartConf)
-	require.NoError(t, err)
-	testutil.StartAndWaitForReady(ctx, t, dt1)
-	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, tp2, gsData.StoredCounter2)
-	require.NoError(t, err)
-	testutil.StartAndWaitForReady(ctx, t, dt2)
-
-	received := make(chan struct{})
-	finished := make(chan struct{}, 2)
-	var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-		//t.Logf("%s: %s\n", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
-
-		if event.Code == datatransfer.DataReceived {
-			received <- struct{}{}
-		}
-
-		if channelState.Status() == datatransfer.Completed {
-			finished <- struct{}{}
-		}
-	}
-	dt1.SubscribeToEvents(subscriber)
-	dt2.SubscribeToEvents(subscriber)
-	voucher := testutil.FakeDTType{Data: "applesauce"}
-	sv := testutil.NewStubbedValidator()
-
-	sourceDagService := gsData.DagService1
-	destDagService := gsData.DagService2
-
-	root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService, loremFile)
-	rootCid := root.(cidlink.Link).Cid
-
-	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
-	require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
-	chid, err := dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
-	require.NoError(t, err)
-
-	// Wait for a block to be received
-	<-received
-
-	// Break connection
-	t.Logf("Breaking connection to peer")
-	require.NoError(t, gsData.Mn.UnlinkPeers(host1.ID(), host2.ID()))
-	require.NoError(t, gsData.Mn.DisconnectPeers(host1.ID(), host2.ID()))
-
-	t.Logf("Sleep for a second")
-	time.Sleep(1 * time.Second)
-
-	// Restore connection
-	t.Logf("Restore connection")
-	require.NoError(t, gsData.Mn.LinkAll())
-	time.Sleep(200 * time.Millisecond)
-	conn, err := gsData.Mn.ConnectPeers(host1.ID(), host2.ID())
-	require.NoError(t, err)
-	require.NotNil(t, conn)
-
-	t.Logf("Waiting for auto-restart on push channel %s", chid)
-
-	(func() {
-		finishedCount := 0
-		for {
-			select {
-			case <-ctx.Done():
-				t.Fatal("Did not complete successful data transfer")
-				return
-			case <-received:
-			case <-finished:
-				finishedCount++
-				if finishedCount == 2 {
-					return
+				if event.Code == datatransfer.Open {
+					dc.signalReadyForDisconnect(true)
 				}
 			}
-		}
-	})()
+			responder.SubscribeToEvents(subscriber)
+		},
+	}, {
+		// Test what happens when the disconnect happens right after the
+		// responder receives the first block
+		name: "when responder receives first block",
+		registerResponder: func(responder datatransfer.Manager, dc *disconnectCoordinator) {
+			rcvdCount := 0
+			subscriber := func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				t.Logf("%s: %s\n", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
+				if event.Code == datatransfer.DataReceived {
+					rcvdCount++
+					if rcvdCount == 1 {
+						dc.signalReadyForDisconnect(false)
+					}
+				}
+			}
+			responder.SubscribeToEvents(subscriber)
+		},
+	}, {
+		// Test what happens when the disconnect happens right before the
+		// requester sends the complete message (ie all blocks have been
+		// received but the responder doesn't get a chance to tell
+		// the initiator before the disconnect)
+		name:                        "before requester sends complete message",
+		disconnectOnRequestComplete: true,
+	}}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
 
-	// Verify that the file was transferred to the destination node
-	testutil.VerifyHasFile(ctx, t, destDagService, root, origBytes)
+			// Create an object to coordinate disconnect events
+			dc := newDisconnectCoordinator()
+
+			// If the test should disconnect before the request is complete,
+			// add a hook to do so
+			var responderTransportOpts []tp.Option
+			if tc.disconnectOnRequestComplete {
+				responderTransportOpts = []tp.Option{
+					tp.RegisterCompletedRequestListener(func(chid datatransfer.ChannelID) {
+						dc.signalReadyForDisconnect(true)
+					}),
+				}
+			}
+
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			netRetry := network.RetryParameters(time.Second, time.Second, 5, 1)
+			gsData.DtNet1 = network.NewFromLibp2pHost(gsData.Host1, netRetry)
+			host1 := gsData.Host1 // initiator, data sender
+			host2 := gsData.Host2 // data recipient
+
+			initiatorGSTspt := gsData.SetupGSTransportHost1()
+			responderGSTspt := gsData.SetupGSTransportHost2(responderTransportOpts...)
+
+			restartConf := PushChannelRestartConfig(100*time.Millisecond, 1, 10, 200*time.Millisecond, 5)
+			initiator, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, initiatorGSTspt, gsData.StoredCounter1, restartConf)
+			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, initiator)
+			responder, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, responderGSTspt, gsData.StoredCounter2)
+			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, responder)
+
+			finished := make(chan struct{}, 2)
+			var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if channelState.Status() == datatransfer.Completed {
+					finished <- struct{}{}
+				}
+			}
+			initiator.SubscribeToEvents(subscriber)
+			responder.SubscribeToEvents(subscriber)
+			voucher := testutil.FakeDTType{Data: "applesauce"}
+			sv := testutil.NewStubbedValidator()
+
+			sourceDagService := gsData.DagService1
+			destDagService := gsData.DagService2
+
+			root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService, loremFile)
+			rootCid := root.(cidlink.Link).Cid
+
+			require.NoError(t, initiator.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+			require.NoError(t, responder.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+
+			// If the test case needs to subscribe to response events, provide
+			// the test case with the responder
+			if tc.registerResponder != nil {
+				tc.registerResponder(responder, dc)
+			}
+
+			// Open a push channel
+			chid, err := initiator.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
+			require.NoError(t, err)
+
+			// Wait for the moment at which the test case should experience a disconnect
+			select {
+			case <-time.After(time.Second):
+				t.Fatal("Timed out waiting for point at which to break connection")
+			case <-dc.readyForDisconnect:
+			}
+
+			// Break connection
+			t.Logf("Breaking connection to peer")
+			require.NoError(t, gsData.Mn.UnlinkPeers(host1.ID(), host2.ID()))
+			require.NoError(t, gsData.Mn.DisconnectPeers(host1.ID(), host2.ID()))
+
+			// Inform the coordinator that the disconnect has occurred
+			dc.onDisconnect()
+
+			t.Logf("Sleep for a second")
+			time.Sleep(1 * time.Second)
+
+			// Restore connection
+			t.Logf("Restore connection")
+			require.NoError(t, gsData.Mn.LinkAll())
+			time.Sleep(200 * time.Millisecond)
+			conn, err := gsData.Mn.ConnectPeers(host1.ID(), host2.ID())
+			require.NoError(t, err)
+			require.NotNil(t, conn)
+
+			t.Logf("Waiting for auto-restart on push channel %s", chid)
+
+			(func() {
+				finishedCount := 0
+				for {
+					select {
+					case <-ctx.Done():
+						t.Fatal("Did not complete successful data transfer")
+						return
+					case <-finished:
+						finishedCount++
+						if finishedCount == 2 {
+							return
+						}
+					}
+				}
+			})()
+
+			// Verify that the file was transferred to the destination node
+			testutil.VerifyHasFile(ctx, t, destDagService, root, origBytes)
+		})
+	}
 }
 
 func TestRoundTripCancelledRequest(t *testing.T) {
