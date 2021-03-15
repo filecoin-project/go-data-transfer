@@ -1,12 +1,18 @@
 package internal
 
 import (
+	"fmt"
+
 	"github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
+	logging "github.com/ipfs/go-log/v2"
+
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 )
+
+var log = logging.Logger("datatransfer")
 
 //go:generate cbor-gen-for --map-encoding ChannelState EncodedVoucher EncodedVoucherResult
 
@@ -58,4 +64,16 @@ type ChannelState struct {
 	Message        string
 	Vouchers       []EncodedVoucher
 	VoucherResults []EncodedVoucherResult
+
+	Stages *datatransfer.ChannelStages
+}
+
+func (cs *ChannelState) AddLog(msg string, a ...interface{}) {
+	if len(a) > 0 {
+		msg = fmt.Sprintf(msg, a...)
+	}
+
+	stage := datatransfer.Statuses[cs.Status]
+
+	cs.Stages.AddLog(stage, msg)
 }

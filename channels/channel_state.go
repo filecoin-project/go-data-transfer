@@ -49,6 +49,8 @@ type channelState struct {
 	voucherResultDecoder DecoderByTypeFunc
 	voucherDecoder       DecoderByTypeFunc
 	channelCIDsReader    ChannelCIDsReader
+
+	stages *datatransfer.ChannelStages
 }
 
 // EmptyChannelState is the zero value for channel state, meaning not present
@@ -171,6 +173,8 @@ func (c channelState) OtherPeer() peer.ID {
 	return c.sender
 }
 
+func (c channelState) Stages() *datatransfer.ChannelStages { return c.stages }
+
 func fromInternalChannelState(c internal.ChannelState, voucherDecoder DecoderByTypeFunc, voucherResultDecoder DecoderByTypeFunc, channelCIDsReader ChannelCIDsReader) datatransfer.ChannelState {
 	return channelState{
 		selfPeer:             c.SelfPeer,
@@ -191,6 +195,7 @@ func fromInternalChannelState(c internal.ChannelState, voucherDecoder DecoderByT
 		voucherResultDecoder: voucherResultDecoder,
 		voucherDecoder:       voucherDecoder,
 		channelCIDsReader:    channelCIDsReader,
+		stages:               c.Stages,
 	}
 }
 

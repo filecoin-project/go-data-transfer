@@ -2,15 +2,18 @@ package datatransfer
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p-core/peer"
 
+	cbg "github.com/whyrusleeping/cbor-gen"
+
 	"github.com/filecoin-project/go-data-transfer/encoding"
 )
 
-//go:generate cbor-gen-for ChannelID
+//go:generate cbor-gen-for ChannelID ChannelStages ChannelStage Log
 
 // TypeIdentifier is a unique string identifier for a type of encodable object in a
 // registry
@@ -132,4 +135,57 @@ type ChannelState interface {
 
 	// Queued returns the number of bytes read from the node and queued for sending
 	Queued() uint64
+
+	Stages() *ChannelStages
+}
+
+type ChannelStages struct {
+	Stages []*ChannelStage
+}
+
+func (cs *ChannelStages) AddLog(stage, msg string) {
+	//log.Infof("adding log for stage <%s> msg <%s>", stage, msg)
+
+	now := curTime()
+	st := cs.GetStage(stage)
+	if st == nil {
+		st = &ChannelStage{
+			CreatedTime: now,
+		}
+		cs.Stages = append(cs.Stages, st)
+	}
+
+	st.Name = stage
+	st.UpdatedTime = now
+	if msg != "" && (len(st.Logs) == 0 || st.Logs[len(st.Logs)-1].Log != msg) {
+		st.Logs = append(st.Logs, &Log{msg, now})
+	}
+}
+
+func (cs *ChannelStages) GetStage(stage string) *ChannelStage {
+	for _, s := range cs.Stages {
+		if s.Name == stage {
+			return s
+		}
+	}
+
+	return nil
+}
+
+type ChannelStage struct {
+	Name        string
+	Description string
+	CreatedTime cbg.CborTime
+	UpdatedTime cbg.CborTime
+	Logs        []*Log
+}
+
+type Log struct {
+	Log         string
+	UpdatedTime cbg.CborTime
+}
+
+func curTime() cbg.CborTime {
+	now := time.Now()
+	return cbg.CborTime(time.Unix(0, now.UnixNano()).UTC())
 }
