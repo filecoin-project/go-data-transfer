@@ -144,7 +144,9 @@ type ChannelStages struct {
 }
 
 func (cs *ChannelStages) AddLog(stage, msg string) {
-	//log.Infof("adding log for stage <%s> msg <%s>", stage, msg)
+	if cs == nil {
+		return
+	}
 
 	now := curTime()
 	st := cs.GetStage(stage)
@@ -163,6 +165,10 @@ func (cs *ChannelStages) AddLog(stage, msg string) {
 }
 
 func (cs *ChannelStages) GetStage(stage string) *ChannelStage {
+	if cs == nil {
+		return nil
+	}
+
 	for _, s := range cs.Stages {
 		if s.Name == stage {
 			return s

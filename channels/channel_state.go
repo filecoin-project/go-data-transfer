@@ -173,7 +173,13 @@ func (c channelState) OtherPeer() peer.ID {
 	return c.sender
 }
 
-func (c channelState) Stages() *datatransfer.ChannelStages { return c.stages }
+func (c channelState) Stages() *datatransfer.ChannelStages {
+	if c.stages == nil {
+		return &datatransfer.ChannelStages{}
+	}
+
+	return c.stages
+}
 
 func fromInternalChannelState(c internal.ChannelState, voucherDecoder DecoderByTypeFunc, voucherResultDecoder DecoderByTypeFunc, channelCIDsReader ChannelCIDsReader) datatransfer.ChannelState {
 	return channelState{
