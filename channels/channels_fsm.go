@@ -75,22 +75,22 @@ var ChannelEvents = fsm.Events{
 		}),
 	fsm.Event(datatransfer.Disconnected).FromAny().ToNoChange().Action(func(chst *internal.ChannelState, err error) error {
 		chst.Message = err.Error()
-		chst.AddLog(chst.Message)
+		chst.AddLog("data transfer disconnected: %s", chst.Message)
 		return nil
 	}),
 	fsm.Event(datatransfer.SendDataError).FromAny().ToNoChange().Action(func(chst *internal.ChannelState, err error) error {
 		chst.Message = err.Error()
-		chst.AddLog(chst.Message)
+		chst.AddLog("data transfer send error: %s", chst.Message)
 		return nil
 	}),
 	fsm.Event(datatransfer.RequestTimedOut).FromAny().ToNoChange().Action(func(chst *internal.ChannelState, err error) error {
 		chst.Message = err.Error()
-		chst.AddLog(chst.Message)
+		chst.AddLog("data transfer request timed out: %s", chst.Message)
 		return nil
 	}),
 	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failing).Action(func(chst *internal.ChannelState, err error) error {
 		chst.Message = err.Error()
-		chst.AddLog("transfer failed with err: %s", chst.Message)
+		chst.AddLog("data transfer erred: %s", chst.Message)
 		return nil
 	}),
 
