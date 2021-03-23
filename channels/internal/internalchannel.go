@@ -7,12 +7,8 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
-	logging "github.com/ipfs/go-log/v2"
-
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 )
-
-var log = logging.Logger("datatransfer")
 
 //go:generate cbor-gen-for --map-encoding ChannelState EncodedVoucher EncodedVoucherResult
 
