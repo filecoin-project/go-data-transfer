@@ -1,7 +1,6 @@
 package channels
 
 import (
-	logging "github.com/ipfs/go-log/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
 	"github.com/filecoin-project/go-statemachine/fsm"
@@ -9,8 +8,6 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels/internal"
 )
-
-var log = logging.Logger("data-transfer")
 
 var transferringStates = []fsm.StateKey{
 	datatransfer.Requested,
