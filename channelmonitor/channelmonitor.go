@@ -30,10 +30,14 @@ type Monitor struct {
 	cfg  *Config
 
 	lk       sync.RWMutex
-	channels map[monitoredChan]struct{}
+	channels map[datatransfer.ChannelID]monitoredChan
 }
 
 type Config struct {
+	// Indicates whether push channel monitoring is enabled
+	MonitorPushChannels bool
+	// Indicates whether pull channel monitoring is enabled
+	MonitorPullChannels bool
 	// Max time to wait for other side to accept open channel request before attempting restart
 	AcceptTimeout time.Duration
 	// Interval between checks of transfer rate
@@ -59,7 +63,7 @@ func NewMonitor(mgr monitorAPI, cfg *Config) *Monitor {
 		stop:     cancel,
 		mgr:      mgr,
 		cfg:      cfg,
-		channels: make(map[monitoredChan]struct{}),
+		channels: make(map[datatransfer.ChannelID]monitoredChan),
 	}
 }
 
@@ -111,6 +115,12 @@ func (m *Monitor) addChannel(chid datatransfer.ChannelID, isPush bool) monitored
 	if !m.enabled() {
 		return nil
 	}
+	if isPush && !m.cfg.MonitorPushChannels {
+		return nil
+	}
+	if !isPush && !m.cfg.MonitorPullChannels {
+		return nil
+	}
 
 	m.lk.Lock()
 	defer m.lk.Unlock()
@@ -121,7 +131,7 @@ func (m *Monitor) addChannel(chid datatransfer.ChannelID, isPush bool) monitored
 	} else {
 		mpc = newMonitoredPullChannel(m.mgr, chid, m.cfg, m.onMonitoredChannelShutdown)
 	}
-	m.channels[mpc] = struct{}{}
+	m.channels[chid] = mpc
 	return mpc
 }
 
@@ -136,17 +146,17 @@ func (m *Monitor) onShutdown() {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
-	for ch := range m.channels {
+	for _, ch := range m.channels {
 		ch.Shutdown()
 	}
 }
 
 // onMonitoredChannelShutdown is called when a monitored channel shuts down
-func (m *Monitor) onMonitoredChannelShutdown(mpc *monitoredChannel) {
+func (m *Monitor) onMonitoredChannelShutdown(chid datatransfer.ChannelID) {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 
-	delete(m.channels, mpc)
+	delete(m.channels, chid)
 }
 
 // enabled indicates whether the channel monitor is running
@@ -189,7 +199,7 @@ func (m *Monitor) checkDataRate() {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
-	for ch := range m.channels {
+	for _, ch := range m.channels {
 		ch.checkDataRate()
 	}
 }
@@ -203,7 +213,7 @@ type monitoredChannel struct {
 	chid       datatransfer.ChannelID
 	cfg        *Config
 	unsub      datatransfer.Unsubscribe
-	onShutdown func(*monitoredChannel)
+	onShutdown func(datatransfer.ChannelID)
 	onDTEvent  datatransfer.Subscriber
 	shutdownLk sync.Mutex
 
@@ -216,7 +226,7 @@ func newMonitoredChannel(
 	mgr monitorAPI,
 	chid datatransfer.ChannelID,
 	cfg *Config,
-	onShutdown func(*monitoredChannel),
+	onShutdown func(datatransfer.ChannelID),
 	onDTEvent datatransfer.Subscriber,
 ) *monitoredChannel {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -253,7 +263,7 @@ func (mc *monitoredChannel) Shutdown() {
 	mc.unsub()
 
 	// Inform the Manager that this channel has shut down
-	go mc.onShutdown(mc)
+	go mc.onShutdown(mc.chid)
 }
 
 func (mc *monitoredChannel) start() {
@@ -275,7 +285,8 @@ func (mc *monitoredChannel) start() {
 		// Once the channel completes, shut down the monitor
 		state := channelState.Status()
 		if channels.IsChannelCleaningUp(state) || channels.IsChannelTerminated(state) {
-			log.Debugf("%s: stopping channel data-rate monitoring", mc.chid)
+			log.Debugf("%s: stopping channel data-rate monitoring (event: %s / state: %s)",
+				mc.chid, datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
 			go mc.Shutdown()
 			return
 		}
@@ -446,7 +457,7 @@ func newMonitoredPushChannel(
 	mgr monitorAPI,
 	chid datatransfer.ChannelID,
 	cfg *Config,
-	onShutdown func(*monitoredChannel),
+	onShutdown func(datatransfer.ChannelID),
 ) *monitoredPushChannel {
 	mpc := &monitoredPushChannel{
 		dataRatePoints: make(chan *dataRatePoint, cfg.ChecksPerInterval),
@@ -530,7 +541,7 @@ func newMonitoredPullChannel(
 	mgr monitorAPI,
 	chid datatransfer.ChannelID,
 	cfg *Config,
-	onShutdown func(*monitoredChannel),
+	onShutdown func(datatransfer.ChannelID),
 ) *monitoredPullChannel {
 	mpc := &monitoredPullChannel{
 		dataRatePoints: make(chan uint64, cfg.ChecksPerInterval),
