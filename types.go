@@ -136,13 +136,64 @@ type ChannelState interface {
 	// Queued returns the number of bytes read from the node and queued for sending
 	Queued() uint64
 
+	// Stages returns the timeline of events this data transfer has gone through,
+	// for observability purposes.
+	//
+	// It is unsafe for the caller to modify the return value, and changes
+	// may not be persisted. It should be treated as immutable.
 	Stages() *ChannelStages
 }
 
+// ChannelStages captures a timeline of the progress of a data transfer channel,
+// grouped by stages.
+//
+// EXPERIMENTAL; subject to change.
 type ChannelStages struct {
+	// Stages contains an entry for every stage the channel has gone through.
+	// Each stage then contains logs.
 	Stages []*ChannelStage
 }
 
+// ChannelStage traces the execution of a data transfer channel stage.
+//
+// EXPERIMENTAL; subject to change.
+type ChannelStage struct {
+	// Human-readable fields.
+	// TODO: these _will_ need to be converted to canonical representations, so
+	//  they are machine readable.
+	Name        string
+	Description string
+
+	// Timestamps.
+	// TODO: may be worth adding an exit timestamp. It _could_ be inferred from
+	//  the start of the next stage, or from the timestamp of the last log line
+	//  if this is a terminal stage. But that's non-determistic and it relies on
+	//  assumptions.
+	CreatedTime cbg.CborTime
+	UpdatedTime cbg.CborTime
+
+	// Logs contains a detailed timeline of events that occurred inside
+	// this stage.
+	Logs []*Log
+}
+
+// Log represents a point-in-time event that occurred inside a channel stage.
+//
+// EXPERIMENTAL; subject to change.
+type Log struct {
+	// Log is a human readable message.
+	//
+	// TODO: this _may_ need to be converted to a canonical data model so it
+	//  is machine-readable.
+	Log string
+
+	UpdatedTime cbg.CborTime
+}
+
+// AddLog adds a log to the specified stage, creating the stage if
+// it doesn't exist yet.
+//
+// EXPERIMENTAL; subject to change.
 func (cs *ChannelStages) AddLog(stage, msg string) {
 	if cs == nil {
 		return
@@ -160,10 +211,18 @@ func (cs *ChannelStages) AddLog(stage, msg string) {
 	st.Name = stage
 	st.UpdatedTime = now
 	if msg != "" && (len(st.Logs) == 0 || st.Logs[len(st.Logs)-1].Log != msg) {
+		// only add the log if it's not a duplicate.
 		st.Logs = append(st.Logs, &Log{msg, now})
 	}
 }
 
+// GetStage returns the ChannelStage object for a named stage, or nil if not found.
+//
+// TODO: the input should be a strongly-typed enum instead of a free-form string.
+// TODO: drop Get from GetStage to make this code more idiomatic. Return a
+//  second ok boolean to make it even more idiomatic.
+//
+// EXPERIMENTAL; subject to change.
 func (cs *ChannelStages) GetStage(stage string) *ChannelStage {
 	if cs == nil {
 		return nil
@@ -176,19 +235,6 @@ func (cs *ChannelStages) GetStage(stage string) *ChannelStage {
 	}
 
 	return nil
-}
-
-type ChannelStage struct {
-	Name        string
-	Description string
-	CreatedTime cbg.CborTime
-	UpdatedTime cbg.CborTime
-	Logs        []*Log
-}
-
-type Log struct {
-	Log         string
-	UpdatedTime cbg.CborTime
 }
 
 func curTime() cbg.CborTime {

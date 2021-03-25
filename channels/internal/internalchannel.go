@@ -61,9 +61,16 @@ type ChannelState struct {
 	Vouchers       []EncodedVoucher
 	VoucherResults []EncodedVoucherResult
 
+	// Stages traces the execution fo a data transfer.
+	//
+	// EXPERIMENTAL; subject to change.
 	Stages *datatransfer.ChannelStages
 }
 
+// AddLog takes an fmt string with arguments, and adds the formatted string to
+// the logs for the current deal stage.
+//
+// EXPERIMENTAL; subject to change.
 func (cs *ChannelState) AddLog(msg string, a ...interface{}) {
 	if len(a) > 0 {
 		msg = fmt.Sprintf(msg, a...)

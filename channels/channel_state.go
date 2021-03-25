@@ -50,6 +50,8 @@ type channelState struct {
 	voucherDecoder       DecoderByTypeFunc
 	channelCIDsReader    ChannelCIDsReader
 
+	// stages tracks the timeline of events related to a data transfer, for
+	// traceability purposes.
 	stages *datatransfer.ChannelStages
 }
 
@@ -173,8 +175,15 @@ func (c channelState) OtherPeer() peer.ID {
 	return c.sender
 }
 
+// Stages returns the current ChannelStages object, or an empty object.
+// It is unsafe for the caller to modify the return value, and changes may not
+// be persisted. It should be treated as immutable.
+//
+// EXPERIMENTAL; subject to change.
 func (c channelState) Stages() *datatransfer.ChannelStages {
 	if c.stages == nil {
+		// return an empty placeholder; it will be discarded because the caller
+		// is not supposed to mutate the value anyway.
 		return &datatransfer.ChannelStages{}
 	}
 
