@@ -60,7 +60,7 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.DataSentProgress).FromMany(transferringStates...).ToNoChange().
 		Action(func(chst *internal.ChannelState, delta uint64) error {
 			chst.Sent += delta
-			chst.AddLog("sent data")
+			chst.AddLog("sending data")
 			return nil
 		}),
 	fsm.Event(datatransfer.DataQueued).FromMany(transferringStates...).ToNoChange().Action(func(chst *internal.ChannelState) error {
@@ -70,7 +70,7 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.DataQueuedProgress).FromMany(transferringStates...).ToNoChange().
 		Action(func(chst *internal.ChannelState, delta uint64) error {
 			chst.Queued += delta
-			chst.AddLog("queued data")
+			chst.AddLog("")
 			return nil
 		}),
 	fsm.Event(datatransfer.Disconnected).FromAny().ToNoChange().Action(func(chst *internal.ChannelState, err error) error {
