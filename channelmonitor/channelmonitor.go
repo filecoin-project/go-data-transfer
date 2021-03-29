@@ -53,6 +53,8 @@ type Config struct {
 	// Max time to wait for the responder to send a Complete message once all
 	// data has been sent
 	CompleteTimeout time.Duration
+	// Max time to wait for a resume after the responder paused the channel - for pull channels
+	PullPauseTimeout time.Duration
 }
 
 func NewMonitor(mgr monitorAPI, cfg *Config) *Monitor {
@@ -90,6 +92,9 @@ func checkConfig(cfg *Config) {
 	}
 	if cfg.CompleteTimeout <= 0 {
 		panic(fmt.Sprintf(prefix+"CompleteTimeout is %s but must be > 0", cfg.CompleteTimeout))
+	}
+	if cfg.MonitorPullChannels && cfg.PullPauseTimeout <= 0 {
+		panic(fmt.Sprintf(prefix+"PullPauseTimeout is %s but must be > 0", cfg.PullPauseTimeout))
 	}
 }
 
@@ -563,6 +568,7 @@ type monitoredPullChannel struct {
 	statsLk        sync.RWMutex
 	received       uint64
 	dataRatePoints chan uint64
+	pausedAt       time.Time
 }
 
 func newMonitoredPullChannel(
@@ -584,6 +590,30 @@ func newMonitoredPullChannel(
 func (mc *monitoredPullChannel) checkDataRate() {
 	mc.statsLk.Lock()
 	defer mc.statsLk.Unlock()
+
+	// If the channel is currently paused
+	if !mc.pausedAt.IsZero() {
+		// Check if the channel has been paused for too long
+		pausedFor := time.Since(mc.pausedAt)
+		if pausedFor > mc.cfg.PullPauseTimeout {
+			log.Warn(fmt.Sprintf("%s: paused for too long, restarting channel: ", mc.chid) +
+				fmt.Sprintf("paused since %s: %s is longer than pause timeout %s",
+					mc.pausedAt, pausedFor, mc.cfg.PullPauseTimeout))
+
+			// Reset pause so we can continue checking the data rate
+			mc.pausedAt = time.Time{}
+
+			// Restart the channel
+			go mc.restartChannel()
+
+			return
+		}
+
+		// Channel is paused, so wait for a resume before checking the data rate
+		log.Debugf("%s: is paused since %s; waiting for resume to continue checking data rate",
+			mc.chid, mc.pausedAt)
+		return
+	}
 
 	// Before returning, add the current data rate stats to the queue
 	defer func() {
@@ -624,5 +654,17 @@ func (mc *monitoredPullChannel) onDTEvent(event datatransfer.Event, channelState
 
 		// Some data was received so reset the consecutive restart counter
 		mc.resetConsecutiveRestarts()
+
+	case datatransfer.PauseResponder:
+		// The sender has paused sending data
+		mc.statsLk.Lock()
+		mc.pausedAt = time.Now()
+		mc.statsLk.Unlock()
+
+	case datatransfer.ResumeResponder:
+		// The sender has resumed sending data
+		mc.statsLk.Lock()
+		mc.pausedAt = time.Time{}
+		mc.statsLk.Unlock()
 	}
 }
