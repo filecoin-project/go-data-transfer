@@ -5,6 +5,7 @@ import (
 	"context"
 	"math/rand"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -672,6 +673,7 @@ func TestAutoRestart(t *testing.T) {
 				RestartBackoff:         500 * time.Millisecond,
 				MaxConsecutiveRestarts: 5,
 				CompleteTimeout:        100 * time.Millisecond,
+				PullPauseTimeout:       100 * time.Millisecond,
 			})
 			initiator, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, initiatorGSTspt, restartConf)
 			require.NoError(t, err)
@@ -935,20 +937,30 @@ func (r *retrievalRevalidator) OnComplete(chid datatransfer.ChannelID) (bool, da
 func TestSimulatedRetrievalFlow(t *testing.T) {
 	ctx := context.Background()
 	testCases := map[string]struct {
-		unpauseRequestorDelay time.Duration
-		unpauseResponderDelay time.Duration
-		pausePoints           []uint64
+		unpauseResponderDelay      time.Duration
+		channelMonitorPauseTimeout time.Duration
+		restartExpected            bool
 	}{
-		"fast unseal, payment channel ready": {
-			pausePoints: []uint64{1000, 3000, 6000, 10000, 15000},
+		// Simulate a retrieval where the provider pauses the data transfer
+		// while the file is being unsealed, for just a moment
+		"fast unseal": {
+			unpauseResponderDelay:      0,
+			channelMonitorPauseTimeout: 500 * time.Millisecond,
+			restartExpected:            false,
 		},
-		"fast unseal, payment channel not ready": {
-			unpauseRequestorDelay: 100 * time.Millisecond,
-			pausePoints:           []uint64{1000, 3000, 6000, 10000, 15000},
+		// Simulate a retrieval where the provider pauses the data transfer
+		// while the file is being unsealed, for a relatively long time
+		"slow unseal": {
+			unpauseResponderDelay:      200 * time.Millisecond,
+			channelMonitorPauseTimeout: 500 * time.Millisecond,
+			restartExpected:            false,
 		},
-		"slow unseal, payment channel ready": {
-			unpauseResponderDelay: 200 * time.Millisecond,
-			pausePoints:           []uint64{1000, 3000, 6000, 10000, 15000},
+		// Simulate a retrieval where the provider pauses the data transfer
+		// while the file is being unsealed, for longer than the unpause timeout
+		"unseal slower than unpause timeout": {
+			unpauseResponderDelay:      200 * time.Millisecond,
+			channelMonitorPauseTimeout: 100 * time.Millisecond,
+			restartExpected:            true,
 		},
 	}
 	for testCase, config := range testCases {
@@ -956,61 +968,102 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 			defer cancel()
 
-			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
-			host1 := gsData.Host1 // initiator, data sender
+			// The provider will pause sending data and wait for a payment
+			// voucher at each of these points in the transfer
+			pausePoints := []uint64{1000, 3000, 6000, 10000, 15000}
 
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			provHost := gsData.Host1
+
+			// Load a file into the provider blockstore
 			root := gsData.LoadUnixFSFile(t, false)
 			rootCid := root.(cidlink.Link).Cid
-			tp1 := gsData.SetupGSTransportHost1()
-			tp2 := gsData.SetupGSTransportHost2()
 
-			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1)
+			tpProv := gsData.SetupGSTransportHost1()
+			tpClient := gsData.SetupGSTransportHost2()
+
+			// Set up restart config for client
+			clientRestartConf := ChannelRestartConfig(channelmonitor.Config{
+				MonitorPullChannels:    true,
+				AcceptTimeout:          100 * time.Millisecond,
+				Interval:               100 * time.Millisecond,
+				MinBytesTransferred:    1,
+				ChecksPerInterval:      2,
+				RestartBackoff:         500 * time.Millisecond,
+				MaxConsecutiveRestarts: 5,
+				CompleteTimeout:        100 * time.Millisecond,
+				PullPauseTimeout:       config.channelMonitorPauseTimeout,
+			})
+
+			// Setup data transfer for client and provider
+			dtClient, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, tpClient, clientRestartConf)
 			require.NoError(t, err)
-			testutil.StartAndWaitForReady(ctx, t, dt1)
-			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, tp2)
+			testutil.StartAndWaitForReady(ctx, t, dtClient)
+
+			dtProv, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tpProv)
 			require.NoError(t, err)
-			testutil.StartAndWaitForReady(ctx, t, dt2)
+			testutil.StartAndWaitForReady(ctx, t, dtProv)
+
+			// Setup requester event listener
 			var chid datatransfer.ChannelID
 			errChan := make(chan struct{}, 2)
+			restarted := int32(0)
 			clientPausePoint := 0
 			clientFinished := make(chan struct{}, 1)
 			finalVoucherResult := testutil.NewFakeDTType()
 			encodedFVR, err := encoding.Encode(finalVoucherResult)
 			require.NoError(t, err)
 			var clientSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-				if event.Code == datatransfer.Error {
-					errChan <- struct{}{}
-				}
+				// Watch for the final payment request from the provider, and
+				// respond with a payment voucher
 				if event.Code == datatransfer.NewVoucherResult {
 					lastVoucherResult := channelState.LastVoucherResult()
 					encodedLVR, err := encoding.Encode(lastVoucherResult)
 					require.NoError(t, err)
 					if bytes.Equal(encodedLVR, encodedFVR) {
-						_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+						_ = dtClient.SendVoucher(ctx, chid, testutil.NewFakeDTType())
 					}
 				}
 
+				// When data received exceeds a pause point, the provider will
+				// have paused the transfer while waiting for a payment voucher.
+				// So send a payment voucher from the client.
 				if event.Code == datatransfer.DataReceived &&
-					clientPausePoint < len(config.pausePoints) &&
-					channelState.Received() > config.pausePoints[clientPausePoint] {
-					_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+					clientPausePoint < len(pausePoints) &&
+					channelState.Received() > pausePoints[clientPausePoint] {
+					_ = dtClient.SendVoucher(ctx, chid, testutil.NewFakeDTType())
 					clientPausePoint++
+				}
+
+				if event.Code == datatransfer.Restart {
+					atomic.AddInt32(&restarted, 1)
+				}
+				if event.Code == datatransfer.Error {
+					errChan <- struct{}{}
 				}
 				if channelState.Status() == datatransfer.Completed {
 					clientFinished <- struct{}{}
 				}
 			}
-			dt2.SubscribeToEvents(clientSubscriber)
+			dtClient.SubscribeToEvents(clientSubscriber)
+
+			// Setup responder event listener
 			providerFinished := make(chan struct{}, 1)
 			providerAccepted := false
 			var providerSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				// The provider should immediately pause the channel when it
+				// receives an open channel request.
 				if event.Code == datatransfer.PauseResponder {
 					if !providerAccepted {
 						providerAccepted = true
+
+						// Simulate pausing while data is unsealed
 						timer := time.NewTimer(config.unpauseResponderDelay)
 						go func() {
 							<-timer.C
-							_ = dt1.ResumeDataTransferChannel(ctx, chid)
+
+							// Resume after unseal completes
+							_ = dtProv.ResumeDataTransferChannel(ctx, chid)
 						}()
 					}
 				}
@@ -1021,20 +1074,24 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					providerFinished <- struct{}{}
 				}
 			}
-			dt1.SubscribeToEvents(providerSubscriber)
+			dtProv.SubscribeToEvents(providerSubscriber)
 			voucher := testutil.FakeDTType{Data: "applesauce"}
 			sv := testutil.NewStubbedValidator()
 			sv.ExpectPausePull()
-			require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+			require.NoError(t, dtProv.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
+			// Set up a revalidator on the provider that will pause at
+			// configurable pause points
 			srv := &retrievalRevalidator{
-				testutil.NewStubbedRevalidator(), 0, 0, config.pausePoints, finalVoucherResult,
+				testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult,
 			}
 			srv.ExpectSuccessRevalidation()
-			require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
+			require.NoError(t, dtProv.RegisterRevalidator(testutil.NewFakeDTType(), srv))
 
-			require.NoError(t, dt2.RegisterVoucherResultType(testutil.NewFakeDTType()))
-			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
+			require.NoError(t, dtClient.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+			require.NoError(t, dtClient.RegisterVoucherResultType(testutil.NewFakeDTType()))
+
+			chid, err = dtClient.OpenPullDataChannel(ctx, provHost.ID(), &voucher, rootCid, gsData.AllSelector)
 			require.NoError(t, err)
 
 			for providerFinished != nil || clientFinished != nil {
@@ -1049,11 +1106,20 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					t.Fatal("received unexpected error")
 				}
 			}
+
+			// Check if there was a restart, and whether it was expected
+			if restarted == 0 && config.restartExpected {
+				require.Fail(t, "expected restart but did not restart")
+			}
+			if restarted > 0 && !config.restartExpected {
+				require.Fail(t, "expected no restart but there was a restart")
+			}
+
 			sv.VerifyExpectations(t)
 			srv.VerifyExpectations(t)
 			gsData.VerifyFileTransferred(t, root, true)
-			require.Equal(t, srv.providerPausePoint, len(config.pausePoints))
-			require.Equal(t, clientPausePoint, len(config.pausePoints))
+			require.Equal(t, srv.providerPausePoint, len(pausePoints))
+			require.Equal(t, clientPausePoint, len(pausePoints))
 		})
 	}
 }
