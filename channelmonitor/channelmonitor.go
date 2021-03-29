@@ -40,6 +40,9 @@ type Config struct {
 	MonitorPullChannels bool
 	// Max time to wait for other side to accept open channel request before attempting restart
 	AcceptTimeout time.Duration
+	// Indicates whether to monitor the data-rate on the channel, and restart
+	// if it falls too low
+	EnableDataRateMonitoring bool
 	// Interval between checks of transfer rate
 	Interval time.Duration
 	// Min bytes that must be sent / received in interval
@@ -102,6 +105,7 @@ func checkConfig(cfg *Config) {
 // push and pull monitor implementations
 type monitoredChan interface {
 	Shutdown() bool
+	enableDataRateMonitoring()
 	checkDataRate()
 }
 
@@ -150,6 +154,33 @@ func (m *Monitor) addChannel(chid datatransfer.ChannelID, isPush bool) monitored
 	}
 	m.channels[chid] = mpc
 	return mpc
+}
+
+// EnableDataRateMonitoring enables monitoring for a channel.
+// It is used in the situation where the client wants to create the channel
+// (and start monitoring for the Accept response from the responder), but
+// doesn't want to start monitoring the data rate until a later time.
+// For example when creating a retrieval deal, it may take some time to
+// set up a payment channel.
+// Note: The monitor must already be enabled in order to enable monitoring for
+// a particular channel.
+// This method is idempotent.
+func (m *Monitor) EnableDataRateMonitoring(chid datatransfer.ChannelID) error {
+	if !m.enabled() {
+		return xerrors.Errorf("could not enable data rate monitoring for channel %s: channel monitoring is disabled", chid)
+	}
+
+	m.lk.Lock()
+	defer m.lk.Unlock()
+
+	ch, ok := m.channels[chid]
+	if !ok {
+		return xerrors.Errorf("could not enable data rate monitoring for unknown channel %s", chid)
+	}
+
+	ch.enableDataRateMonitoring()
+
+	return nil
 }
 
 func (m *Monitor) Shutdown() {
@@ -479,10 +510,11 @@ type dataRatePoint struct {
 type monitoredPushChannel struct {
 	*monitoredChannel
 
-	statsLk        sync.RWMutex
-	queued         uint64
-	sent           uint64
-	dataRatePoints chan *dataRatePoint
+	statsLk               sync.RWMutex
+	rateMonitoringEnabled bool
+	queued                uint64
+	sent                  uint64
+	dataRatePoints        chan *dataRatePoint
 }
 
 func newMonitoredPushChannel(
@@ -493,10 +525,23 @@ func newMonitoredPushChannel(
 	onShutdown func(datatransfer.ChannelID),
 ) *monitoredPushChannel {
 	mpc := &monitoredPushChannel{
-		dataRatePoints: make(chan *dataRatePoint, cfg.ChecksPerInterval),
+		rateMonitoringEnabled: cfg.EnableDataRateMonitoring,
+		dataRatePoints:        make(chan *dataRatePoint, cfg.ChecksPerInterval),
 	}
 	mpc.monitoredChannel = newMonitoredChannel(parentCtx, mgr, chid, cfg, onShutdown, mpc.onDTEvent)
 	return mpc
+}
+
+func (mc *monitoredPushChannel) enableDataRateMonitoring() {
+	mc.statsLk.Lock()
+	defer mc.statsLk.Unlock()
+
+	if mc.rateMonitoringEnabled {
+		return
+	}
+
+	log.Info("%s: enabling push channel data rate monitoring", mc.chid)
+	mc.rateMonitoringEnabled = true
 }
 
 // check if the amount of data sent in the interval was too low, and if so
@@ -504,6 +549,10 @@ func newMonitoredPushChannel(
 func (mc *monitoredPushChannel) checkDataRate() {
 	mc.statsLk.Lock()
 	defer mc.statsLk.Unlock()
+
+	if !mc.rateMonitoringEnabled {
+		return
+	}
 
 	// Before returning, add the current data rate stats to the queue
 	defer func() {
@@ -565,10 +614,11 @@ func (mc *monitoredPushChannel) onDTEvent(event datatransfer.Event, channelState
 type monitoredPullChannel struct {
 	*monitoredChannel
 
-	statsLk        sync.RWMutex
-	received       uint64
-	dataRatePoints chan uint64
-	pausedAt       time.Time
+	statsLk               sync.RWMutex
+	rateMonitoringEnabled bool
+	received              uint64
+	dataRatePoints        chan uint64
+	pausedAt              time.Time
 }
 
 func newMonitoredPullChannel(
@@ -579,10 +629,23 @@ func newMonitoredPullChannel(
 	onShutdown func(datatransfer.ChannelID),
 ) *monitoredPullChannel {
 	mpc := &monitoredPullChannel{
-		dataRatePoints: make(chan uint64, cfg.ChecksPerInterval),
+		rateMonitoringEnabled: cfg.EnableDataRateMonitoring,
+		dataRatePoints:        make(chan uint64, cfg.ChecksPerInterval),
 	}
 	mpc.monitoredChannel = newMonitoredChannel(parentCtx, mgr, chid, cfg, onShutdown, mpc.onDTEvent)
 	return mpc
+}
+
+func (mc *monitoredPullChannel) enableDataRateMonitoring() {
+	mc.statsLk.Lock()
+	defer mc.statsLk.Unlock()
+
+	if mc.rateMonitoringEnabled {
+		return
+	}
+
+	log.Info("%s: enabling pull channel data rate monitoring", mc.chid)
+	mc.rateMonitoringEnabled = true
 }
 
 // check if the amount of data received in the interval was too low, and if so
@@ -590,6 +653,10 @@ func newMonitoredPullChannel(
 func (mc *monitoredPullChannel) checkDataRate() {
 	mc.statsLk.Lock()
 	defer mc.statsLk.Unlock()
+
+	if !mc.rateMonitoringEnabled {
+		return
+	}
 
 	// If the channel is currently paused
 	if !mc.pausedAt.IsZero() {

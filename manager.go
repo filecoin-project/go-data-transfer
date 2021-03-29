@@ -104,6 +104,15 @@ type Manager interface {
 	// transfer parts of the piece that match the selector
 	OpenPullDataChannel(ctx context.Context, to peer.ID, voucher Voucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
 
+	// EnableDataRateMonitoring enables data-rate monitoring for a channel.
+	// It is used in the situation where the client wants to create the channel
+	// (and start monitoring for the Accept response from the responder), but
+	// doesn't want to start monitoring the data rate until a later time.
+	// For example when creating a retrieval deal, it may take some time to
+	// set up a payment channel. So the client creates a data-transfer channel,
+	// then creates a payment channel, then enables data-rate monitoring.
+	EnableDataRateMonitoring(chid ChannelID) error
+
 	// send an intermediate voucher as needed when the receiver sends a request for revalidation
 	SendVoucher(ctx context.Context, chid ChannelID, voucher Voucher) error
 

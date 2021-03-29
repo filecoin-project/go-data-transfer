@@ -259,6 +259,10 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 	return chid, nil
 }
 
+func (m *manager) EnableDataRateMonitoring(chid datatransfer.ChannelID) error {
+	return m.channelMonitor.EnableDataRateMonitoring(chid)
+}
+
 // SendVoucher sends an intermediate voucher as needed when the receiver sends a request for revalidation
 func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.ChannelID, voucher datatransfer.Voucher) error {
 	chst, err := m.channels.GetByID(ctx, channelID)

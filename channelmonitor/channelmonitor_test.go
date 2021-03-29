@@ -59,14 +59,15 @@ func TestPushChannelMonitorAutoRestart(t *testing.T) {
 			mockAPI := newMockMonitorAPI(ch, tc.errOnRestart)
 
 			m := NewMonitor(mockAPI, &Config{
-				MonitorPushChannels:    true,
-				AcceptTimeout:          time.Hour,
-				Interval:               10 * time.Millisecond,
-				ChecksPerInterval:      10,
-				MinBytesTransferred:    1,
-				MaxConsecutiveRestarts: 3,
-				CompleteTimeout:        time.Hour,
-				PullPauseTimeout:       time.Hour,
+				MonitorPushChannels:      true,
+				AcceptTimeout:            time.Hour,
+				EnableDataRateMonitoring: true,
+				Interval:                 10 * time.Millisecond,
+				ChecksPerInterval:        10,
+				MinBytesTransferred:      1,
+				MaxConsecutiveRestarts:   3,
+				CompleteTimeout:          time.Hour,
+				PullPauseTimeout:         time.Hour,
 			})
 			m.Start()
 			mch := m.AddPushChannel(ch1).(*monitoredPushChannel)
@@ -146,14 +147,15 @@ func TestPullChannelMonitorAutoRestart(t *testing.T) {
 			mockAPI := newMockMonitorAPI(ch, tc.errOnRestart)
 
 			m := NewMonitor(mockAPI, &Config{
-				MonitorPullChannels:    true,
-				AcceptTimeout:          time.Hour,
-				Interval:               10 * time.Millisecond,
-				ChecksPerInterval:      10,
-				MinBytesTransferred:    1,
-				MaxConsecutiveRestarts: 3,
-				CompleteTimeout:        time.Hour,
-				PullPauseTimeout:       time.Hour,
+				MonitorPullChannels:      true,
+				AcceptTimeout:            time.Hour,
+				EnableDataRateMonitoring: true,
+				Interval:                 10 * time.Millisecond,
+				ChecksPerInterval:        10,
+				MinBytesTransferred:      1,
+				MaxConsecutiveRestarts:   3,
+				CompleteTimeout:          time.Hour,
+				PullPauseTimeout:         time.Hour,
 			})
 			m.Start()
 			mch := m.AddPullChannel(ch1).(*monitoredPullChannel)
@@ -310,14 +312,15 @@ func TestPushChannelMonitorDataRate(t *testing.T) {
 
 			checksPerInterval := uint32(1)
 			m := NewMonitor(mockAPI, &Config{
-				MonitorPushChannels:    true,
-				AcceptTimeout:          time.Hour,
-				Interval:               time.Hour,
-				ChecksPerInterval:      checksPerInterval,
-				MinBytesTransferred:    tc.minBytesSent,
-				MaxConsecutiveRestarts: 3,
-				CompleteTimeout:        time.Hour,
-				PullPauseTimeout:       time.Hour,
+				MonitorPushChannels:      true,
+				AcceptTimeout:            time.Hour,
+				EnableDataRateMonitoring: true,
+				Interval:                 time.Hour,
+				ChecksPerInterval:        checksPerInterval,
+				MinBytesTransferred:      tc.minBytesSent,
+				MaxConsecutiveRestarts:   3,
+				CompleteTimeout:          time.Hour,
+				PullPauseTimeout:         time.Hour,
 			})
 
 			// Note: Don't start monitor, we'll call checkDataRate() manually
@@ -380,14 +383,15 @@ func TestPullChannelMonitorDataRate(t *testing.T) {
 
 			checksPerInterval := uint32(1)
 			m := NewMonitor(mockAPI, &Config{
-				MonitorPullChannels:    true,
-				AcceptTimeout:          time.Hour,
-				Interval:               time.Hour,
-				ChecksPerInterval:      checksPerInterval,
-				MinBytesTransferred:    tc.minBytesTransferred,
-				MaxConsecutiveRestarts: 3,
-				CompleteTimeout:        time.Hour,
-				PullPauseTimeout:       time.Hour,
+				MonitorPullChannels:      true,
+				AcceptTimeout:            time.Hour,
+				EnableDataRateMonitoring: true,
+				Interval:                 time.Hour,
+				ChecksPerInterval:        checksPerInterval,
+				MinBytesTransferred:      tc.minBytesTransferred,
+				MaxConsecutiveRestarts:   3,
+				CompleteTimeout:          time.Hour,
+				PullPauseTimeout:         time.Hour,
 			})
 
 			// Note: Don't start monitor, we'll call checkDataRate() manually
@@ -418,33 +422,79 @@ func TestPullChannelMonitorDataRate(t *testing.T) {
 	}
 }
 
+func TestChannelMonitorDataRateEnabled(t *testing.T) {
+	runTest := func(name string, isPush bool) {
+		t.Run(name, func(t *testing.T) {
+			ch := &mockChannelState{chid: ch1}
+			mockAPI := newMockMonitorAPI(ch, false)
+
+			m := NewMonitor(mockAPI, &Config{
+				MonitorPushChannels:      isPush,
+				MonitorPullChannels:      !isPush,
+				AcceptTimeout:            time.Hour,
+				EnableDataRateMonitoring: false,
+				Interval:                 time.Hour,
+				ChecksPerInterval:        1,
+				MinBytesTransferred:      1,
+				MaxConsecutiveRestarts:   3,
+				CompleteTimeout:          time.Hour,
+				PullPauseTimeout:         time.Hour,
+			})
+
+			// Note: Don't start monitor, we'll call checkDataRate() manually
+
+			if isPush {
+				m.AddPushChannel(ch1)
+
+				// Queue up some unsent data: queued (10) - sent (5) = 5
+				mockAPI.dataQueued(10)
+				mockAPI.dataSent(5)
+			} else {
+				m.AddPullChannel(ch1)
+
+				// Receive some data
+				mockAPI.dataReceived(5)
+			}
+
+			// Data rate checks should be ignored because data rate monitoring is
+			// disabled
+			m.checkDataRate()
+			m.checkDataRate()
+
+			mockAPI.expectNotToRestart(t)
+
+			// Enable data rate monitoring
+			m.EnableDataRateMonitoring(ch1)
+
+			// Check the data rate once to create an initial data point
+			m.checkDataRate()
+			// Check a second time to compare against the initial data point
+			m.checkDataRate()
+
+			// Expect that the channel will be restarted by the monitor
+			mockAPI.expectRestart(t)
+		})
+	}
+
+	runTest("push", true)
+	runTest("pull", false)
+}
+
 func TestPullChannelMonitorPausing(t *testing.T) {
 	ch := &mockChannelState{chid: ch1}
 	mockAPI := newMockMonitorAPI(ch, false)
 
-	checkIfRestarted := func(expectRestart bool) {
-		select {
-		case <-time.After(5 * time.Millisecond):
-			if expectRestart {
-				require.Fail(t, "failed to restart channel")
-			}
-		case <-mockAPI.restarts:
-			if !expectRestart {
-				require.Fail(t, "expected no channel restart")
-			}
-		}
-	}
-
 	minBytesTransferred := uint64(10)
 	m := NewMonitor(mockAPI, &Config{
-		MonitorPullChannels:    true,
-		AcceptTimeout:          time.Hour,
-		Interval:               time.Hour,
-		ChecksPerInterval:      1,
-		MinBytesTransferred:    minBytesTransferred,
-		MaxConsecutiveRestarts: 3,
-		CompleteTimeout:        time.Hour,
-		PullPauseTimeout:       time.Hour,
+		MonitorPullChannels:      true,
+		AcceptTimeout:            time.Hour,
+		EnableDataRateMonitoring: true,
+		Interval:                 time.Hour,
+		ChecksPerInterval:        1,
+		MinBytesTransferred:      minBytesTransferred,
+		MaxConsecutiveRestarts:   3,
+		CompleteTimeout:          time.Hour,
+		PullPauseTimeout:         time.Hour,
 	})
 
 	// Note: Don't start monitor, we'll call checkDataRate() manually
@@ -466,7 +516,7 @@ func TestPullChannelMonitorPausing(t *testing.T) {
 	m.checkDataRate()
 
 	// Should not restart
-	checkIfRestarted(false)
+	mockAPI.expectNotToRestart(t)
 
 	// Resume the responder
 	mockAPI.resumeResponder()
@@ -477,7 +527,7 @@ func TestPullChannelMonitorPausing(t *testing.T) {
 
 	// Should not restart because received data exceeds minimum required
 	m.checkDataRate()
-	checkIfRestarted(false)
+	mockAPI.expectNotToRestart(t)
 
 	// Pause responder again
 	mockAPI.pauseResponder()
@@ -491,37 +541,25 @@ func TestPullChannelMonitorPausing(t *testing.T) {
 	// Not enough data received, should restart
 	mockAPI.dataReceived(lastRcvd + minBytesTransferred/2)
 	m.checkDataRate()
-	checkIfRestarted(true)
+	mockAPI.expectRestart(t)
 }
 
 func TestPullChannelMonitorPauseTimeout(t *testing.T) {
 	ch := &mockChannelState{chid: ch1}
 	mockAPI := newMockMonitorAPI(ch, false)
 
-	checkIfRestarted := func(expectRestart bool) {
-		select {
-		case <-time.After(5 * time.Millisecond):
-			if expectRestart {
-				require.Fail(t, "failed to restart channel")
-			}
-		case <-mockAPI.restarts:
-			if !expectRestart {
-				require.Fail(t, "expected no channel restart")
-			}
-		}
-	}
-
 	minBytesTransferred := uint64(10)
 	pullPauseTimeout := 50 * time.Millisecond
 	m := NewMonitor(mockAPI, &Config{
-		MonitorPullChannels:    true,
-		AcceptTimeout:          time.Hour,
-		Interval:               time.Hour,
-		ChecksPerInterval:      1,
-		MinBytesTransferred:    minBytesTransferred,
-		MaxConsecutiveRestarts: 3,
-		CompleteTimeout:        time.Hour,
-		PullPauseTimeout:       pullPauseTimeout,
+		MonitorPullChannels:      true,
+		AcceptTimeout:            time.Hour,
+		EnableDataRateMonitoring: true,
+		Interval:                 time.Hour,
+		ChecksPerInterval:        1,
+		MinBytesTransferred:      minBytesTransferred,
+		MaxConsecutiveRestarts:   3,
+		CompleteTimeout:          time.Hour,
+		PullPauseTimeout:         pullPauseTimeout,
 	})
 
 	// Note: Don't start monitor, we'll call checkDataRate() manually
@@ -541,14 +579,14 @@ func TestPullChannelMonitorPauseTimeout(t *testing.T) {
 	m.checkDataRate() // Should be ignored because responder is paused
 
 	// Should not restart
-	checkIfRestarted(false)
+	mockAPI.expectNotToRestart(t)
 
 	// Pause timeout elapses
 	time.Sleep(pullPauseTimeout * 2)
 
 	// Should detect timeout has elapsed and restart
 	m.checkDataRate()
-	checkIfRestarted(true)
+	mockAPI.expectRestart(t)
 }
 
 func TestChannelMonitorMaxConsecutiveRestarts(t *testing.T) {
@@ -559,15 +597,16 @@ func TestChannelMonitorMaxConsecutiveRestarts(t *testing.T) {
 
 			maxConsecutiveRestarts := 3
 			m := NewMonitor(mockAPI, &Config{
-				MonitorPushChannels:    isPush,
-				MonitorPullChannels:    !isPush,
-				AcceptTimeout:          time.Hour,
-				Interval:               time.Hour,
-				ChecksPerInterval:      1,
-				MinBytesTransferred:    2,
-				MaxConsecutiveRestarts: uint32(maxConsecutiveRestarts),
-				CompleteTimeout:        time.Hour,
-				PullPauseTimeout:       time.Hour,
+				MonitorPushChannels:      isPush,
+				MonitorPullChannels:      !isPush,
+				AcceptTimeout:            time.Hour,
+				EnableDataRateMonitoring: true,
+				Interval:                 time.Hour,
+				ChecksPerInterval:        1,
+				MinBytesTransferred:      2,
+				MaxConsecutiveRestarts:   uint32(maxConsecutiveRestarts),
+				CompleteTimeout:          time.Hour,
+				PullPauseTimeout:         time.Hour,
 			})
 
 			// Note: Don't start monitor, we'll call checkDataRate() manually
@@ -595,8 +634,7 @@ func TestChannelMonitorMaxConsecutiveRestarts(t *testing.T) {
 				for i := 0; i < maxConsecutiveRestarts; i++ {
 					m.checkDataRate()
 
-					err := mockAPI.awaitRestart()
-					require.NoError(t, err)
+					mockAPI.expectRestart(t)
 				}
 			}
 			triggerMaxRestarts()
@@ -615,8 +653,7 @@ func TestChannelMonitorMaxConsecutiveRestarts(t *testing.T) {
 			// attempt.
 			// Instead the channel should be closed and the monitor shut down.
 			m.checkDataRate()
-			err := mockAPI.awaitRestart()
-			require.Error(t, err) // require error because expecting no restart
+			mockAPI.expectNotToRestart(t)
 			verifyChannelShutdown(t, chanCtx)
 		})
 	}
@@ -680,15 +717,16 @@ func TestChannelMonitorTimeouts(t *testing.T) {
 				acceptTimeout := 10 * time.Millisecond
 				completeTimeout := 10 * time.Millisecond
 				m := NewMonitor(mockAPI, &Config{
-					MonitorPushChannels:    isPush,
-					MonitorPullChannels:    !isPush,
-					AcceptTimeout:          acceptTimeout,
-					Interval:               time.Hour,
-					ChecksPerInterval:      1,
-					MinBytesTransferred:    1,
-					MaxConsecutiveRestarts: 1,
-					CompleteTimeout:        completeTimeout,
-					PullPauseTimeout:       time.Hour,
+					MonitorPushChannels:      isPush,
+					MonitorPullChannels:      !isPush,
+					AcceptTimeout:            acceptTimeout,
+					EnableDataRateMonitoring: true,
+					Interval:                 time.Hour,
+					ChecksPerInterval:        1,
+					MinBytesTransferred:      1,
+					MaxConsecutiveRestarts:   1,
+					CompleteTimeout:          completeTimeout,
+					PullPauseTimeout:         time.Hour,
 				})
 				m.Start()
 
@@ -814,6 +852,19 @@ func (m *mockMonitorAPI) awaitRestart() error {
 		return xerrors.Errorf("failed to restart channel")
 	case <-m.restarts:
 		return nil
+	}
+}
+
+func (m *mockMonitorAPI) expectRestart(t *testing.T) {
+	err := m.awaitRestart()
+	require.NoError(t, err)
+}
+
+func (m *mockMonitorAPI) expectNotToRestart(t *testing.T) {
+	select {
+	case <-time.After(10 * time.Millisecond):
+	case <-m.restarts:
+		require.Fail(t, "expected no channel restart")
 	}
 }
 
