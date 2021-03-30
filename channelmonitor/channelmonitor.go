@@ -161,7 +161,8 @@ func (m *Monitor) addChannel(chid datatransfer.ChannelID, isPush bool) monitored
 // (and start monitoring for the Accept response from the responder), but
 // doesn't want to start monitoring the data rate until a later time.
 // For example when creating a retrieval deal, it may take some time to
-// set up a payment channel.
+// set up a payment channel. The client opens a data-transfer channel,
+// then opens a payment channel, then starts monitoring the data rate.
 // Note: The monitor must already be enabled in order to enable monitoring for
 // a particular channel.
 // This method is idempotent.

@@ -664,16 +664,17 @@ func TestAutoRestart(t *testing.T) {
 
 			// Set up
 			restartConf := ChannelRestartConfig(channelmonitor.Config{
-				MonitorPushChannels:    tc.isPush,
-				MonitorPullChannels:    !tc.isPush,
-				AcceptTimeout:          100 * time.Millisecond,
-				Interval:               100 * time.Millisecond,
-				MinBytesTransferred:    1,
-				ChecksPerInterval:      10,
-				RestartBackoff:         500 * time.Millisecond,
-				MaxConsecutiveRestarts: 5,
-				CompleteTimeout:        100 * time.Millisecond,
-				PullPauseTimeout:       100 * time.Millisecond,
+				MonitorPushChannels:      tc.isPush,
+				MonitorPullChannels:      !tc.isPush,
+				AcceptTimeout:            100 * time.Millisecond,
+				EnableDataRateMonitoring: true,
+				Interval:                 100 * time.Millisecond,
+				MinBytesTransferred:      1,
+				ChecksPerInterval:        10,
+				RestartBackoff:           500 * time.Millisecond,
+				MaxConsecutiveRestarts:   5,
+				CompleteTimeout:          100 * time.Millisecond,
+				PullPauseTimeout:         100 * time.Millisecond,
 			})
 			initiator, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, initiatorGSTspt, restartConf)
 			require.NoError(t, err)
@@ -937,30 +938,67 @@ func (r *retrievalRevalidator) OnComplete(chid datatransfer.ChannelID) (bool, da
 func TestSimulatedRetrievalFlow(t *testing.T) {
 	ctx := context.Background()
 	testCases := map[string]struct {
-		unpauseResponderDelay      time.Duration
+		provUnsealDelay            time.Duration
+		clientPaychCreateDelay     time.Duration
 		channelMonitorPauseTimeout time.Duration
+		monitorDataRateFromStart   bool
 		restartExpected            bool
 	}{
-		// Simulate a retrieval where the provider pauses the data transfer
-		// while the file is being unsealed, for just a moment
+		// Simulate a retrieval where
+		// - the provider unseal delay is minimal
+		// - the client payment channel already has sufficient funds
 		"fast unseal": {
-			unpauseResponderDelay:      0,
+			provUnsealDelay:            0,
+			clientPaychCreateDelay:     0,
 			channelMonitorPauseTimeout: 500 * time.Millisecond,
+			monitorDataRateFromStart:   true,
 			restartExpected:            false,
 		},
-		// Simulate a retrieval where the provider pauses the data transfer
-		// while the file is being unsealed, for a relatively long time
+		// Simulate a retrieval where
+		// - the provider unseal delay is relatively long but does not exceed
+		//   the pause timeout
+		// - the client payment channel already has sufficient funds
 		"slow unseal": {
-			unpauseResponderDelay:      200 * time.Millisecond,
+			provUnsealDelay:            200 * time.Millisecond,
+			clientPaychCreateDelay:     0,
 			channelMonitorPauseTimeout: 500 * time.Millisecond,
+			monitorDataRateFromStart:   true,
 			restartExpected:            false,
 		},
-		// Simulate a retrieval where the provider pauses the data transfer
-		// while the file is being unsealed, for longer than the unpause timeout
+		// Simulate a retrieval where
+		// - the provider unseal delay is longer than the unpause timeout
+		// - the client payment channel already has sufficient funds
+		// There should be a restart because of the excessive unseal delay.
 		"unseal slower than unpause timeout": {
-			unpauseResponderDelay:      200 * time.Millisecond,
+			provUnsealDelay:            200 * time.Millisecond,
+			clientPaychCreateDelay:     0,
 			channelMonitorPauseTimeout: 100 * time.Millisecond,
+			monitorDataRateFromStart:   true,
 			restartExpected:            true,
+		},
+		// Simulate a retrieval where
+		// - the provider unseal delay is long but does not exceed the pause timeout
+		// - the client payment channel creation delay is longer than the pause timeout
+		// There should not be a restart because the client doesn't start monitoring
+		// the data rate until after the payment channel creation has completed.
+		"slow unseal, slow payment channel create": {
+			provUnsealDelay:            50 * time.Millisecond,
+			clientPaychCreateDelay:     150 * time.Millisecond,
+			channelMonitorPauseTimeout: 100 * time.Millisecond,
+			monitorDataRateFromStart:   false,
+			restartExpected:            false,
+		},
+		// Simulate a retrieval where
+		// - the provider unseal delay is longer than the pause timeout
+		// - the client payment channel creation delay is longer than the pause timeout
+		// There should not be a restart because the client doesn't start monitoring
+		// the data rate until after the payment channel creation has completed.
+		"unseal slower than unpause timeout, slow payment channel create": {
+			provUnsealDelay:            200 * time.Millisecond,
+			clientPaychCreateDelay:     150 * time.Millisecond,
+			channelMonitorPauseTimeout: 100 * time.Millisecond,
+			monitorDataRateFromStart:   false,
+			restartExpected:            false,
 		},
 	}
 	for testCase, config := range testCases {
@@ -984,15 +1022,16 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 
 			// Set up restart config for client
 			clientRestartConf := ChannelRestartConfig(channelmonitor.Config{
-				MonitorPullChannels:    true,
-				AcceptTimeout:          100 * time.Millisecond,
-				Interval:               100 * time.Millisecond,
-				MinBytesTransferred:    1,
-				ChecksPerInterval:      2,
-				RestartBackoff:         500 * time.Millisecond,
-				MaxConsecutiveRestarts: 5,
-				CompleteTimeout:        100 * time.Millisecond,
-				PullPauseTimeout:       config.channelMonitorPauseTimeout,
+				MonitorPullChannels:      true,
+				AcceptTimeout:            100 * time.Millisecond,
+				EnableDataRateMonitoring: config.monitorDataRateFromStart,
+				Interval:                 100 * time.Millisecond,
+				MinBytesTransferred:      1,
+				ChecksPerInterval:        2,
+				RestartBackoff:           500 * time.Millisecond,
+				MaxConsecutiveRestarts:   5,
+				CompleteTimeout:          100 * time.Millisecond,
+				PullPauseTimeout:         config.channelMonitorPauseTimeout,
 			})
 
 			// Setup data transfer for client and provider
@@ -1031,7 +1070,23 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 				if event.Code == datatransfer.DataReceived &&
 					clientPausePoint < len(pausePoints) &&
 					channelState.Received() > pausePoints[clientPausePoint] {
-					_ = dtClient.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+
+					// If this is the first pause point
+					if clientPausePoint == 0 {
+						go func() {
+							// Simulate waiting for a payment channel to be created
+							time.Sleep(config.clientPaychCreateDelay)
+							// Enable data rate monitoring now that the payment
+							// channel has been created
+							err := dtClient.EnableDataRateMonitoring(chid)
+							require.NoError(t, err)
+							// Send the voucher
+							_ = dtClient.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+						}()
+					} else {
+						// Otherwise just send the voucher immediately
+						_ = dtClient.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+					}
 					clientPausePoint++
 				}
 
@@ -1058,7 +1113,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 						providerAccepted = true
 
 						// Simulate pausing while data is unsealed
-						timer := time.NewTimer(config.unpauseResponderDelay)
+						timer := time.NewTimer(config.provUnsealDelay)
 						go func() {
 							<-timer.C
 
