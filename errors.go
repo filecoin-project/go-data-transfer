@@ -25,6 +25,10 @@ const ErrPause = errorType("pause channel")
 // use to resume the channel
 const ErrResume = errorType("resume channel")
 
+// ErrNoOp is a special error that the RequestReceived / ResponseReceived hooks can
+// use to neither resume nor pause the channel but maintain the status quo.
+const ErrNoOp = errorType("no-op")
+
 // ErrRejected indicates a request was not accepted
 const ErrRejected = errorType("response rejected")
 
