@@ -443,7 +443,7 @@ func (m *manager) processRevalidationResult(chid datatransfer.ChannelID, result 
 		}
 	}
 
-	if resultErr == datatransfer.ErrNoOp {
+	if resultErr == nil {
 		return vresMessage, nil
 	}
 
@@ -455,7 +455,7 @@ func (m *manager) processRevalidationResult(chid datatransfer.ChannelID, result 
 		return vresMessage, datatransfer.ErrPause
 	}
 
-	if resultErr == nil {
+	if resultErr == datatransfer.ErrResume {
 		err = m.resume(chid)
 		if err != nil {
 			return nil, err
