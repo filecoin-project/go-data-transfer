@@ -145,8 +145,7 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, uint64(0), state.Sent())
 		require.Empty(t, state.ReceivedCids())
 
-		var isNew bool
-		isNew, err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[0], 50)
+		isNew, err := channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[0], 50)
 		require.NoError(t, err)
 		_ = checkEvent(ctx, t, received, datatransfer.DataReceivedProgress)
 		require.True(t, isNew)
@@ -167,9 +166,11 @@ func TestChannels(t *testing.T) {
 		// errors if channel does not exist
 		isNew, err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200)
 		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
+		require.False(t, isNew)
 		isNew, err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200)
 		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
 		require.Equal(t, []cid.Cid{cids[0]}, state.ReceivedCids())
+		require.False(t, isNew)
 
 		isNew, err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 50)
 		require.NoError(t, err)

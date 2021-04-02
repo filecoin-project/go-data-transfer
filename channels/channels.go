@@ -363,8 +363,10 @@ func (c *Channels) removeSeenCIDCaches(chid datatransfer.ChannelID) error {
 // fireProgressEvent fires
 // - an event for queuing / sending / receiving blocks
 // - a corresponding "progress" event if the block has not been seen before
-// For example if a block is resent, the method will fire DataSent but not DataSentProgress.
-// Returns true if a progress event was fired.
+// For example, if a block is being sent for the first time, the method will
+// fire both DataSent AND DataSentProgress.
+// If a block is resent, the method will fire DataSent but not DataSentProgress.
+// Returns true if the block is new (both the event and a progress event were fired).
 func (c *Channels) fireProgressEvent(chid datatransfer.ChannelID, evt datatransfer.EventCode, progressEvt datatransfer.EventCode, k cid.Cid, delta uint64) (bool, error) {
 	if err := c.checkChannelExists(chid, evt); err != nil {
 		return false, err
