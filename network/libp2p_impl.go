@@ -187,6 +187,18 @@ func (dtnet *libp2pDataTransferNetwork) ConnectTo(ctx context.Context, p peer.ID
 	return dtnet.host.Connect(ctx, peer.AddrInfo{ID: p})
 }
 
+// OpenStreamTo establishes a connection to the given peer, retrying if
+// necessary, and opens a stream on the data-transfer protocol to verify
+// the peer will accept messages on the protocol
+func (dtnet *libp2pDataTransferNetwork) OpenStreamTo(ctx context.Context, p peer.ID) error {
+	s, err := dtnet.openStream(ctx, p, dtnet.dtProtocols...)
+	if err != nil {
+		return err
+	}
+
+	return s.Close()
+}
+
 // handleNewStream receives a new stream from the network.
 func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 	defer s.Close() // nolint: errcheck,gosec
