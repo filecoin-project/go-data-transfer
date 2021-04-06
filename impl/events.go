@@ -414,17 +414,15 @@ func (m *manager) validateVoucher(sender peer.ID,
 	if err != nil {
 		return nil, nil, err
 	}
-	var validatorFunc func(peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.VoucherResult, error)
 	processor, _ := m.validatedTypes.Processor(vouch.Type())
 	validator := processor.(datatransfer.RequestValidator)
 	if isPull {
-		validatorFunc = validator.ValidatePull
+		result, err := validator.ValidatePull(incoming.IsRestart(), sender, vouch, baseCid, stor)
+		return vouch, result, err
 	} else {
-		validatorFunc = validator.ValidatePush
+		result, err := validator.ValidatePush(sender, vouch, baseCid, stor)
+		return vouch, result, err
 	}
-
-	result, err := validatorFunc(sender, vouch, baseCid, stor)
-	return vouch, result, err
 }
 
 // revalidateVoucher converts a voucher in an incoming message to its appropriate

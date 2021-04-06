@@ -19,6 +19,7 @@ type RequestValidator interface {
 		selector ipld.Node) (VoucherResult, error)
 	// ValidatePull validates a pull request received from the peer that will receive data
 	ValidatePull(
+		isRestart bool,
 		receiver peer.ID,
 		voucher Voucher,
 		baseCid cid.Cid,

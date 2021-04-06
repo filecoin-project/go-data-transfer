@@ -30,6 +30,7 @@ func (sv *StubbedValidator) ValidatePush(
 
 // ValidatePull returns a stubbed result for a pull validation
 func (sv *StubbedValidator) ValidatePull(
+	_ bool,
 	receiver peer.ID,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
