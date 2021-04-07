@@ -3,6 +3,7 @@ package impl
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -180,6 +181,7 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 			log.Infof("channel %s: received rejected response, erroring out channel", chid)
 			return m.channels.Error(chid, datatransfer.ErrRejected)
 		}
+		fmt.Println("IsNew", response.IsNew())
 		if response.IsNew() {
 			log.Infof("channel %s: received new response, accepting channel", chid)
 			err := m.channels.Accept(chid)

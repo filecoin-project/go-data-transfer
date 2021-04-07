@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	blocks "github.com/ipfs/go-block-format"
@@ -22,11 +23,15 @@ import (
 
 var blockGenerator = blocksutil.NewBlockGenerator()
 
+var mu sync.Mutex
+
 //var prioritySeq int
 var seedSeq int64
 
 // RandomBytes returns a byte array of the given size with random values.
 func RandomBytes(n int64) []byte {
+	mu.Lock()
+	defer mu.Unlock()
 	data := new(bytes.Buffer)
 	random.WritePseudoRandomBytes(n, data, seedSeq) // nolint: gosec,errcheck
 	seedSeq++

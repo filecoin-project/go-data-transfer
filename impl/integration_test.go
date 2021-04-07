@@ -98,7 +98,7 @@ func TestRoundTrip(t *testing.T) {
 				ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 				defer cancel()
 
-				gsData := testutil.NewGraphsyncTestingData(ctx, t, ps.host1Protocols, ps.host2Protocols)
+				gsData := testutil.NewGraphsyncTestingData(ctx, t, ps.host1Protocols, ps.host2Protocols, nil)
 				host1 := gsData.Host1 // initiator, data sender
 				host2 := gsData.Host2 // data recipient
 
@@ -253,7 +253,7 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 
-			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 			host1 := gsData.Host1 // initiator, data sender
 			host2 := gsData.Host2 // data recipient
 
@@ -378,7 +378,7 @@ func TestManyReceiversAtOnce(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 
-			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 			host1 := gsData.Host1 // initiator, data sender
 
 			tp1 := gsData.SetupGSTransportHost1()
@@ -714,7 +714,7 @@ func TestAutoRestart(t *testing.T) {
 
 			// The retry config for the network layer: make 5 attempts, backing off by 1s each time
 			netRetry := network.RetryParameters(time.Second, time.Second, 5, 1)
-			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 			gsData.DtNet1 = network.NewFromLibp2pHost(gsData.Host1, netRetry)
 			initiatorHost := gsData.Host1 // initiator, data sender
 			responderHost := gsData.Host2 // data recipient
@@ -889,7 +889,7 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 
-			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 			host1 := gsData.Host1 // initiator, data sender
 			host2 := gsData.Host2
 
@@ -1029,7 +1029,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 			defer cancel()
 
-			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 			host1 := gsData.Host1 // initiator, data sender
 
 			root := gsData.LoadUnixFSFile(t, false)
@@ -1142,7 +1142,7 @@ func TestPauseAndResume(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 
-			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 			host1 := gsData.Host1 // initiator, data sender
 			host2 := gsData.Host2 // data recipient
 
@@ -1283,7 +1283,7 @@ func TestUnrecognizedVoucherRoundTrip(t *testing.T) {
 			//	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			//	defer cancel()
 
-			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 			host1 := gsData.Host1 // initiator, data sender
 			host2 := gsData.Host2 // data recipient
 
@@ -1352,7 +1352,7 @@ func TestDataTransferSubscribing(t *testing.T) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 	host2 := gsData.Host2
 
 	tp1 := gsData.SetupGSTransportHost1()
@@ -1480,7 +1480,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 	host1 := gsData.Host1 // initiator and data sender
 	host2 := gsData.Host2 // data recipient, makes graphsync request for data
 	voucher := testutil.NewFakeDTType()
@@ -1567,7 +1567,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 	host1 := gsData.Host1 // initiator and data sender
 	host2 := gsData.Host2 // data recipient, makes graphsync request for data
 	voucher := testutil.FakeDTType{Data: "applesauce"}
@@ -1697,7 +1697,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 
-			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil, nil)
 
 			// setup receiving peer to just record message coming in
 			gsr := &fakeGraphSyncReceiver{

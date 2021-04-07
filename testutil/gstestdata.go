@@ -94,7 +94,7 @@ type GraphsyncTestingData struct {
 }
 
 // NewGraphsyncTestingData returns a new GraphsyncTestingData instance
-func NewGraphsyncTestingData(ctx context.Context, t *testing.T, host1Protocols []protocol.ID, host2Protocols []protocol.ID) *GraphsyncTestingData {
+func NewGraphsyncTestingData(ctx context.Context, t *testing.T, host1Protocols []protocol.ID, host2Protocols []protocol.ID, mn mocknet.Mocknet) *GraphsyncTestingData {
 
 	gsData := &GraphsyncTestingData{}
 	gsData.Ctx = ctx
@@ -119,8 +119,11 @@ func NewGraphsyncTestingData(ctx context.Context, t *testing.T, host1Protocols [
 	gsData.Loader2 = storeutil.LoaderForBlockstore(gsData.Bs2)
 	gsData.Storer2 = storeutil.StorerForBlockstore(gsData.Bs2)
 
-	gsData.Mn = mocknet.New(ctx)
-
+	if mn == nil {
+		gsData.Mn = mocknet.New(ctx)
+	} else {
+		gsData.Mn = mn
+	}
 	// setup network
 	var err error
 	gsData.Host1, err = gsData.Mn.GenPeer()

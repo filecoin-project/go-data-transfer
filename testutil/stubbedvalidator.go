@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/ipfs/go-cid"
@@ -34,6 +35,9 @@ func (sv *StubbedValidator) ValidatePull(
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
 	selector ipld.Node) (datatransfer.VoucherResult, error) {
+	sv.mu.Lock()
+	defer sv.mu.Unlock()
+
 	sv.didPull = true
 	sv.ValidationsReceived = append(sv.ValidationsReceived, ReceivedValidation{true, receiver, voucher, baseCid, selector})
 	return sv.result, sv.pullError
@@ -138,6 +142,7 @@ type StubbedValidator struct {
 	expectPull          bool
 	pushError           error
 	pullError           error
+	mu                  sync.Mutex
 	ValidationsReceived []ReceivedValidation
 }
 

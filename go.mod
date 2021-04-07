@@ -3,6 +3,7 @@ module github.com/filecoin-project/go-data-transfer
 go 1.14
 
 require (
+	github.com/filecoin-project/go-cbor-util v0.0.0-20191219014500-08c40a1e63a2
 	github.com/filecoin-project/go-ds-versioning v0.1.0
 	github.com/filecoin-project/go-statemachine v0.0.0-20200925024713-05bd7c71fbfe
 	github.com/hannahhoward/cbor-gen-for v0.0.0-20200817222906-ea96cece81f1
