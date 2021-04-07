@@ -49,107 +49,18 @@ func BenchmarkRoundtripSuccess(b *testing.B) {
 	ctx := context.Background()
 	tdm, err := newTempDirMaker(b)
 	require.NoError(b, err)
-	// b.Run("test-p2p-stress-10-128MB", func(b *testing.B) {
-	// 	p2pStrestTest(ctx, b, 10, allFilesUniformSize(128*(1<<20), 1<<20, 1024, true), tdm, false, false)
-	// })
-	// b.Run("test-p2p-stress-10-128MB-1KB-chunks", func(b *testing.B) {
-	// 	p2pStrestTest(ctx, b, 10, allFilesUniformSize(128*(1<<20), 1<<10, 1024, true), tdm, false, false)
-	// })
-	// b.Run("test-p2p-stress-1-1GB", func(b *testing.B) {
-	// 	p2pStrestTest(ctx, b, 1, allFilesUniformSize(1*(1<<30), 1<<20, 1024, true), tdm, true, true)
-	// })
-	// b.Run("test-p2p-stress-1-1GB-no-raw-nodes", func(b *testing.B) {
-	// 	p2pStrestTest(ctx, b, 1, allFilesUniformSize(1*(1<<30), 1<<20, 1024, false), tdm, true, true)
-	// })
-	b.Run("test-p2p-one-to-many-1-128MB", func(b *testing.B) {
-		p2pOneToMany(ctx, b, 12, 1, allFilesUniformSize(1*(1<<20), 1<<20, 1024, true), tdm, false, false)
+	b.Run("test-p2p-stress-10-128MB", func(b *testing.B) {
+		p2pStrestTest(ctx, b, 10, allFilesUniformSize(128*(1<<20), 1<<20, 1024, true), tdm, false, false)
 	})
-}
-
-// This function tests multiple peers pulling data from the same peer at the same time
-func p2pOneToMany(ctx context.Context, b *testing.B, numInstances int, numfiles int, df distFunc, tdm *tempDirMaker, diskBasedDatastore bool, limitBandwidth bool) {
-	mn := mocknet.New(ctx)
-	if limitBandwidth {
-		mn.SetLinkDefaults(mocknet.LinkOptions{Latency: 100 * time.Millisecond, Bandwidth: 16 << 20})
-	}
-	net := tn.StreamNet(ctx, mn)
-	ig := testinstance.NewTestInstanceGenerator(ctx, net, tdm, diskBasedDatastore)
-	instances, err := ig.Instances(numInstances)
-	require.NoError(b, err)
-	var allCids []cid.Cid
-	for i := 0; i < numfiles; i++ {
-		thisCids := df(ctx, b, instances[:1])
-		allCids = append(allCids, thisCids...)
-	}
-	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
-
-	allSelector := ssb.ExploreRecursive(ipldselector.RecursionLimitNone(),
-		ssb.ExploreAll(ssb.ExploreRecursiveEdge())).Node()
-
-	runtime.GC()
-	b.ResetTimer()
-	b.ReportAllocs()
-	sender := instances[0]
-	done := make(chan struct{}, numInstances*2)
-	sender.Manager.SubscribeToEvents(func(event datatransfer.Event, state datatransfer.ChannelState) {
-		if state.Status() == datatransfer.Completed {
-			done <- struct{}{}
-		}
+	b.Run("test-p2p-stress-10-128MB-1KB-chunks", func(b *testing.B) {
+		p2pStrestTest(ctx, b, 10, allFilesUniformSize(128*(1<<20), 1<<10, 1024, true), tdm, false, false)
 	})
-	globTimer := time.NewTimer(1 * time.Minute)
-	receivers := instances[1:]
-	for i := 0; i < numInstances-1; i++ {
-		receiver := receivers[i]
-		go func(receiver testinstance.Instance, transfersDone chan struct{}) {
-			done := make(chan struct{}, numfiles)
-			receiver.Manager.SubscribeToEvents(func(event datatransfer.Event, state datatransfer.ChannelState) {
-				if state.Received() > 0 {
-					b.Logf("transferred: %d", state.Received())
-				}
-				if state.Status() == datatransfer.Completed {
-					done <- struct{}{}
-				}
-			})
-			timer := time.NewTimer(30 * time.Second)
-			start := time.Now()
-			for j := 0; j < numfiles; j++ {
-				_, err := receiver.Manager.OpenPullDataChannel(ctx, sender.Peer, testutil.NewFakeDTType(), allCids[j], allSelector)
-				if err != nil {
-					b.Fatalf("received error on request: %s", err.Error())
-				}
-			}
-			finished := 0
-			for finished < numfiles+1 {
-				select {
-				case <-done:
-					finished++
-				case <-timer.C:
-					runtime.GC()
-					b.Fatalf("did not complete requests in time")
-				}
-			}
-			result := runStats{
-				Time: time.Since(start),
-				Name: b.Name(),
-			}
-			benchmarkLog = append(benchmarkLog, result)
-			receiver.Close()
-
-			transfersDone <- struct{}{}
-		}(receiver, done)
-	}
-	finished := 0
-	for finished < numInstances-1 {
-		select {
-		case <-done:
-			finished++
-		case <-globTimer.C:
-			runtime.GC()
-			b.Fatalf("did not complete all transfers in time")
-		}
-	}
-	testinstance.Close(instances)
-	ig.Close()
+	b.Run("test-p2p-stress-1-1GB", func(b *testing.B) {
+		p2pStrestTest(ctx, b, 1, allFilesUniformSize(1*(1<<30), 1<<20, 1024, true), tdm, true, true)
+	})
+	b.Run("test-p2p-stress-1-1GB-no-raw-nodes", func(b *testing.B) {
+		p2pStrestTest(ctx, b, 1, allFilesUniformSize(1*(1<<30), 1<<20, 1024, false), tdm, true, true)
+	})
 }
 
 func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc, tdm *tempDirMaker, diskBasedDatastore bool, limitBandwidth bool) {
