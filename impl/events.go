@@ -80,6 +80,7 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 // It fires an event on the channel, updating the sum of queued data and calls
 // revalidators so they can pause / resume or send a message over the transport.
 func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size uint64) (datatransfer.Message, error) {
+
 	// The transport layer reports that some data has been queued up to be sent
 	// to the requester, so fire a DataQueued event on the channels state
 	// machine.
@@ -121,7 +122,24 @@ func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size
 }
 
 func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64) error {
-	_, err := m.channels.DataSent(chid, link.(cidlink.Link).Cid, size)
+	isNew, err := m.channels.DataSent(chid, link.(cidlink.Link).Cid, size)
+	if err != nil {
+		return err
+	}
+	if !isNew {
+		return nil
+	}
+
+	var handled bool
+	_ = m.revalidators.Each(func(_ datatransfer.TypeIdentifier, _ encoding.Decoder, processor registry.Processor) error {
+		revalidator := processor.(datatransfer.Revalidator)
+		handled, err = revalidator.OnPullDataSentOnWire(chid, size)
+		if handled {
+			return errors.New("stop processing")
+		}
+		return nil
+	})
+
 	return err
 }
 

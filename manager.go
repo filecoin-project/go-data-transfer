@@ -56,6 +56,8 @@ type Revalidator interface {
 	// if VoucherResult is non nil, the request will enter a settlement phase awaiting
 	// a final update
 	OnComplete(chid ChannelID) (bool, VoucherResult, error)
+
+	OnPullDataSentOnWire(chid ChannelID, additionalBytesSent uint64) (bool, error)
 }
 
 // TransportConfigurer provides a mechanism to provide transport specific configuration for a given voucher type

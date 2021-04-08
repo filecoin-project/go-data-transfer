@@ -535,6 +535,11 @@ func newRestartRevalidator() *restartRevalidator {
 	}
 }
 
+func (r *restartRevalidator) OnPullDataSentOnWire(chid datatransfer.ChannelID, additionalBytesSent uint64) (bool, error) {
+	// TODO IMPL
+	return true, nil
+}
+
 func (r *restartRevalidator) OnPullDataSent(chid datatransfer.ChannelID, additionalBytesSent uint64) (bool, datatransfer.VoucherResult, error) {
 	chSent, ok := r.pullDataSent[chid]
 	if !ok {
@@ -996,6 +1001,12 @@ func (r *retrievalRevalidator) OnPullDataSent(chid datatransfer.ChannelID, addit
 		return true, testutil.NewFakeDTType(), datatransfer.ErrPause
 	}
 	return true, nil, nil
+}
+
+func (r *retrievalRevalidator) OnPullDataSentOnWire(chid datatransfer.ChannelID, additionalBytesSent uint64) (bool, error) {
+	// TODO IMPL
+
+	return true, nil
 }
 
 func (r *retrievalRevalidator) OnPushDataReceived(chid datatransfer.ChannelID, additionalBytesReceived uint64) (bool, datatransfer.VoucherResult, error) {
