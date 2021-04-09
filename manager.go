@@ -19,6 +19,7 @@ type RequestValidator interface {
 		selector ipld.Node) (VoucherResult, error)
 	// ValidatePull validates a pull request received from the peer that will receive data
 	ValidatePull(
+		isRestart bool,
 		receiver peer.ID,
 		voucher Voucher,
 		baseCid cid.Cid,
@@ -39,6 +40,9 @@ type Revalidator interface {
 	// request revalidation or nil to continue uninterrupted,
 	// other errors will terminate the request.
 	OnPullDataSent(chid ChannelID, additionalBytesSent uint64) (bool, VoucherResult, error)
+
+	OnPullDuplicateTraversed(chid ChannelID, additionalBytesSent uint64) (bool, error)
+
 	// OnPushDataReceived is called on the responder side when more bytes are received
 	// for a given push request. The first value indicates whether the request was
 	// recognized by this revalidator and should be considered 'handled'. If true,

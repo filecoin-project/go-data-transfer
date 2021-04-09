@@ -3,6 +3,7 @@ package impl
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -75,6 +76,20 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 	return nil
 }
 
+func (m *manager) OnDuplicateTraversed(chid datatransfer.ChannelID, link ipld.Link, size uint64) error {
+	var handled bool
+	var err error
+	_ = m.revalidators.Each(func(_ datatransfer.TypeIdentifier, _ encoding.Decoder, processor registry.Processor) error {
+		revalidator := processor.(datatransfer.Revalidator)
+		handled, err = revalidator.OnPullDuplicateTraversed(chid, size)
+		if handled {
+			return errors.New("stop processing")
+		}
+		return nil
+	})
+	return err
+}
+
 // OnDataQueued is called when the transport layer reports that it has queued
 // up some data to be sent to the requester.
 // It fires an event on the channel, updating the sum of queued data and calls
@@ -91,13 +106,22 @@ func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size
 	// If this block has already been queued on the channel, take no further
 	// action (this can happen when the data-transfer channel is restarted)
 	if !isNew {
-		return nil, nil
+		//fmt.Printf("\n recording false at size=%d, chid=%s", size, link)
+		//return nil, nil
+	} else {
+		//fmt.Printf("\n recorded OnDataQueued for size=%d, chid=%s", size, link)
 	}
 
 	// If this node initiated the data transfer, there's nothing more to do
 	if chid.Initiator == m.peerID {
 		return nil, nil
 	}
+
+	channel, err := m.channels.GetByID(context.TODO(), chid)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("\n\n --dt channel.sent=%d, channel.queued=%d, size=%d", channel.Sent(), channel.Queued(), size)
 
 	// Check each revalidator to see if they want to pause / resume, or send
 	// a message over the transport.
@@ -254,6 +278,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 				}
 				return m.channels.Complete(chid)
 			}
+			fmt.Println("\n will emit error on client")
 			return m.channels.Error(chid, err)
 		}
 
@@ -302,6 +327,7 @@ func (m *manager) receiveNewRequest(
 
 func (m *manager) restartRequest(chid datatransfer.ChannelID,
 	incoming datatransfer.Request) (datatransfer.VoucherResult, error) {
+	fmt.Println("\n got restart req")
 
 	initiator := chid.Initiator
 	if m.peerID == initiator {
@@ -317,7 +343,7 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 		return nil, err
 	}
 
-	voucher, result, err := m.validateVoucher(initiator, incoming, incoming.IsPull(), incoming.BaseCid(), stor)
+	voucher, result, err := m.validateVoucher(true, initiator, incoming, incoming.IsPull(), incoming.BaseCid(), stor)
 	if err != nil && err != datatransfer.ErrPause {
 		return result, xerrors.Errorf("failed to validate voucher: %w", err)
 	}
@@ -356,7 +382,7 @@ func (m *manager) acceptRequest(
 		return nil, err
 	}
 
-	voucher, result, err := m.validateVoucher(initiator, incoming, incoming.IsPull(), incoming.BaseCid(), stor)
+	voucher, result, err := m.validateVoucher(false, initiator, incoming, incoming.IsPull(), incoming.BaseCid(), stor)
 	if err != nil && err != datatransfer.ErrPause {
 		return result, err
 	}
@@ -405,7 +431,7 @@ func (m *manager) acceptRequest(
 //   * reading voucher fails
 //   * deserialization of selector fails
 //   * validation fails
-func (m *manager) validateVoucher(sender peer.ID,
+func (m *manager) validateVoucher(isRestart bool, sender peer.ID,
 	incoming datatransfer.Request,
 	isPull bool,
 	baseCid cid.Cid,
@@ -414,16 +440,16 @@ func (m *manager) validateVoucher(sender peer.ID,
 	if err != nil {
 		return nil, nil, err
 	}
-	var validatorFunc func(peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.VoucherResult, error)
 	processor, _ := m.validatedTypes.Processor(vouch.Type())
 	validator := processor.(datatransfer.RequestValidator)
+
+	var result datatransfer.VoucherResult
 	if isPull {
-		validatorFunc = validator.ValidatePull
+		result, err = validator.ValidatePull(isRestart, sender, vouch, baseCid, stor)
 	} else {
-		validatorFunc = validator.ValidatePush
+		result, err = validator.ValidatePush(sender, vouch, baseCid, stor)
 	}
 
-	result, err := validatorFunc(sender, vouch, baseCid, stor)
 	return vouch, result, err
 }
 

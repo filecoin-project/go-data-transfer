@@ -27,6 +27,8 @@ type EventsHandler interface {
 	// - err == ErrPause - pause this request
 	OnDataReceived(chid ChannelID, link ipld.Link, size uint64) error
 
+	OnDuplicateTraversed(chid ChannelID, link ipld.Link, size uint64) error
+
 	// OnDataQueued is called when data is queued for sending for the given channel ID
 	// return values are:
 	// message = data transfer message along with data

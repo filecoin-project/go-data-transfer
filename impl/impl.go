@@ -457,6 +457,7 @@ func (m *manager) RegisterTransportConfigurer(voucherType datatransfer.Voucher, 
 
 // RestartDataTransferChannel restarts data transfer on the channel with the given channelId
 func (m *manager) RestartDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	fmt.Println("\n calling restart CHANNEL")
 	log.Infof("restart channel %s", chid)
 
 	channel, err := m.channels.GetByID(ctx, chid)

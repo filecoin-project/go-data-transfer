@@ -3,6 +3,7 @@ package graphsync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/ipfs/go-cid"
@@ -104,11 +105,19 @@ func (t *Transport) OpenChannel(ctx context.Context,
 	stor ipld.Node,
 	doNotSendCids []cid.Cid,
 	msg datatransfer.Message) error {
+
+	fmt.Println("\n openChanel with doNotSendCids=")
+	for _, c := range doNotSendCids {
+		fmt.Println(c)
+	}
+
 	if t.events == nil {
+		fmt.Println("\n no handler set")
 		return datatransfer.ErrHandlerNotSet
 	}
 	exts, err := extension.ToExtensionData(msg, t.supportedExtensions)
 	if err != nil {
+		fmt.Println("\n extension error")
 		return err
 	}
 
@@ -136,6 +145,8 @@ func (t *Transport) OpenChannel(ctx context.Context,
 			Data: bz}
 		exts = append(exts, doNotSendExt)
 	}
+
+	fmt.Println("\n sent gs req")
 	responseChan, errChan := t.gs.Request(internalCtx, dataSender, root, stor, exts...)
 
 	go t.executeGsRequest(internalCtx, channelID, responseChan, errChan)
@@ -443,19 +454,23 @@ func (t *Transport) gsBlockSentHook(p peer.ID, request graphsync.RequestData, bl
 }
 
 func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData, block graphsync.BlockData, hookActions graphsync.OutgoingBlockHookActions) {
-	// When a data transfer is restarted, the requester sends a list of CIDs
-	// that it already has. Graphsync calls the outgoing block hook for all
-	// blocks even if they are in the list (meaning, they aren't actually going
-	// to be sent over the wire). So here we check if the block is actually
-	// going to be sent over the wire before firing the data queued event.
-	if block.BlockSizeOnWire() == 0 {
-		return
-	}
-
 	t.dataLock.RLock()
 	chid, ok := t.graphsyncRequestMap[graphsyncKey{request.ID(), p}]
 	t.dataLock.RUnlock()
 	if !ok {
+		return
+	}
+
+	// When a data transfer is restarted, the requester sends a list of CIDs
+	// that it already has. Graphsync calls the outgoing block hook for all
+	// blocks even if they are in the list (meaning, they aren't actually going
+	// to be sent over the wire).
+	if block.BlockSizeOnWire() == 0 {
+		// emit even for duplicate block here
+		if err := t.events.OnDuplicateTraversed(chid, block.Link(), block.BlockSize()); err != nil {
+			log.Errorf("OnDuplicateTraversed failed: %s", err)
+		}
+
 		return
 	}
 
@@ -576,6 +591,7 @@ func (t *Transport) gsCompletedResponseListener(p peer.ID, request graphsync.Req
 		t.completedResponseListener(chid)
 	}
 
+	fmt.Printf("\n will call OnChannelCompleted")
 	err := t.events.OnChannelCompleted(chid, completeErr)
 	if err != nil {
 		log.Error(err)
