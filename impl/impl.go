@@ -322,7 +322,7 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 // ConnectTo opens a connection to a peer on the data-transfer protocol,
 // retrying if necessary
 func (m *manager) ConnectTo(ctx context.Context, p peer.ID) error {
-	return m.dataTransferNetwork.OpenStreamTo(ctx, p)
+	return m.dataTransferNetwork.ConnectWithRetry(ctx, p)
 }
 
 // close an open channel and fire an error event

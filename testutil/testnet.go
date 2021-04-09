@@ -45,7 +45,7 @@ func (fn *FakeNetwork) ConnectTo(_ context.Context, _ peer.ID) error {
 	panic("not implemented")
 }
 
-func (fn *FakeNetwork) OpenStreamTo(ctx context.Context, p peer.ID) error {
+func (fn *FakeNetwork) ConnectWithRetry(ctx context.Context, p peer.ID) error {
 	panic("implement me")
 }
 
