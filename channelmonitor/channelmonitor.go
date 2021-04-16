@@ -489,7 +489,7 @@ func (mc *monitoredChannel) closeChannelAndShutdown(cherr error) {
 // Wait for the peer to send an acknowledgement to the restart request
 func (mc *monitoredChannel) waitForRestartResponse() chan error {
 	restartFired := make(chan struct{})
-	restarted := make(chan error, 3)
+	restarted := make(chan error, 1)
 	timer := time.NewTimer(mc.cfg.RestartAckTimeout)
 
 	unsub := mc.mgr.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
