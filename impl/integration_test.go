@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/xerrors"
+
 	"github.com/ipfs/go-blockservice"
+	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
 	dss "github.com/ipfs/go-datastore/sync"
@@ -20,6 +23,7 @@ import (
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	ipldformat "github.com/ipfs/go-ipld-format"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-merkledag"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -232,6 +236,144 @@ func TestRoundTrip(t *testing.T) {
 			})
 		}
 	} //
+}
+
+// TestRetrievalMissingBlock performs a test that
+// - stores a DAG in the blockstore
+// - removes one of the DAG's blocks from the blockstore
+// - attempts to retrieve the DAG with the missing block (expect failure)
+// - puts the block back into the blockstore
+// - attempts to retrieve the DAG again (expect success)
+func TestRetrievalMissingBlock(t *testing.T) {
+	logging.SetLogLevel("graphsync", "info")
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	randomBlockCid, err := cid.Decode("bafkreifaglzaff5gxfehb7o37c3gpq2yzvcvzi7to4lam6h726p2w5u46y")
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name      string
+		targetCid cid.Cid
+	}{{
+		name:      "blockstore missing root block",
+		targetCid: cid.Undef,
+	}, {
+		name:      "blockstore missing random block",
+		targetCid: randomBlockCid,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+			host1 := gsData.Host1 // initiator, data sender
+			host2 := gsData.Host2 // data recipient
+
+			tp1 := gsData.SetupGSTransportHost1()
+			tp2 := gsData.SetupGSTransportHost2()
+
+			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1)
+			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt1)
+			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, tp2)
+			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt2)
+
+			sourceDagService := gsData.DagService1
+			root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService, loremFile)
+			rootCid := root.(cidlink.Link).Cid
+
+			targetCid := tc.targetCid
+			if !targetCid.Defined() {
+				targetCid = rootCid
+			}
+			targetBlock, err := gsData.Bs1.Get(targetCid)
+			require.NoError(t, err)
+
+			destDagService := gsData.DagService2
+
+			sv := testutil.NewStubbedValidator()
+			sv.ExpectSuccessPull()
+			require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+
+			doRetrieval := func(missingBlock bool) {
+				finished := make(chan struct{}, 2)
+				errChan := make(chan error, 2)
+				opened := make(chan struct{}, 2)
+				sent := make(chan uint64, 21)
+				received := make(chan uint64, 21)
+				var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+					if event.Code == datatransfer.DataQueued {
+						if channelState.Queued() > 0 {
+							sent <- channelState.Queued()
+						}
+					}
+
+					if event.Code == datatransfer.DataReceived {
+						if channelState.Received() > 0 {
+							received <- channelState.Received()
+						}
+					}
+
+					if channelState.Status() == datatransfer.Completed {
+						finished <- struct{}{}
+					}
+					if event.Code == datatransfer.Error {
+						errChan <- xerrors.Errorf("Error %d: %s", event.Code, event.Message)
+					}
+					if event.Code == datatransfer.Open {
+						opened <- struct{}{}
+					}
+				}
+				dt1.SubscribeToEvents(subscriber)
+				dt2.SubscribeToEvents(subscriber)
+				voucher := testutil.FakeDTType{Data: "applesauce"}
+
+				var chid datatransfer.ChannelID
+
+				if missingBlock {
+					err = gsData.Bs1.DeleteBlock(targetCid)
+					require.NoError(t, err)
+				} else {
+					err = gsData.Bs1.Put(targetBlock)
+					require.NoError(t, err)
+				}
+
+				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
+				require.NoError(t, err)
+
+				opens := 0
+				completes := 0
+				sentIncrements := make([]uint64, 0, 21)
+				receivedIncrements := make([]uint64, 0, 21)
+				for opens < 2 || completes < 2 || len(sentIncrements) < 21 || len(receivedIncrements) < 21 {
+					select {
+					case <-ctx.Done():
+						t.Fatal("Did not complete successful data transfer")
+					case <-finished:
+						completes++
+					case <-opened:
+						opens++
+					case sentIncrement := <-sent:
+						sentIncrements = append(sentIncrements, sentIncrement)
+					case receivedIncrement := <-received:
+						receivedIncrements = append(receivedIncrements, receivedIncrement)
+					case err := <-errChan:
+						if missingBlock {
+							t.Logf("received expected error for missing block: %s", err)
+							return
+						}
+						t.Fatalf("received unexpected error on data transfer: %s", err)
+					}
+				}
+				require.Equal(t, sentIncrements, receivedIncrements)
+				testutil.VerifyHasFile(ctx, t, destDagService, root, origBytes)
+				assert.Equal(t, chid.Initiator, host2.ID())
+			}
+
+			doRetrieval(true)
+			doRetrieval(false)
+		})
+	}
 }
 
 func TestMultipleRoundTripMultipleStores(t *testing.T) {
