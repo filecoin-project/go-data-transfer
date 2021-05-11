@@ -462,6 +462,8 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		// initiated a pull
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}
 
+		log.Debugf("%s: received request for data (pull)", chid)
+
 		// Lock the channel for the duration of this method
 		ch = t.trackDTChannel(chid)
 		ch.lk.Lock()
@@ -474,6 +476,8 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		// initiated a push, and the remote peer responded with a request
 		// for data
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID, Responder: p}
+
+		log.Debugf("%s: received request for data (push)", chid)
 
 		// Lock the channel for the duration of this method
 		ch = t.trackDTChannel(chid)
@@ -505,8 +509,9 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 	// immediately (eg because data is still being unsealed)
 	paused := false
 	if err == datatransfer.ErrPause {
+		log.Debugf("%s: pausing graphsync response", chid)
+
 		paused = true
-		log.Warnf("process new request: pause response")
 		hookActions.PauseResponse()
 	}
 
@@ -514,6 +519,8 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 	// out of the paused state (eg because we're still unsealing), start this
 	// graphsync response in the paused state.
 	if ch.isOpen && !ch.xferStarted && !paused {
+		log.Debugf("%s: pausing graphsync response after restart", chid)
+
 		paused = true
 		hookActions.PauseResponse()
 	}
@@ -675,11 +682,12 @@ func (t *Transport) gsRequestorCancelledListener(p peer.ID, request graphsync.Re
 	ch, err := t.getDTChannel(chid)
 	if err != nil {
 		if !xerrors.Is(datatransfer.ErrChannelNotFound, err) {
-			log.Errorf("requestor cancelled: getting channel %s", chid)
+			log.Errorf("requestor cancelled: getting channel %s: %s", chid, err)
 		}
 		return
 	}
 
+	log.Debugf("%s: requester cancelled data-transfer", ch)
 	ch.onRequesterCancelled()
 }
 
@@ -876,6 +884,8 @@ func (c *dtChannel) gsReqOpened(gsKey graphsyncKey, hookActions graphsync.Outgoi
 // gsDataRequestRcvd is called when the transport receives an incoming request
 // for data
 func (c *dtChannel) gsDataRequestRcvd(gsKey graphsyncKey, hookActions graphsync.IncomingRequestHookActions) {
+	log.Debugf("%s: received request for data", c.channelID)
+
 	// If the requester had previously cancelled their request, send any
 	// message that was queued since the cancel
 	if c.requesterCancelled {
@@ -908,7 +918,7 @@ func (c *dtChannel) pause() error {
 	// If it's a graphsync request
 	if c.gsKey.p == c.peerID {
 		// Pause the request
-		log.Debugf("pausing request for dt-channel %s", c.channelID)
+		log.Debugf("%s: pausing request", c.channelID)
 		return c.gs.PauseRequest(c.gsKey.requestID)
 	}
 
@@ -916,11 +926,12 @@ func (c *dtChannel) pause() error {
 
 	// If the requester cancelled, bail out
 	if c.requesterCancelled {
+		log.Debugf("%s: requester has cancelled so not pausing response", c.channelID)
 		return nil
 	}
 
 	// Pause the response
-	log.Debugf("pausing response for dt-channel %s", c.channelID)
+	log.Debugf("%s: pausing response", c.channelID)
 	return c.gs.PauseResponse(c.gsKey.p, c.gsKey.requestID)
 }
 
@@ -939,7 +950,7 @@ func (c *dtChannel) resume(msg datatransfer.Message) error {
 
 	// If it's a graphsync request
 	if c.gsKey.p == c.peerID {
-		log.Debugf("unpausing request for dt-channel %s", c.channelID)
+		log.Debugf("%s: unpausing request", c.channelID)
 		return c.gs.UnpauseRequest(c.gsKey.requestID, extensions...)
 	}
 
@@ -952,14 +963,14 @@ func (c *dtChannel) resume(msg datatransfer.Message) error {
 		// the message to be sent next time the peer makes a request to us.
 		c.pendingExtensions = append(c.pendingExtensions, extensions...)
 
+		log.Debugf("%s: requester has cancelled so not unpausing response", c.channelID)
 		return nil
 	}
 
 	// Record that the transfer has started
 	c.xferStarted = true
 
-	log.Warnf("unpausing response for dt-channel %s", c.channelID)
-	//log.Debugf("unpausing response for dt-channel %s", c.channelID)
+	log.Debugf("%s: unpausing response", c.channelID)
 	return c.gs.UnpauseResponse(c.gsKey.p, c.gsKey.requestID, extensions...)
 }
 
@@ -970,7 +981,7 @@ func (c *dtChannel) close() error {
 	// If it's a graphsync request
 	if c.gsKey.p == c.peerID {
 		// Cancel the request
-		log.Debugf("cancelling request for dt-channel %s", c.channelID)
+		log.Debugf("%s: cancelling request", c.channelID)
 		c.cancelReq.cancel()
 		return nil
 	}
@@ -983,7 +994,7 @@ func (c *dtChannel) close() error {
 	}
 
 	// Cancel the response
-	log.Debugf("cancelling response for dt-channel %s", c.channelID)
+	log.Debugf("%s: cancelling response", c.channelID)
 	return c.gs.CancelResponse(c.gsKey.p, c.gsKey.requestID)
 }
 
@@ -1022,6 +1033,8 @@ func (c *dtChannel) useStore(loader ipld.Loader, storer ipld.Storer) error {
 func (c *dtChannel) cleanup() {
 	c.lk.Lock()
 	defer c.lk.Unlock()
+
+	log.Debugf("%s: cleaning up channel", c.channelID)
 
 	if c.hasStore() {
 		// Unregister the channel's store from graphsync
