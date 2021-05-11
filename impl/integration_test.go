@@ -3,7 +3,6 @@ package impl_test
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"math/rand"
 	"os"
@@ -1075,7 +1074,6 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 				if channelState.Status() == datatransfer.Completed {
 					clientFinished <- struct{}{}
 				}
-				fmt.Println("=> CLIENT", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
 			}
 			dt2.SubscribeToEvents(clientSubscriber)
 			providerFinished := make(chan struct{}, 1)
@@ -1097,7 +1095,6 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 				if channelState.Status() == datatransfer.Completed {
 					providerFinished <- struct{}{}
 				}
-				fmt.Println("=> PROVIDER", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
 			}
 			dt1.SubscribeToEvents(providerSubscriber)
 			voucher := testutil.FakeDTType{Data: "applesauce"}
