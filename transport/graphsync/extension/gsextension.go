@@ -77,19 +77,14 @@ func GetTransferData(extendedData GsExtended) (datatransfer.Message, error) {
 		ExtensionDataTransfer1_1,
 		ExtensionDataTransfer1_0,
 	}
-	i := 0
-	extName := extNames[i]
-	data, ok := extendedData.Extension(extName)
-	for !ok {
-		i++
-		if i == len(extNames) {
-			return nil, nil
+	for _, name := range extNames {
+		data, ok := extendedData.Extension(name)
+		if ok {
+			reader := bytes.NewReader(data)
+			return decoders[name](reader)
 		}
-		extName = extNames[i]
-		data, ok = extendedData.Extension(extName)
 	}
-	reader := bytes.NewReader(data)
-	return decoders[extName](reader)
+	return nil, nil
 }
 
 type decoder func(io.Reader) (datatransfer.Message, error)

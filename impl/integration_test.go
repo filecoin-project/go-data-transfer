@@ -1810,7 +1810,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 	// Stub in the validator so it returns that exact voucher when calling ValidatePull
 	// this validator will not pause transfer when accepting a transfer and will start
-	// sending blocks immmediately
+	// sending blocks immediately
 	sv.StubResult(respVoucher)
 
 	srv := &retrievalRevalidator{
