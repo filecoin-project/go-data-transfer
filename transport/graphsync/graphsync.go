@@ -32,11 +32,22 @@ type graphsyncKey struct {
 	p         peer.ID
 }
 
-var defaultSupportedExtensions = []graphsync.ExtensionName{extension.ExtensionDataTransfer1_1, extension.ExtensionDataTransfer1_0}
+var defaultSupportedExtensions = []graphsync.ExtensionName{
+	extension.ExtensionDataTransfer1_1,
+	extension.ExtensionDataTransfer1_0,
+}
 
-var defaultIncomingReqExtensions = []graphsync.ExtensionName{extension.ExtensionIncomingRequest1_1}
+var defaultIncomingReqExtensions = []graphsync.ExtensionName{
+	extension.ExtensionIncomingRequest1_1,
+	extension.ExtensionDataTransfer1_1,
+	extension.ExtensionDataTransfer1_0,
+}
 
-var defaultOutgoingBlkExtensions = []graphsync.ExtensionName{extension.ExtensionOutgoingBlock1_1}
+var defaultOutgoingBlkExtensions = []graphsync.ExtensionName{
+	extension.ExtensionOutgoingBlock1_1,
+	extension.ExtensionDataTransfer1_1,
+	extension.ExtensionDataTransfer1_0,
+}
 
 // Option is an option for setting up the graphsync transport
 type Option func(*Transport)
