@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"sort"
@@ -101,7 +102,24 @@ func TestMultiRequestStreams(t *testing.T) {
 				hn1.net.SetDelegate(&handler{dt2})
 				receivers[gsData.Host2.ID()] = hn2
 				testData = append(testData, gsData)
+
+				// Channel that will be closed when all data has been received
+				allDataReceived := make(chan struct{})
+				dt2.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+					if channelState.Status() == datatransfer.Completed {
+						close(allDataReceived)
+					}
+				})
 				verifiers[gsData.Host2.ID()] = func() {
+					// Wait for all data to be received
+					select {
+					case <-allDataReceived:
+					case <-ctx.Done():
+						t.Fatal("timed out waiting for all data to be received")
+						//default:
+						//	t.Fatal("verify called before all data received")
+					}
+					// Verify all data was received correctly
 					gsData.VerifyFileTransferred(t, root, true)
 				}
 			}
@@ -425,7 +443,8 @@ const unixfsChunkSize uint64 = 1 << 10
 const unixfsLinksPerLevel = 1024
 
 func LoadRandomData(ctx context.Context, t *testing.T, dagService ipldformat.DAGService) (ipld.Link, []byte) {
-	tf, err := os.CreateTemp("", "data")
+	tf, err := ioutil.TempFile("", "data")
+	//tf, err := os.CreateTemp("", "data")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.Remove(tf.Name())
