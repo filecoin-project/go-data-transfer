@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// ExtensionIncomingRequest1_1 is the identifier for data sent by the IncomingReequest hook
+	// ExtensionIncomingRequest1_1 is the identifier for data sent by the IncomingRequest hook
 	ExtensionIncomingRequest1_1 = graphsync.ExtensionName("fil/data-transfer/incoming-request/1.1")
 	// ExtensionOutgoingBlock1_1 is the identifier for data sent by the OutgoingBlock hook
 	ExtensionOutgoingBlock1_1 = graphsync.ExtensionName("fil/data-transfer/outgoing-block/1.1")
@@ -71,22 +71,22 @@ type GsExtended interface {
 //    * nil + error if the extendedData fails to unmarshal
 //    * unmarshaled ExtensionDataTransferData + nil if all goes well
 func GetTransferData(extendedData GsExtended) (datatransfer.Message, error) {
-	extName := ExtensionDataTransfer1_1
+	extNames := []graphsync.ExtensionName{
+		ExtensionIncomingRequest1_1,
+		ExtensionOutgoingBlock1_1,
+		ExtensionDataTransfer1_1,
+		ExtensionDataTransfer1_0,
+	}
+	i := 0
+	extName := extNames[i]
 	data, ok := extendedData.Extension(extName)
-	if !ok {
-		extName = ExtensionDataTransfer1_0
-		data, ok = extendedData.Extension(extName)
-		if !ok {
-			extName = ExtensionIncomingRequest1_1
-			data, ok = extendedData.Extension(extName)
-			if !ok {
-				extName = ExtensionOutgoingBlock1_1
-				data, ok = extendedData.Extension(extName)
-				if !ok {
-					return nil, nil
-				}
-			}
+	for !ok {
+		i++
+		if i == len(extNames) {
+			return nil, nil
 		}
+		extName = extNames[i]
+		data, ok = extendedData.Extension(extName)
 	}
 	reader := bytes.NewReader(data)
 	return decoders[extName](reader)

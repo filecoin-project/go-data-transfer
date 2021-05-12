@@ -3,7 +3,6 @@ package impl_test
 import (
 	"bytes"
 	"context"
-	"io"
 	"math/rand"
 	"os"
 	"testing"
@@ -21,7 +20,6 @@ import (
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 	chunker "github.com/ipfs/go-ipfs-chunker"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
-	files "github.com/ipfs/go-ipfs-files"
 	ipldformat "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-merkledag"
 	"github.com/ipfs/go-unixfs/importer/balanced"
@@ -1745,16 +1743,20 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 
 	var chid datatransfer.ChannelID
 	errChan := make(chan struct{}, 2)
+
 	clientPausePoint := 0
 
-	clientFinished := make(chan struct{}, 1)
 	clientGotResponse := make(chan struct{}, 1)
+	clientFinished := make(chan struct{}, 1)
 
-	// The response voucher is the voucher returned by the request validator
+	// In this retrieval flow we expect 2 voucher results:
+	// The first one is sent as a response from the initial request telling the client
+	// the provider has accepted the request and is starting to send blocks
 	respVoucher := testutil.NewFakeDTType()
 	encodedRVR, err := encoding.Encode(respVoucher)
 	require.NoError(t, err)
 
+	// The final voucher result is sent by the provider to request a new payment voucher
 	finalVoucherResult := testutil.NewFakeDTType()
 	encodedFVR, err := encoding.Encode(finalVoucherResult)
 	require.NoError(t, err)
@@ -1763,15 +1765,23 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 		if event.Code == datatransfer.Error {
 			errChan <- struct{}{}
 		}
+		// Here we verify reception of voucherResults by the client
 		if event.Code == datatransfer.NewVoucherResult {
-			lastVoucherResult := channelState.LastVoucherResult()
-			encodedLVR, err := encoding.Encode(lastVoucherResult)
+			voucherResult := channelState.LastVoucherResult()
+			encodedVR, err := encoding.Encode(voucherResult)
 			require.NoError(t, err)
-			if bytes.Equal(encodedLVR, encodedFVR) {
-				_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
-			}
-			if bytes.Equal(encodedLVR, encodedRVR) {
+
+			// If this voucher result is the response voucher no action is needed
+			// we just know that the provider has accepted the transfer and is sending blocks
+			if bytes.Equal(encodedVR, encodedRVR) {
+				// The test will fail if no response voucher is received
 				clientGotResponse <- struct{}{}
+			}
+
+			// If this voucher result is the final voucher result we need
+			// to send a new voucher to unpause the provider and complete the transfer
+			if bytes.Equal(encodedVR, encodedFVR) {
+				_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
 			}
 		}
 		if event.Code == datatransfer.DataReceived &&
@@ -1796,24 +1806,29 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 		}
 	})
 
-	voucher := testutil.FakeDTType{Data: "applesauce"}
 	sv := testutil.NewStubbedValidator()
 	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+	// Stub in the validator so it returns that exact voucher when calling ValidatePull
+	// this validator will not pause transfer when accepting a transfer and will start
+	// sending blocks immmediately
+	sv.StubResult(respVoucher)
 
 	srv := &retrievalRevalidator{
 		testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult,
 	}
+	// The stubbed revalidator will authorize Revalidate and return ErrResume to finisht the transfer
 	srv.ExpectSuccessErrResume()
 	require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
 
-	// Register our response voucher
+	// Register our response voucher with the client
 	require.NoError(t, dt2.RegisterVoucherResultType(respVoucher))
-	// Stub in the validator to make sure we receive that voucher
-	sv.StubResult(respVoucher)
 
+	voucher := testutil.FakeDTType{Data: "applesauce"}
 	chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
 	require.NoError(t, err)
 
+	// Expect the client to receive a response voucher, the provider to complete the transfer and
+	// the client to finish the transfer
 	for clientGotResponse != nil || providerFinished != nil || clientFinished != nil {
 		select {
 		case <-ctx.Done():
@@ -1834,23 +1849,8 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 }
 
 func LoadRandomData(ctx context.Context, t *testing.T, dagService ipldformat.DAGService) (ipld.Link, []byte) {
-	tf, err := os.CreateTemp("", "data")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.Remove(tf.Name())
-	})
-
 	data := make([]byte, 256000)
 	rand.New(rand.NewSource(time.Now().UnixNano())).Read(data)
-	_, err = tf.Write(data)
-	require.NoError(t, err)
-
-	f, err := os.Open(tf.Name())
-	require.NoError(t, err)
-
-	var buf bytes.Buffer
-	tr := io.TeeReader(f, &buf)
-	file := files.NewReaderFile(tr)
 
 	// import to UnixFS
 	bufferedDS := ipldformat.NewBufferedDAG(ctx, dagService)
@@ -1862,7 +1862,7 @@ func LoadRandomData(ctx context.Context, t *testing.T, dagService ipldformat.DAG
 		Dagserv:    bufferedDS,
 	}
 
-	db, err := params.New(chunker.NewSizeSplitter(file, int64(1<<10)))
+	db, err := params.New(chunker.NewSizeSplitter(bytes.NewReader(data), int64(1<<10)))
 	require.NoError(t, err)
 
 	nd, err := balanced.Layout(db)
@@ -1872,7 +1872,7 @@ func LoadRandomData(ctx context.Context, t *testing.T, dagService ipldformat.DAG
 	require.NoError(t, err)
 
 	// save the original files bytes
-	return cidlink.Link{Cid: nd.Cid()}, buf.Bytes()
+	return cidlink.Link{Cid: nd.Cid()}, data
 }
 
 type receivedMessage struct {
