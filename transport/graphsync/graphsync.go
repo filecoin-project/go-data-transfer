@@ -327,7 +327,7 @@ func (t *Transport) UseStore(channelID datatransfer.ChannelID, loader ipld.Loade
 
 // gsOutgoingRequestHook is called when a graphsync request is made
 func (t *Transport) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestData, hookActions graphsync.OutgoingRequestHookActions) {
-	message, _ := extension.GetTransferData(request)
+	message, _ := extension.GetTransferData(request, t.supportedExtensions)
 
 	// extension not found; probably not our request.
 	if message == nil {
@@ -454,7 +454,8 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 
 // gsReqRecdHook is called when graphsync receives an incoming request for data
 func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hookActions graphsync.IncomingRequestHookActions) {
-	msg, err := extension.GetTransferData(request)
+	// if this is a push request the sender is us.
+	msg, err := extension.GetTransferData(request, t.supportedExtensions)
 	if err != nil {
 		hookActions.TerminateWithError(err)
 		return
@@ -617,7 +618,7 @@ func (t *Transport) gsRequestUpdatedHook(p peer.ID, request graphsync.RequestDat
 		return
 	}
 
-	responseMessage, err := t.processExtension(chid, update, p)
+	responseMessage, err := t.processExtension(chid, update, p, t.supportedExtensions)
 
 	if responseMessage != nil {
 		extensions, extensionErr := extension.ToExtensionData(responseMessage, t.supportedExtensions)
@@ -643,7 +644,7 @@ func (t *Transport) gsIncomingResponseHook(p peer.ID, response graphsync.Respons
 		return
 	}
 
-	responseMessage, err := t.processExtension(chid, response, p)
+	responseMessage, err := t.processExtension(chid, response, p, t.incomingReqExtensions)
 
 	if responseMessage != nil {
 		extensions, extensionErr := extension.ToExtensionData(responseMessage, t.supportedExtensions)
@@ -659,12 +660,23 @@ func (t *Transport) gsIncomingResponseHook(p peer.ID, response graphsync.Respons
 	if err != nil {
 		hookActions.TerminateWithError(err)
 	}
+
+	// In a case where the transfer sends blocks immediately this extension may contain both a
+	// response message and a revalidation request so we trigger OnResponseReceived again for this
+	// specific extension name
+	msg, err := extension.GetTransferData(response, []graphsync.ExtensionName{extension.ExtensionOutgoingBlock1_1})
+	if msg != nil {
+		err := t.events.OnResponseReceived(chid, msg.(datatransfer.Response))
+		if err != nil {
+			hookActions.TerminateWithError(err)
+		}
+	}
 }
 
-func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extension.GsExtended, p peer.ID) (datatransfer.Message, error) {
+func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extension.GsExtended, p peer.ID, exts []graphsync.ExtensionName) (datatransfer.Message, error) {
 
 	// if this is a push request the sender is us.
-	msg, err := extension.GetTransferData(gsMsg)
+	msg, err := extension.GetTransferData(gsMsg, exts)
 	if err != nil {
 		return nil, err
 	}

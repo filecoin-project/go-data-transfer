@@ -986,14 +986,19 @@ type retrievalRevalidator struct {
 	providerPausePoint int
 	pausePoints        []uint64
 	finalVoucher       datatransfer.VoucherResult
+	revalVouchers      []datatransfer.VoucherResult
 }
 
 func (r *retrievalRevalidator) OnPullDataSent(chid datatransfer.ChannelID, additionalBytesSent uint64) (bool, datatransfer.VoucherResult, error) {
 	r.dataSoFar += additionalBytesSent
 	if r.providerPausePoint < len(r.pausePoints) &&
 		r.dataSoFar >= r.pausePoints[r.providerPausePoint] {
+		var v datatransfer.VoucherResult = testutil.NewFakeDTType()
+		if len(r.revalVouchers) > r.providerPausePoint {
+			v = r.revalVouchers[r.providerPausePoint]
+		}
 		r.providerPausePoint++
-		return true, testutil.NewFakeDTType(), datatransfer.ErrPause
+		return true, v, datatransfer.ErrPause
 	}
 	return true, nil, nil
 }
@@ -1101,7 +1106,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 			srv := &retrievalRevalidator{
-				testutil.NewStubbedRevalidator(), 0, 0, config.pausePoints, finalVoucherResult,
+				testutil.NewStubbedRevalidator(), 0, 0, config.pausePoints, finalVoucherResult, []datatransfer.VoucherResult{},
 			}
 			srv.ExpectSuccessErrResume()
 			require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
@@ -1756,7 +1761,17 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	encodedRVR, err := encoding.Encode(respVoucher)
 	require.NoError(t, err)
 
-	// The final voucher result is sent by the provider to request a new payment voucher
+	// voucher results are sent by the providers to request payment while pausing until a voucher is sent
+	// to revalidate
+	voucherResults := []datatransfer.VoucherResult{
+		&testutil.FakeDTType{Data: "one"},
+		&testutil.FakeDTType{Data: "two"},
+		&testutil.FakeDTType{Data: "thr"},
+		&testutil.FakeDTType{Data: "for"},
+		&testutil.FakeDTType{Data: "fiv"},
+	}
+
+	// The final voucher result is sent by the provider to request a last payment voucher
 	finalVoucherResult := testutil.NewFakeDTType()
 	encodedFVR, err := encoding.Encode(finalVoucherResult)
 	require.NoError(t, err)
@@ -1778,17 +1793,22 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 				clientGotResponse <- struct{}{}
 			}
 
+			// If this voucher is a revalidation request we need to send a new voucher
+			// to revalidate and unpause the transfer
+			if clientPausePoint < 5 {
+				encodedExpected, err := encoding.Encode(voucherResults[clientPausePoint])
+				require.NoError(t, err)
+				if bytes.Equal(encodedVR, encodedExpected) {
+					_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+					clientPausePoint++
+				}
+			}
+
 			// If this voucher result is the final voucher result we need
 			// to send a new voucher to unpause the provider and complete the transfer
 			if bytes.Equal(encodedVR, encodedFVR) {
 				_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
 			}
-		}
-		if event.Code == datatransfer.DataReceived &&
-			clientPausePoint < len(pausePoints) &&
-			channelState.Received() > pausePoints[clientPausePoint] {
-			_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
-			clientPausePoint++
 		}
 
 		if channelState.Status() == datatransfer.Completed {
@@ -1814,7 +1834,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	sv.StubResult(respVoucher)
 
 	srv := &retrievalRevalidator{
-		testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult,
+		testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult, voucherResults,
 	}
 	// The stubbed revalidator will authorize Revalidate and return ErrResume to finisht the transfer
 	srv.ExpectSuccessErrResume()

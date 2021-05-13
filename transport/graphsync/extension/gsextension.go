@@ -70,13 +70,7 @@ type GsExtended interface {
 //    * nil + nil if the extension is not found
 //    * nil + error if the extendedData fails to unmarshal
 //    * unmarshaled ExtensionDataTransferData + nil if all goes well
-func GetTransferData(extendedData GsExtended) (datatransfer.Message, error) {
-	extNames := []graphsync.ExtensionName{
-		ExtensionIncomingRequest1_1,
-		ExtensionOutgoingBlock1_1,
-		ExtensionDataTransfer1_1,
-		ExtensionDataTransfer1_0,
-	}
+func GetTransferData(extendedData GsExtended, extNames []graphsync.ExtensionName) (datatransfer.Message, error) {
 	for _, name := range extNames {
 		data, ok := extendedData.Extension(name)
 		if ok {

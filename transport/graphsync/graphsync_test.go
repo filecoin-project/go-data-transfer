@@ -227,9 +227,6 @@ func TestManager(t *testing.T) {
 			},
 		},
 		"incoming gs request with recognized dt request will validate gs request & send dt response": {
-			requestConfig: gsRequestConfig{
-				extName: extension.ExtensionIncomingRequest1_1,
-			},
 			action: func(gsData *harness) {
 				gsData.incomingRequestHook()
 			},
@@ -240,10 +237,10 @@ func TestManager(t *testing.T) {
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
 				require.Equal(t, 0, events.OnResponseReceivedCallCount)
 				require.Equal(t, events.RequestReceivedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other})
-				dtRequestData, _ := gsData.request.Extension(extension.ExtensionIncomingRequest1_1)
+				dtRequestData, _ := gsData.request.Extension(extension.ExtensionDataTransfer1_1)
 				assertDecodesToMessage(t, dtRequestData, events.RequestReceivedRequest)
 				require.True(t, gsData.incomingRequestHookActions.Validated)
-				assertHasExtensionMessage(t, extension.ExtensionIncomingRequest1_1, gsData.incomingRequestHookActions.SentExtensions, events.RequestReceivedResponse)
+				assertHasExtensionMessage(t, extension.ExtensionDataTransfer1_1, gsData.incomingRequestHookActions.SentExtensions, events.RequestReceivedResponse)
 				require.NoError(t, gsData.incomingRequestHookActions.TerminationError)
 			},
 		},
@@ -1182,7 +1179,6 @@ type gsRequestConfig struct {
 	dtExtensionMissing   bool
 	dtIsResponse         bool
 	dtExtensionMalformed bool
-	extName              graphsync.ExtensionName
 }
 
 func (grc *gsRequestConfig) makeRequest(t *testing.T, transferID datatransfer.TransferID, requestID graphsync.RequestID) graphsync.RequestData {
@@ -1191,11 +1187,7 @@ func (grc *gsRequestConfig) makeRequest(t *testing.T, transferID datatransfer.Tr
 		dtIsResponse:         grc.dtIsResponse,
 		dtExtensionMalformed: grc.dtExtensionMalformed,
 	}
-	extName := extension.ExtensionDataTransfer1_1
-	if grc.extName != "" {
-		extName = grc.extName
-	}
-	extensions := dtConfig.extensions(t, transferID, extName)
+	extensions := dtConfig.extensions(t, transferID, extension.ExtensionDataTransfer1_1)
 	return testutil.NewFakeRequest(requestID, extensions)
 }
 
