@@ -138,13 +138,13 @@ func (t *Transport) OpenChannel(ctx context.Context,
 	ch := t.trackDTChannel(channelID)
 
 	// Open a graphsync request to the remote peer
-	responseChan, errChan, err := ch.open(ctx, channelID, dataSender, root, stor, doNotSendCids, exts)
+	req, err := ch.open(ctx, channelID, dataSender, root, stor, doNotSendCids, exts)
 	if err != nil {
 		return err
 	}
 
 	// Process incoming data
-	go t.executeGsRequest(ch, responseChan, errChan)
+	go t.executeGsRequest(req)
 
 	return nil
 }
@@ -163,19 +163,15 @@ func (t *Transport) consumeResponses(responseChan <-chan graphsync.ResponseProgr
 
 // Read from the graphsync response and error channels until they are closed
 // or there is an error, then call the channel completed callback
-func (t *Transport) executeGsRequest(
-	ch *dtChannel,
-	responseChan <-chan graphsync.ResponseProgress,
-	errChan <-chan error,
-) {
-	defer ch.onComplete()
+func (t *Transport) executeGsRequest(req *gsReq) {
+	defer req.onComplete()
 
-	lastError := t.consumeResponses(responseChan, errChan)
+	lastError := t.consumeResponses(req.responseChan, req.errChan)
 
 	if _, ok := lastError.(graphsync.RequestContextCancelledErr); ok {
 		terr := xerrors.Errorf("graphsync request context cancelled")
-		log.Warnf("channel id %v: %s", ch.channelID, terr)
-		if err := t.events.OnRequestTimedOut(ch.channelID, terr); err != nil {
+		log.Warnf("channel id %v: %s", req.channelID, terr)
+		if err := t.events.OnRequestTimedOut(req.channelID, terr); err != nil {
 			log.Error(err)
 		}
 		return
@@ -189,8 +185,8 @@ func (t *Transport) executeGsRequest(
 	// TODO: There seems to be a bug in graphsync. I believe it should return
 	// graphsync.RequestCancelledErr on the errChan if the request's context is
 	// cancelled, but it doesn't seem to be doing that
-	if ch.gsReqCtx.Err() != nil {
-		log.Warnf("graphsync request cancelled for channel %s", ch.channelID)
+	if req.gsReqCtx.Err() != nil {
+		log.Warnf("graphsync request cancelled for channel %s", req.channelID)
 		return
 	}
 
@@ -198,7 +194,7 @@ func (t *Transport) executeGsRequest(
 		log.Warnf("graphsync error: %s", lastError.Error())
 	}
 
-	log.Debugf("finished executing graphsync request for channel %s", ch.channelID)
+	log.Debugf("finished executing graphsync request for channel %s", req.channelID)
 
 	var completeErr error
 	if lastError != nil {
@@ -207,10 +203,10 @@ func (t *Transport) executeGsRequest(
 
 	// Used by the tests to listen for when a request completes
 	if t.completedRequestListener != nil {
-		t.completedRequestListener(ch.channelID)
+		t.completedRequestListener(req.channelID)
 	}
 
-	err := t.events.OnChannelCompleted(ch.channelID, completeErr)
+	err := t.events.OnChannelCompleted(req.channelID, completeErr)
 	if err != nil {
 		log.Errorf("processing OnChannelCompleted: %s", err)
 	}
@@ -762,11 +758,14 @@ func (t *Transport) getDTChannel(chid datatransfer.ChannelID) (*dtChannel, error
 	return ch, nil
 }
 
+// Info needed to cancel a graphsync request, and wait for the cancellation
+// to complete
 type cancelRequest struct {
 	cancel    context.CancelFunc
 	completed chan struct{}
 }
 
+// Info needed to keep track of a data transfer channel
 type dtChannel struct {
 	peerID              peer.ID
 	channelID           datatransfer.ChannelID
@@ -776,13 +775,11 @@ type dtChannel struct {
 
 	lk                 sync.RWMutex
 	isOpen             bool
-	gsReqCtx           context.Context
 	gsKey              graphsyncKey
 	cancelReq          *cancelRequest
 	requesterCancelled bool
 	xferStarted        bool
 	pendingExtensions  []graphsync.ExtensionData
-	onComplete         func()
 
 	opened chan graphsyncKey
 
@@ -790,8 +787,17 @@ type dtChannel struct {
 	storeRegistered bool
 }
 
+// Info needed to monitor an ongoing graphsync request
+type gsReq struct {
+	channelID    datatransfer.ChannelID
+	gsReqCtx     context.Context
+	responseChan <-chan graphsync.ResponseProgress
+	errChan      <-chan error
+	onComplete   func()
+}
+
 // Open a graphsync request for data to the remote peer
-func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataSender peer.ID, root ipld.Link, stor ipld.Node, doNotSendCids []cid.Cid, exts []graphsync.ExtensionData) (<-chan graphsync.ResponseProgress, <-chan error, error) {
+func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataSender peer.ID, root ipld.Link, stor ipld.Node, doNotSendCids []cid.Cid, exts []graphsync.ExtensionData) (*gsReq, error) {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
@@ -805,14 +811,13 @@ func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataS
 		// Wait for the cancel to go through
 		err := waitForCancelComplete(ctx, completed)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
 	// Create a cancellable context for the channel so that the graphsync
 	// request can be cancelled
 	gsReqCtx, gsReqCancel := context.WithCancel(ctx)
-	c.gsReqCtx = gsReqCtx
 	c.cancelReq = &cancelRequest{
 		cancel:    gsReqCancel,
 		completed: make(chan struct{}),
@@ -821,12 +826,12 @@ func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataS
 	// Open graphsync request
 	log.Infof("Opening graphsync request to %s for root %s with %d CIDs already received",
 		dataSender, root, len(doNotSendCids))
-	responseChan, errChan := c.gs.Request(c.gsReqCtx, dataSender, root, stor, exts...)
+	responseChan, errChan := c.gs.Request(gsReqCtx, dataSender, root, stor, exts...)
 
 	// Wait for graphsync "request opened" callback
 	select {
 	case <-ctx.Done():
-		return nil, nil, ctx.Err()
+		return nil, ctx.Err()
 	case gsKey := <-c.opened:
 		c.isOpen = true
 
@@ -835,11 +840,17 @@ func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataS
 	}
 
 	// When the transfer completes, close the completed channel
-	c.onComplete = func() {
+	onComplete := func() {
 		close(c.cancelReq.completed)
 	}
 
-	return responseChan, errChan, nil
+	return &gsReq{
+		channelID:    chid,
+		gsReqCtx:     gsReqCtx,
+		responseChan: responseChan,
+		errChan:      errChan,
+		onComplete:   onComplete,
+	}, nil
 }
 
 func waitForCancelComplete(ctx context.Context, completed chan struct{}) error {
