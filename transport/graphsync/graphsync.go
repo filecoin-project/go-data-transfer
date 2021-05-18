@@ -1114,7 +1114,7 @@ func newGSKeyToChannelIDMap() *gsKeyToChannelIDMap {
 }
 
 // get the value for a key
-func (m gsKeyToChannelIDMap) load(key graphsyncKey) (datatransfer.ChannelID, bool) {
+func (m *gsKeyToChannelIDMap) load(key graphsyncKey) (datatransfer.ChannelID, bool) {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
@@ -1123,7 +1123,7 @@ func (m gsKeyToChannelIDMap) load(key graphsyncKey) (datatransfer.ChannelID, boo
 }
 
 // get the value if any of the keys exists in the map
-func (m gsKeyToChannelIDMap) any(ks ...graphsyncKey) (datatransfer.ChannelID, bool) {
+func (m *gsKeyToChannelIDMap) any(ks ...graphsyncKey) (datatransfer.ChannelID, bool) {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
@@ -1137,7 +1137,7 @@ func (m gsKeyToChannelIDMap) any(ks ...graphsyncKey) (datatransfer.ChannelID, bo
 }
 
 // set the value for a key
-func (m gsKeyToChannelIDMap) set(key graphsyncKey, val datatransfer.ChannelID) {
+func (m *gsKeyToChannelIDMap) set(key graphsyncKey, val datatransfer.ChannelID) {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 
@@ -1145,7 +1145,7 @@ func (m gsKeyToChannelIDMap) set(key graphsyncKey, val datatransfer.ChannelID) {
 }
 
 // call f for each key / value in the map
-func (m gsKeyToChannelIDMap) forEach(f func(k graphsyncKey, chid datatransfer.ChannelID)) {
+func (m *gsKeyToChannelIDMap) forEach(f func(k graphsyncKey, chid datatransfer.ChannelID)) {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
@@ -1155,7 +1155,7 @@ func (m gsKeyToChannelIDMap) forEach(f func(k graphsyncKey, chid datatransfer.Ch
 }
 
 // delete any keys that reference this value
-func (m gsKeyToChannelIDMap) deleteRefs(id datatransfer.ChannelID) {
+func (m *gsKeyToChannelIDMap) deleteRefs(id datatransfer.ChannelID) {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 
