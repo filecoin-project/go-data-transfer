@@ -37,13 +37,13 @@ var defaultSupportedExtensions = []graphsync.ExtensionName{
 	extension.ExtensionDataTransfer1_0,
 }
 
-var defaultIncomingReqExtensions = []graphsync.ExtensionName{
+var incomingReqExtensions = []graphsync.ExtensionName{
 	extension.ExtensionIncomingRequest1_1,
 	extension.ExtensionDataTransfer1_1,
 	extension.ExtensionDataTransfer1_0,
 }
 
-var defaultOutgoingBlkExtensions = []graphsync.ExtensionName{
+var outgoingBlkExtensions = []graphsync.ExtensionName{
 	extension.ExtensionOutgoingBlock1_1,
 	extension.ExtensionDataTransfer1_1,
 	extension.ExtensionDataTransfer1_0,
@@ -81,8 +81,6 @@ type Transport struct {
 	peerID peer.ID
 
 	supportedExtensions       []graphsync.ExtensionName
-	incomingReqExtensions     []graphsync.ExtensionName
-	outgoingBlkExtensions     []graphsync.ExtensionName
 	unregisterFuncs           []graphsync.UnregisterHookFunc
 	completedRequestListener  func(channelID datatransfer.ChannelID)
 	completedResponseListener func(channelID datatransfer.ChannelID)
@@ -99,13 +97,11 @@ type Transport struct {
 // NewTransport makes a new hooks manager with the given hook events interface
 func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, options ...Option) *Transport {
 	t := &Transport{
-		gs:                    gs,
-		peerID:                peerID,
-		supportedExtensions:   defaultSupportedExtensions,
-		incomingReqExtensions: defaultIncomingReqExtensions,
-		outgoingBlkExtensions: defaultOutgoingBlkExtensions,
-		dtChannels:            make(map[datatransfer.ChannelID]*dtChannel),
-		gsKeyToChannelID:      newGSKeyToChannelIDMap(),
+		gs:                  gs,
+		peerID:              peerID,
+		supportedExtensions: defaultSupportedExtensions,
+		dtChannels:          make(map[datatransfer.ChannelID]*dtChannel),
+		gsKeyToChannelID:    newGSKeyToChannelIDMap(),
 	}
 	for _, option := range options {
 		option(t)
@@ -441,7 +437,7 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 	if msg != nil {
 		// gsOutgoingBlockHook uses a unique extension name so it can be attached with data from a different hook
 		// outgoingBlkExtensions also includes the default extension name so it remains compatible with all data-transfer protocol versions out there
-		extensions, err := extension.ToExtensionData(msg, t.outgoingBlkExtensions)
+		extensions, err := extension.ToExtensionData(msg, outgoingBlkExtensions)
 		if err != nil {
 			hookActions.TerminateWithError(err)
 			return
@@ -511,7 +507,7 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		// gsReqRecdHook uses a unique extension name so it can be attached with data from a different hook
 		// incomingReqExtensions also includes default extension name so it remains compatible with previous data-transfer
 		// protocol versions out there.
-		extensions, extensionErr := extension.ToExtensionData(responseMessage, t.incomingReqExtensions)
+		extensions, extensionErr := extension.ToExtensionData(responseMessage, incomingReqExtensions)
 		if extensionErr != nil {
 			hookActions.TerminateWithError(err)
 			return
@@ -644,7 +640,7 @@ func (t *Transport) gsIncomingResponseHook(p peer.ID, response graphsync.Respons
 		return
 	}
 
-	responseMessage, err := t.processExtension(chid, response, p, t.incomingReqExtensions)
+	responseMessage, err := t.processExtension(chid, response, p, incomingReqExtensions)
 
 	if responseMessage != nil {
 		extensions, extensionErr := extension.ToExtensionData(responseMessage, t.supportedExtensions)
@@ -664,12 +660,10 @@ func (t *Transport) gsIncomingResponseHook(p peer.ID, response graphsync.Respons
 	// In a case where the transfer sends blocks immediately this extension may contain both a
 	// response message and a revalidation request so we trigger OnResponseReceived again for this
 	// specific extension name
-	msg, err := extension.GetTransferData(response, []graphsync.ExtensionName{extension.ExtensionOutgoingBlock1_1})
-	if msg != nil {
-		err := t.events.OnResponseReceived(chid, msg.(datatransfer.Response))
-		if err != nil {
-			hookActions.TerminateWithError(err)
-		}
+	_, err = t.processExtension(chid, response, p, []graphsync.ExtensionName{extension.ExtensionOutgoingBlock1_1})
+
+	if err != nil {
+		hookActions.TerminateWithError(err)
 	}
 }
 
