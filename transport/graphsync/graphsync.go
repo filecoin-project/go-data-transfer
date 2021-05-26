@@ -594,7 +594,7 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		request := msg.(datatransfer.Request)
 		log.Debugf("will validate recieved gs request, chid=%s, request=%+v", chid, request)
 		responseMessage, err = t.events.OnRequestReceived(chid, request)
-		log.Debugf("will send response message %+v for request gs chid=%s", responseMessage, chid)
+		log.Debugf("will send response message %+v for request gs chid=%s, error/pause/resume value=%s", responseMessage, chid, err)
 	} else {
 		// when a DT response comes in on graphsync, it's a push
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID, Responder: p}
@@ -637,6 +637,7 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 	hasXferStarted, isRestart := t.channelXferStarted[chid]
 	if isRestart && !hasXferStarted && !paused {
 		paused = true
+		log.Debugf("pausing responder for request gs chid=%s, even though validator sent no-op as it's a restart req", chid)
 		hookActions.PauseResponse()
 	}
 	t.channelXferStarted[chid] = !paused
