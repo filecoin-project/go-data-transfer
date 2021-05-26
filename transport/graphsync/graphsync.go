@@ -820,7 +820,11 @@ func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extensio
 	}
 
 	dtResponse := msg.(datatransfer.Response)
-	return nil, t.events.OnResponseReceived(chid, dtResponse)
+	err = t.events.OnResponseReceived(chid, dtResponse)
+	if err != nil {
+		log.Errorf("\n error receieved from OnResponseReceived is %s", err)
+	}
+	return nil, err
 }
 
 func (t *Transport) gsRequestorCancelledListener(p peer.ID, request graphsync.RequestData) {

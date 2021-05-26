@@ -161,25 +161,31 @@ func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request datatra
 }
 
 func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datatransfer.Response) error {
+	log.Infof("channel %s: received response %+v from provider", chid, response)
+
 	if response.IsCancel() {
 		log.Infof("channel %s: received cancel response, cancelling channel", chid)
 		return m.channels.Cancel(chid)
 	}
+
 	if response.IsVoucherResult() {
 		if !response.EmptyVoucherResult() {
 			vresult, err := m.decodeVoucherResult(response)
 			if err != nil {
 				return err
 			}
+			log.Infof("channel %s: received voucher response %+v", chid, vresult)
 			err = m.channels.NewVoucherResult(chid, vresult)
 			if err != nil {
 				return err
 			}
 		}
+
 		if !response.Accepted() {
 			log.Infof("channel %s: received rejected response, erroring out channel", chid)
 			return m.channels.Error(chid, datatransfer.ErrRejected)
 		}
+
 		if response.IsNew() {
 			log.Infof("channel %s: received new response, accepting channel", chid)
 			err := m.channels.Accept(chid)
@@ -196,6 +202,7 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 			}
 		}
 	}
+
 	if response.IsComplete() && response.Accepted() {
 		if !response.IsPaused() {
 			log.Infof("channel %s: received complete response, completing channel", chid)
@@ -206,6 +213,7 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 			return nil
 		}
 	}
+
 	if response.IsPaused() {
 		return m.pauseOther(chid)
 	}
@@ -432,6 +440,10 @@ func (m *manager) validateVoucher(
 	}
 
 	result, err := validatorFunc(isRestart, sender, vouch, baseCid, stor)
+	if isPull {
+		log.Infof("\n ValidatePull, result=%s, err=%s", result, err)
+	}
+
 	return vouch, result, err
 }
 
