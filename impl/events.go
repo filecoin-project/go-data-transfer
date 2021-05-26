@@ -171,7 +171,7 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 	if response.IsVoucherResult() {
 		log.Infof("channel %s: received response %+v from provider is a voucher result", chid, response)
 		if !response.EmptyVoucherResult() {
-			log.Debug("processing non-empty voucher result")
+			log.Debugf("channel %s: processing non-empty voucher result", chid)
 			vresult, err := m.decodeVoucherResult(response)
 			if err != nil {
 				log.Errorf("channel %s:, failed to decode voucher result, err=%s", chid, err)
@@ -449,7 +449,7 @@ func (m *manager) validateVoucher(
 
 	result, err := validatorFunc(isRestart, sender, vouch, baseCid, stor)
 	if isPull {
-		log.Infof("\n ValidatePull, result=%s, err=%s", result, err)
+		log.Infof("ValidatePull, result=%s, err=%s", result, err)
 	}
 
 	return vouch, result, err

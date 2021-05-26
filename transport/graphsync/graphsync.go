@@ -592,7 +592,7 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		// when a DT request comes in on graphsync, it's a pull
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}
 		request := msg.(datatransfer.Request)
-		log.Debugf("will validate recieved gs request, chid=%s, request=%+v", chid, request)
+		log.Debugf("will validate received gs request, chid=%s, request=%+v", chid, request)
 		responseMessage, err = t.events.OnRequestReceived(chid, request)
 		log.Debugf("will send response message %+v for request gs chid=%s, error/pause/resume value=%s", responseMessage, chid, err)
 	} else {
@@ -828,7 +828,7 @@ func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extensio
 	dtResponse := msg.(datatransfer.Response)
 	err = t.events.OnResponseReceived(chid, dtResponse)
 	if err != nil {
-		log.Errorf("\n error receieved from OnResponseReceived is %s", err)
+		log.Errorf("error receieved from OnResponseReceived is %s", err)
 	}
 	return nil, err
 }
