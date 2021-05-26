@@ -592,7 +592,9 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		// when a DT request comes in on graphsync, it's a pull
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}
 		request := msg.(datatransfer.Request)
+		log.Debugf("will validate recieved gs request, chid=%s, request=%+v", chid, request)
 		responseMessage, err = t.events.OnRequestReceived(chid, request)
+		log.Debugf("will send response message %+v for request gs chid=%s", responseMessage, chid)
 	} else {
 		// when a DT response comes in on graphsync, it's a push
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID, Responder: p}
@@ -604,15 +606,18 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		extensions, extensionErr := extension.ToExtensionData(responseMessage, t.supportedExtensions)
 		if extensionErr != nil {
 			hookActions.TerminateWithError(err)
+			log.Errorf("terminated client gs request chid=%s with extension err=%s", chid, err)
 			return
 		}
 		for _, extension := range extensions {
+			log.Debugf("queued up extension %+v for response, gs chid=%s", extension, chid)
 			hookActions.SendExtensionData(extension)
 		}
 	}
 
 	if err != nil && err != datatransfer.ErrPause {
 		hookActions.TerminateWithError(err)
+		log.Errorf("terminated client gs request chid=%s with err=%s", chid, err)
 		return
 	}
 

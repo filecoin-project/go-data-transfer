@@ -169,14 +169,18 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 	}
 
 	if response.IsVoucherResult() {
+		log.Infof("channel %s: received response %+v from provider is a voucher result", chid, response)
 		if !response.EmptyVoucherResult() {
+			log.Debug("processing non-empty voucher result")
 			vresult, err := m.decodeVoucherResult(response)
 			if err != nil {
+				log.Errorf("channel %s:, failed to decode voucher result, err=%s", chid, err)
 				return err
 			}
 			log.Infof("channel %s: received voucher response %+v", chid, vresult)
 			err = m.channels.NewVoucherResult(chid, vresult)
 			if err != nil {
+				log.Errorf("channel %s: failed NewVoucherResult, err=%s ", chid, err)
 				return err
 			}
 		}
@@ -190,6 +194,7 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 			log.Infof("channel %s: received new response, accepting channel", chid)
 			err := m.channels.Accept(chid)
 			if err != nil {
+				log.Errorf("channel %s: failed to accept new response, err=%s", chid, err)
 				return err
 			}
 		}
