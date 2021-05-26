@@ -308,7 +308,7 @@ func (mc *monitoredChannel) watchForResponderComplete() {
 	case <-timer.C:
 		// Timer expired before we received a Complete message from the responder
 		err := xerrors.Errorf("%s: timed out waiting %s for Complete message from remote peer",
-			mc.chid, mc.cfg.AcceptTimeout)
+			mc.chid, mc.cfg.CompleteTimeout)
 		mc.closeChannelAndShutdown(err)
 	}
 }

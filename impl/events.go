@@ -213,6 +213,9 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 			log.Infof("channel %s: received complete response, completing channel", chid)
 			return m.channels.ResponderCompletes(chid)
 		}
+
+		log.Infof("channel %s: received complete response but responder is paused", chid)
+
 		err := m.channels.ResponderBeginsFinalization(chid)
 		if err != nil {
 			return nil
