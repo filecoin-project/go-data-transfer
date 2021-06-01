@@ -316,9 +316,9 @@ func (t *Transport) Shutdown(ctx context.Context) error {
 }
 
 // UseStore tells the graphsync transport to use the given loader and storer for this channelID
-func (t *Transport) UseStore(channelID datatransfer.ChannelID, loader ipld.Loader, storer ipld.Storer) error {
+func (t *Transport) UseStore(channelID datatransfer.ChannelID, lsys ipld.LinkSystem) error {
 	ch := t.trackDTChannel(channelID)
-	return ch.useStore(loader, storer)
+	return ch.useStore(lsys)
 }
 
 // gsOutgoingRequestHook is called when a graphsync request is made
@@ -1056,12 +1056,12 @@ func (c *dtChannel) hasStore() bool {
 
 // Use the given loader and storer to get / put blocks for the data-transfer.
 // Note that each data-transfer channel uses a separate multi-store.
-func (c *dtChannel) useStore(loader ipld.Loader, storer ipld.Storer) error {
+func (c *dtChannel) useStore(lsys ipld.LinkSystem) error {
 	c.storeLk.Lock()
 	defer c.storeLk.Unlock()
 
 	// Register the channel's store with graphsync
-	err := c.gs.RegisterPersistenceOption("data-transfer-"+c.channelID.String(), loader, storer)
+	err := c.gs.RegisterPersistenceOption("data-transfer-"+c.channelID.String(), lsys)
 	if err != nil {
 		return err
 	}

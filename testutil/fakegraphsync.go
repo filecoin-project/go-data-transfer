@@ -87,11 +87,6 @@ type CancelResponse struct {
 	RequestID graphsync.RequestID
 }
 
-type PersistenceOption struct {
-	ipld.Loader
-	ipld.Storer
-}
-
 // FakeGraphSync implements a GraphExchange but does nothing
 type FakeGraphSync struct {
 	requests                     chan ReceivedGraphSyncRequest // records calls to fakeGraphSync.Request
@@ -101,7 +96,7 @@ type FakeGraphSync struct {
 	resumeResponses              chan ResumeResponse
 	cancelResponses              chan CancelResponse
 	persistenceOptionsLk         sync.RWMutex
-	persistenceOptions           map[string]PersistenceOption
+	persistenceOptions           map[string]ipld.LinkSystem
 	leaveRequestsOpen            bool
 	OutgoingRequestHook          graphsync.OnOutgoingRequestHook
 	IncomingBlockHook            graphsync.OnIncomingBlockHook
@@ -125,7 +120,7 @@ func NewFakeGraphSync() *FakeGraphSync {
 		pauseResponses:     make(chan PauseResponse, 1),
 		resumeResponses:    make(chan ResumeResponse, 1),
 		cancelResponses:    make(chan CancelResponse, 1),
-		persistenceOptions: make(map[string]PersistenceOption),
+		persistenceOptions: make(map[string]ipld.LinkSystem),
 	}
 }
 
@@ -230,7 +225,7 @@ func (fgs *FakeGraphSync) AssertCancelResponseReceived(ctx context.Context, t *t
 }
 
 // AssertHasPersistenceOption verifies that a persistence option was registered
-func (fgs *FakeGraphSync) AssertHasPersistenceOption(t *testing.T, name string) PersistenceOption {
+func (fgs *FakeGraphSync) AssertHasPersistenceOption(t *testing.T, name string) ipld.LinkSystem {
 	fgs.persistenceOptionsLk.RLock()
 	defer fgs.persistenceOptionsLk.RUnlock()
 	option, ok := fgs.persistenceOptions[name]
@@ -259,14 +254,14 @@ func (fgs *FakeGraphSync) Request(ctx context.Context, p peer.ID, root ipld.Link
 }
 
 // RegisterPersistenceOption registers an alternate loader/storer combo that can be substituted for the default
-func (fgs *FakeGraphSync) RegisterPersistenceOption(name string, loader ipld.Loader, storer ipld.Storer) error {
+func (fgs *FakeGraphSync) RegisterPersistenceOption(name string, lsys ipld.LinkSystem) error {
 	fgs.persistenceOptionsLk.Lock()
 	defer fgs.persistenceOptionsLk.Unlock()
 	_, ok := fgs.persistenceOptions[name]
 	if ok {
 		return errors.New("already registered")
 	}
-	fgs.persistenceOptions[name] = PersistenceOption{Loader: loader, Storer: storer}
+	fgs.persistenceOptions[name] = lsys
 	return nil
 }
 
