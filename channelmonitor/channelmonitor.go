@@ -101,7 +101,12 @@ func (m *Monitor) addChannel(chid datatransfer.ChannelID, isPush bool) *monitore
 	}
 
 	m.lk.Lock()
-	defer m.lk.Unlock()
+	log.Debugf("aquired lock to create channel monitor for channelID=%s", chid)
+	defer func() {
+		log.Debugf("will release channel monitor lock for channelID=%s", chid)
+		m.lk.Unlock()
+		log.Debugf("released channel monitor lock for channelID=%s", chid)
+	}()
 
 	// Check if there is already a monitor for this channel
 	if _, ok := m.channels[chid]; ok {
@@ -114,8 +119,10 @@ func (m *Monitor) addChannel(chid datatransfer.ChannelID, isPush bool) *monitore
 		return nil
 	}
 
+	log.Debugf("will create channel monitor for channelID=%s", chid)
 	mpc := newMonitoredChannel(m.ctx, m.mgr, chid, m.cfg, m.onMonitoredChannelShutdown)
 	m.channels[chid] = mpc
+	log.Debugf("created channel monitor for channelID=%s", chid)
 	return mpc
 }
 
@@ -224,6 +231,8 @@ func (mc *monitoredChannel) start() {
 
 	// Watch to make sure the responder accepts the channel in time
 	cancelAcceptTimer := mc.watchForResponderAccept()
+
+	log.Debugf("finished creating timer for accept messages, channelID=%s", mc.chid)
 
 	// Watch for data-transfer channel events
 	mc.unsub = mc.mgr.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
@@ -448,6 +457,9 @@ func (mc *monitoredChannel) sendRestartMessage(restartCount int) error {
 	if err != nil {
 		return xerrors.Errorf("%s: failed to send restart message to %s: %w", mc.chid, p, err)
 	}
+	log.Infof("%s: sent restart message to %s (%d consecutive restarts)", mc.chid, p, restartCount)
+
+	restartResult := mc.waitForRestartResponse()
 
 	// The restart message was sent successfully.
 	// If a restart backoff is configured, backoff after a restart before

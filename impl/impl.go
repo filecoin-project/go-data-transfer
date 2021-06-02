@@ -204,19 +204,17 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 		transportConfigurer(chid, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
-	monitoredChan := m.channelMonitor.AddPushChannel(chid)
+
 	if err := m.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.channels.Error(chid, err)
-
-		// If push channel monitoring is enabled, shutdown the monitor as it
-		// wasn't possible to start the data transfer
-		if monitoredChan != nil {
-			monitoredChan.Shutdown()
-		}
-
 		return chid, err
 	}
+
+	log.Debugf("sent push request message, channelID=%s", chid)
+
+	m.channelMonitor.AddPushChannel(chid)
+	log.Infof("started new channel monitor for push request, channelID=%s", chid)
 
 	return chid, nil
 }
@@ -242,19 +240,18 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 		transportConfigurer(chid, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
-	monitoredChan := m.channelMonitor.AddPullChannel(chid)
+
 	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, nil, req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.channels.Error(chid, err)
 
-		// If pull channel monitoring is enabled, shutdown the monitor as it
-		// wasn't possible to start the data transfer
-		if monitoredChan != nil {
-			monitoredChan.Shutdown()
-		}
-
 		return chid, err
 	}
+
+	log.Debugf("sent pull channel request channelID=%s", chid)
+	m.channelMonitor.AddPullChannel(chid)
+	log.Infof("started new channel monitor for pull request: channelID=%s", chid)
+
 	return chid, nil
 }
 

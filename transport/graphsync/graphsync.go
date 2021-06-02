@@ -484,7 +484,9 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		defer ch.lk.Unlock()
 
 		request := msg.(datatransfer.Request)
+		log.Debugf("will validate received gs request, chid=%s, request=%+v", chid, request)
 		responseMessage, err = t.events.OnRequestReceived(chid, request)
+		log.Debugf("will send response message %+v for request gs chid=%s, error/pause/resume value=%s", responseMessage, chid, err)
 	} else {
 		// when a data transfer response comes in on graphsync, this node
 		// initiated a push, and the remote peer responded with a request
@@ -510,15 +512,18 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		extensions, extensionErr := extension.ToExtensionData(responseMessage, incomingReqExtensions)
 		if extensionErr != nil {
 			hookActions.TerminateWithError(err)
+			log.Errorf("terminated client gs request chid=%s with extension err=%s", chid, err)
 			return
 		}
 		for _, extension := range extensions {
+			log.Debugf("queued up extension %+v for response, gs chid=%s", extension, chid)
 			hookActions.SendExtensionData(extension)
 		}
 	}
 
 	if err != nil && err != datatransfer.ErrPause {
 		hookActions.TerminateWithError(err)
+		log.Errorf("terminated client gs request chid=%s with err=%s", chid, err)
 		return
 	}
 
@@ -539,6 +544,7 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		log.Debugf("%s: pausing graphsync response after restart", chid)
 
 		paused = true
+		log.Debugf("pausing responder for request gs chid=%s, even though validator sent no-op as it's a restart req", chid)
 		hookActions.PauseResponse()
 	}
 
@@ -696,7 +702,11 @@ func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extensio
 	}
 
 	dtResponse := msg.(datatransfer.Response)
-	return nil, t.events.OnResponseReceived(chid, dtResponse)
+	err = t.events.OnResponseReceived(chid, dtResponse)
+	if err != nil {
+		log.Errorf("error receieved from OnResponseReceived is %s", err)
+	}
+	return nil, err
 }
 
 func (t *Transport) gsRequestorCancelledListener(p peer.ID, request graphsync.RequestData) {

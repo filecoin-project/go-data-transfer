@@ -154,11 +154,13 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 	ctx context.Context,
 	p peer.ID,
 	outgoing datatransfer.Message) error {
+	log.Debugf("opening stream to peer %s to send message %+v", p, outgoing)
 
 	s, err := dtnet.openStream(ctx, p, dtnet.dtProtocols...)
 	if err != nil {
 		return err
 	}
+	log.Debugf("finished opening stream to peer %s to send message %+v", p, outgoing)
 
 	outgoing, err = outgoing.MessageForProtocol(s.Protocol())
 	if err != nil {

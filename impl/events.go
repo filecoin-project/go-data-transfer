@@ -161,29 +161,40 @@ func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request datatra
 }
 
 func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datatransfer.Response) error {
+	log.Infof("channel %s: received response %+v from provider", chid, response)
+
 	if response.IsCancel() {
 		log.Infof("channel %s: received cancel response, cancelling channel", chid)
 		return m.channels.Cancel(chid)
 	}
+
 	if response.IsVoucherResult() {
+		log.Infof("channel %s: received response %+v from provider is a voucher result", chid, response)
 		if !response.EmptyVoucherResult() {
+			log.Debugf("channel %s: processing non-empty voucher result", chid)
 			vresult, err := m.decodeVoucherResult(response)
 			if err != nil {
+				log.Errorf("channel %s:, failed to decode voucher result, err=%s", chid, err)
 				return err
 			}
+			log.Infof("channel %s: received voucher response %+v", chid, vresult)
 			err = m.channels.NewVoucherResult(chid, vresult)
 			if err != nil {
+				log.Errorf("channel %s: failed NewVoucherResult, err=%s ", chid, err)
 				return err
 			}
 		}
+
 		if !response.Accepted() {
 			log.Infof("channel %s: received rejected response, erroring out channel", chid)
 			return m.channels.Error(chid, datatransfer.ErrRejected)
 		}
+
 		if response.IsNew() {
 			log.Infof("channel %s: received new response, accepting channel", chid)
 			err := m.channels.Accept(chid)
 			if err != nil {
+				log.Errorf("channel %s: failed to accept new response, err=%s", chid, err)
 				return err
 			}
 		}
@@ -196,16 +207,21 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 			}
 		}
 	}
+
 	if response.IsComplete() && response.Accepted() {
 		if !response.IsPaused() {
 			log.Infof("channel %s: received complete response, completing channel", chid)
 			return m.channels.ResponderCompletes(chid)
 		}
+
+		log.Infof("channel %s: received complete response but responder is paused", chid)
+
 		err := m.channels.ResponderBeginsFinalization(chid)
 		if err != nil {
 			return nil
 		}
 	}
+
 	if response.IsPaused() {
 		return m.pauseOther(chid)
 	}
@@ -432,6 +448,10 @@ func (m *manager) validateVoucher(
 	}
 
 	result, err := validatorFunc(isRestart, sender, vouch, baseCid, stor)
+	if isPull {
+		log.Infof("ValidatePull, result=%s, err=%s", result, err)
+	}
+
 	return vouch, result, err
 }
 
