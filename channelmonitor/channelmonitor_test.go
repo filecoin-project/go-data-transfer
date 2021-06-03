@@ -544,6 +544,10 @@ func (m *mockChannelState) Status() datatransfer.Status {
 	return datatransfer.Ongoing
 }
 
+func (m *mockChannelState) NReceivedCids() uint64 {
+	panic("implement me")
+}
+
 func (m *mockChannelState) TransferID() datatransfer.TransferID {
 	panic("implement me")
 }

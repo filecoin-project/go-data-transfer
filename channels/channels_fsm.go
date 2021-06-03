@@ -50,6 +50,7 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.DataReceivedProgress).FromMany(transferringStates...).ToNoChange().
 		Action(func(chst *internal.ChannelState, delta uint64) error {
 			chst.Received += delta
+			chst.NReceivedCids = chst.NReceivedCids + 1
 			chst.AddLog("received data")
 			return nil
 		}),
