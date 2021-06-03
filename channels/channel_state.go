@@ -50,6 +50,8 @@ type channelState struct {
 	voucherDecoder       DecoderByTypeFunc
 	channelCIDsReader    ChannelCIDsReader
 
+	nReceivedCids uint64
+
 	// stages tracks the timeline of events related to a data transfer, for
 	// traceability purposes.
 	stages *datatransfer.ChannelStages
@@ -105,6 +107,10 @@ func (c channelState) ReceivedCids() []cid.Cid {
 		log.Error(err)
 	}
 	return receivedCids
+}
+
+func (c channelState) NReceivedCids() uint64 {
+	return c.nReceivedCids
 }
 
 // Sender returns the peer id for the node that is sending data
@@ -211,6 +217,7 @@ func fromInternalChannelState(c internal.ChannelState, voucherDecoder DecoderByT
 		voucherDecoder:       voucherDecoder,
 		channelCIDsReader:    channelCIDsReader,
 		stages:               c.Stages,
+		nReceivedCids:        c.NReceivedCids,
 	}
 }
 

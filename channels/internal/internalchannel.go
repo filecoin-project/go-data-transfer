@@ -61,6 +61,9 @@ type ChannelState struct {
 	Vouchers       []EncodedVoucher
 	VoucherResults []EncodedVoucherResult
 
+	// NReceivedCids is the number of cids for which data has already been received by this node.
+	NReceivedCids uint64
+
 	// Stages traces the execution fo a data transfer.
 	//
 	// EXPERIMENTAL; subject to change.
