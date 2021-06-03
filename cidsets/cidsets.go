@@ -29,6 +29,16 @@ func (mgr *CIDSetManager) InsertSetCID(sid SetID, c cid.Cid) (exists bool, err e
 	return mgr.getSet(sid).Insert(c)
 }
 
+// SetToArray gets the set as an array of CIDs
+func (mgr *CIDSetManager) SetToArray(sid SetID) ([]cid.Cid, error) {
+	return mgr.getSet(sid).ToArray()
+}
+
+// SetLen gets the number of CIDs in the set
+func (mgr *CIDSetManager) SetLen(sid SetID) (int, error) {
+	return mgr.getSet(sid).Len()
+}
+
 // DeleteSet deletes a CID set
 func (mgr *CIDSetManager) DeleteSet(sid SetID) error {
 	return mgr.getSet(sid).Truncate()
@@ -55,8 +65,9 @@ func (mgr *CIDSetManager) getSetDS(sid SetID) datastore.Batching {
 
 // cidSet persists a set of CIDs
 type cidSet struct {
-	lk sync.Mutex
-	ds datastore.Batching
+	lk  sync.Mutex
+	ds  datastore.Batching
+	len *int
 }
 
 func NewCIDSet(ds datastore.Batching) *cidSet {
@@ -69,15 +80,96 @@ func (s *cidSet) Insert(c cid.Cid) (exists bool, err error) {
 	s.lk.Lock()
 	defer s.lk.Unlock()
 
+	// Check if the key is in the set already
 	k := datastore.NewKey(c.String())
 	has, err := s.ds.Has(k)
 	if err != nil {
 		return false, err
 	}
 	if has {
+		// Already in the set, just return true
 		return true, nil
 	}
-	return false, s.ds.Put(k, nil)
+
+	// Get the length of the set
+	len, err := s.unlockedLen()
+	if err != nil {
+		return false, err
+	}
+
+	// Add the new CID to the set
+	err = s.ds.Put(k, nil)
+	if err != nil {
+		return false, err
+	}
+
+	// Increment the cached length of the set
+	len++
+	s.len = &len
+
+	return false, nil
+}
+
+// Returns the number of CIDs in the set
+func (s *cidSet) Len() (int, error) {
+	s.lk.Lock()
+	defer s.lk.Unlock()
+
+	return s.unlockedLen()
+}
+
+func (s *cidSet) unlockedLen() (int, error) {
+	// If the length is already cached, return it
+	if s.len != nil {
+		return *s.len, nil
+	}
+
+	// Query the datastore for all keys
+	res, err := s.ds.Query(query.Query{KeysOnly: true})
+	if err != nil {
+		return 0, err
+	}
+
+	entries, err := res.Rest()
+	if err != nil {
+		return 0, err
+	}
+
+	// Cache the length of the set
+	len := len(entries)
+	s.len = &len
+
+	return len, nil
+}
+
+// Get all cids in the set as an array
+func (s *cidSet) ToArray() ([]cid.Cid, error) {
+	s.lk.Lock()
+	defer s.lk.Unlock()
+
+	res, err := s.ds.Query(query.Query{KeysOnly: true})
+	if err != nil {
+		return nil, err
+	}
+
+	entries, err := res.Rest()
+	if err != nil {
+		return nil, err
+	}
+
+	cids := make([]cid.Cid, 0, len(entries))
+	for _, entry := range entries {
+		k := entry.Key
+		if string(k[0]) == "/" {
+			k = k[1:]
+		}
+		c, err := cid.Parse(k)
+		if err != nil {
+			return nil, err
+		}
+		cids = append(cids, c)
+	}
+	return cids, nil
 }
 
 // Truncate removes all CIDs in the set
@@ -85,6 +177,7 @@ func (s *cidSet) Truncate() error {
 	s.lk.Lock()
 	defer s.lk.Unlock()
 
+	// Get all keys in the datastore
 	res, err := s.ds.Query(query.Query{KeysOnly: true})
 	if err != nil {
 		return err
@@ -95,11 +188,13 @@ func (s *cidSet) Truncate() error {
 		return err
 	}
 
+	// Create a batch to perform all deletes as one operation
 	batched, err := s.ds.Batch()
 	if err != nil {
 		return err
 	}
 
+	// Add delete operations for each key to the batch
 	for _, entry := range entries {
 		err := batched.Delete(datastore.NewKey(entry.Key))
 		if err != nil {
@@ -107,5 +202,15 @@ func (s *cidSet) Truncate() error {
 		}
 	}
 
-	return batched.Commit()
+	// Commit the batch
+	err = batched.Commit()
+	if err != nil {
+		return err
+	}
+
+	// Set the cached length of the set to zero
+	len := 0
+	s.len = &len
+
+	return nil
 }
