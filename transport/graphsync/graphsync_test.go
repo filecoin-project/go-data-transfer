@@ -240,7 +240,7 @@ func TestManager(t *testing.T) {
 				dtRequestData, _ := gsData.request.Extension(extension.ExtensionDataTransfer1_1)
 				assertDecodesToMessage(t, dtRequestData, events.RequestReceivedRequest)
 				require.True(t, gsData.incomingRequestHookActions.Validated)
-				assertHasOutgoingMessage(t, gsData.incomingRequestHookActions.SentExtensions, events.RequestReceivedResponse)
+				assertHasExtensionMessage(t, extension.ExtensionDataTransfer1_1, gsData.incomingRequestHookActions.SentExtensions, events.RequestReceivedResponse)
 				require.NoError(t, gsData.incomingRequestHookActions.TerminationError)
 			},
 		},
@@ -289,7 +289,7 @@ func TestManager(t *testing.T) {
 				dtRequestData, _ := gsData.request.Extension(extension.ExtensionDataTransfer1_1)
 				assertDecodesToMessage(t, dtRequestData, events.RequestReceivedRequest)
 				require.False(t, gsData.incomingRequestHookActions.Validated)
-				assertHasOutgoingMessage(t, gsData.incomingRequestHookActions.SentExtensions, events.RequestReceivedResponse)
+				assertHasExtensionMessage(t, extension.ExtensionIncomingRequest1_1, gsData.incomingRequestHookActions.SentExtensions, events.RequestReceivedResponse)
 				require.Error(t, gsData.incomingRequestHookActions.TerminationError)
 			},
 		},
@@ -372,7 +372,7 @@ func TestManager(t *testing.T) {
 				require.Equal(t, 1, events.OnRequestReceivedCallCount)
 				require.True(t, events.OnDataQueuedCalled)
 				require.NoError(t, gsData.outgoingBlockHookActions.TerminationError)
-				assertHasOutgoingMessage(t, gsData.outgoingBlockHookActions.SentExtensions,
+				assertHasExtensionMessage(t, extension.ExtensionOutgoingBlock1_1, gsData.outgoingBlockHookActions.SentExtensions,
 					events.OnDataQueuedMessage)
 			},
 		},
@@ -668,6 +668,8 @@ func TestManager(t *testing.T) {
 			action: func(gsData *harness) {
 				cids := testutil.GenerateCids(2)
 				stor, _ := gsData.outgoing.Selector()
+
+				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
@@ -696,6 +698,7 @@ func TestManager(t *testing.T) {
 			action: func(gsData *harness) {
 				cids := testutil.GenerateCids(2)
 				stor, _ := gsData.outgoing.Selector()
+				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
@@ -705,6 +708,7 @@ func TestManager(t *testing.T) {
 					cids,
 					gsData.outgoing)
 
+				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
@@ -727,6 +731,7 @@ func TestManager(t *testing.T) {
 				gsData.fgs.LeaveRequestsOpen()
 				stor, _ := gsData.outgoing.Selector()
 
+				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
@@ -752,6 +757,7 @@ func TestManager(t *testing.T) {
 				gsData.fgs.LeaveRequestsOpen()
 				stor, _ := gsData.outgoing.Selector()
 
+				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
@@ -778,6 +784,7 @@ func TestManager(t *testing.T) {
 				gsData.fgs.LeaveRequestsOpen()
 				stor, _ := gsData.outgoing.Selector()
 
+				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
@@ -786,8 +793,6 @@ func TestManager(t *testing.T) {
 					stor,
 					nil,
 					gsData.outgoing)
-
-				gsData.outgoingRequestHook()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				requestReceived := gsData.fgs.AssertRequestReceived(gsData.ctx, t)
@@ -808,6 +813,7 @@ func TestManager(t *testing.T) {
 				gsData.fgs.LeaveRequestsOpen()
 				stor, _ := gsData.outgoing.Selector()
 
+				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
@@ -834,6 +840,7 @@ func TestManager(t *testing.T) {
 				gsData.fgs.LeaveRequestsOpen()
 				stor, _ := gsData.outgoing.Selector()
 
+				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
@@ -867,6 +874,7 @@ func TestManager(t *testing.T) {
 				gsData.fgs.LeaveRequestsOpen()
 				stor, _ := gsData.outgoing.Selector()
 
+				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
 					gsData.ctx,
 					gsData.other,
@@ -939,6 +947,7 @@ func TestManager(t *testing.T) {
 			},
 		},
 	}
+
 	ctx := context.Background()
 	for testCase, data := range testCases {
 		t.Run(testCase, func(t *testing.T) {
@@ -1145,11 +1154,11 @@ type dtConfig struct {
 	dtExtensionMalformed bool
 }
 
-func (dtc *dtConfig) extensions(t *testing.T, transferID datatransfer.TransferID) map[graphsync.ExtensionName][]byte {
+func (dtc *dtConfig) extensions(t *testing.T, transferID datatransfer.TransferID, extName graphsync.ExtensionName) map[graphsync.ExtensionName][]byte {
 	extensions := make(map[graphsync.ExtensionName][]byte)
 	if !dtc.dtExtensionMissing {
 		if dtc.dtExtensionMalformed {
-			extensions[extension.ExtensionDataTransfer1_1] = testutil.RandomBytes(100)
+			extensions[extName] = testutil.RandomBytes(100)
 		} else {
 			var msg datatransfer.Message
 			if dtc.dtIsResponse {
@@ -1160,7 +1169,7 @@ func (dtc *dtConfig) extensions(t *testing.T, transferID datatransfer.TransferID
 			buf := new(bytes.Buffer)
 			err := msg.ToNet(buf)
 			require.NoError(t, err)
-			extensions[extension.ExtensionDataTransfer1_1] = buf.Bytes()
+			extensions[extName] = buf.Bytes()
 		}
 	}
 	return extensions
@@ -1178,7 +1187,7 @@ func (grc *gsRequestConfig) makeRequest(t *testing.T, transferID datatransfer.Tr
 		dtIsResponse:         grc.dtIsResponse,
 		dtExtensionMalformed: grc.dtExtensionMalformed,
 	}
-	extensions := dtConfig.extensions(t, transferID)
+	extensions := dtConfig.extensions(t, transferID, extension.ExtensionDataTransfer1_1)
 	return testutil.NewFakeRequest(requestID, extensions)
 }
 
@@ -1195,7 +1204,7 @@ func (grc *gsResponseConfig) makeResponse(t *testing.T, transferID datatransfer.
 		dtIsResponse:         grc.dtIsResponse,
 		dtExtensionMalformed: grc.dtExtensionMalformed,
 	}
-	extensions := dtConfig.extensions(t, transferID)
+	extensions := dtConfig.extensions(t, transferID, extension.ExtensionDataTransfer1_1)
 	return testutil.NewFakeResponse(requestID, extensions, grc.status)
 }
 
@@ -1212,6 +1221,17 @@ func assertHasOutgoingMessage(t *testing.T, extensions []graphsync.ExtensionData
 	require.NoError(t, err)
 	expectedExt := graphsync.ExtensionData{
 		Name: extension.ExtensionDataTransfer1_1,
+		Data: buf.Bytes(),
+	}
+	require.Contains(t, extensions, expectedExt)
+}
+
+func assertHasExtensionMessage(t *testing.T, name graphsync.ExtensionName, extensions []graphsync.ExtensionData, expected datatransfer.Message) {
+	buf := new(bytes.Buffer)
+	err := expected.ToNet(buf)
+	require.NoError(t, err)
+	expectedExt := graphsync.ExtensionData{
+		Name: name,
 		Data: buf.Bytes(),
 	}
 	require.Contains(t, extensions, expectedExt)
