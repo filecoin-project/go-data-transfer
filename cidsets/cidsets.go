@@ -67,11 +67,11 @@ func (mgr *CIDSetManager) getSetDS(sid SetID) datastore.Batching {
 type cidSet struct {
 	lk  sync.Mutex
 	ds  datastore.Batching
-	len *int
+	len int // cached length of set, starts at -1
 }
 
 func NewCIDSet(ds datastore.Batching) *cidSet {
-	return &cidSet{ds: ds}
+	return &cidSet{ds: ds, len: -1}
 }
 
 // Insert a CID into the set.
@@ -104,8 +104,7 @@ func (s *cidSet) Insert(c cid.Cid) (exists bool, err error) {
 	}
 
 	// Increment the cached length of the set
-	len++
-	s.len = &len
+	s.len = len + 1
 
 	return false, nil
 }
@@ -120,8 +119,8 @@ func (s *cidSet) Len() (int, error) {
 
 func (s *cidSet) unlockedLen() (int, error) {
 	// If the length is already cached, return it
-	if s.len != nil {
-		return *s.len, nil
+	if s.len >= 0 {
+		return s.len, nil
 	}
 
 	// Query the datastore for all keys
@@ -136,10 +135,9 @@ func (s *cidSet) unlockedLen() (int, error) {
 	}
 
 	// Cache the length of the set
-	len := len(entries)
-	s.len = &len
+	s.len = len(entries)
 
-	return len, nil
+	return s.len, nil
 }
 
 // Get all cids in the set as an array
@@ -159,10 +157,13 @@ func (s *cidSet) ToArray() ([]cid.Cid, error) {
 
 	cids := make([]cid.Cid, 0, len(entries))
 	for _, entry := range entries {
+		// When we create a datastore Key, a "/" is automatically pre-pended,
+		// so here we need to remove the preceding "/" before parsing as a CID
 		k := entry.Key
 		if string(k[0]) == "/" {
 			k = k[1:]
 		}
+
 		c, err := cid.Parse(k)
 		if err != nil {
 			return nil, err
@@ -209,8 +210,7 @@ func (s *cidSet) Truncate() error {
 	}
 
 	// Set the cached length of the set to zero
-	len := 0
-	s.len = &len
+	s.len = 0
 
 	return nil
 }

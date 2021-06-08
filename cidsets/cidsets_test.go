@@ -157,3 +157,55 @@ func TestCIDSetLenAfterInsert(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len)
 }
+
+func TestCIDSetRestart(t *testing.T) {
+	cids := testutil.GenerateCids(3)
+	cid1 := cids[0]
+	cid2 := cids[1]
+	cid3 := cids[2]
+
+	dstore := ds_sync.MutexWrap(ds.NewMapDatastore())
+	mgr := NewCIDSetManager(dstore)
+	setID1 := SetID("set1")
+
+	// set1: +cid1
+	exists, err := mgr.InsertSetCID(setID1, cid1)
+	require.NoError(t, err)
+	require.False(t, exists)
+
+	// set1: +cid2
+	exists, err = mgr.InsertSetCID(setID1, cid2)
+	require.NoError(t, err)
+	require.False(t, exists)
+
+	// Expect 2 cids in set
+	arr, err := mgr.SetToArray(setID1)
+	require.NoError(t, err)
+	require.Len(t, arr, 2)
+	require.Contains(t, arr, cid1)
+	require.Contains(t, arr, cid2)
+
+	// Simulate a restart by creating a new CIDSetManager from the same
+	// datastore
+	mgr = NewCIDSetManager(dstore)
+
+	// Expect 2 cids in set
+	arr, err = mgr.SetToArray(setID1)
+	require.NoError(t, err)
+	require.Len(t, arr, 2)
+	require.Contains(t, arr, cid1)
+	require.Contains(t, arr, cid2)
+
+	// set1: +cid3
+	exists, err = mgr.InsertSetCID(setID1, cid3)
+	require.NoError(t, err)
+	require.False(t, exists)
+
+	// Expect 3 cids in set
+	arr, err = mgr.SetToArray(setID1)
+	require.NoError(t, err)
+	require.Len(t, arr, 3)
+	require.Contains(t, arr, cid1)
+	require.Contains(t, arr, cid2)
+	require.Contains(t, arr, cid3)
+}
