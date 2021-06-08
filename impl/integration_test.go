@@ -5,6 +5,7 @@ import (
 	"context"
 	"math/rand"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -1720,6 +1721,58 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 	}
 }
 
+// channelTracking similar to https://github.com/filecoin-project/go-fil-markets/blob/62bfbff1170a87fa7b406a5f9b8e4e797fdb9707/retrievalmarket/impl/requestvalidation/revalidator.go#L58
+type channelTracking struct {
+	mu      sync.Mutex
+	tracked map[datatransfer.ChannelID]bool
+}
+
+func (ct *channelTracking) TrackChannel(chid datatransfer.ChannelID) {
+	ct.mu.Lock()
+	ct.tracked[chid] = true
+	ct.mu.Unlock()
+}
+func (ct *channelTracking) Tracking(chid datatransfer.ChannelID) bool {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	return ct.tracked[chid]
+}
+
+type retrievalRevalidatorTracking struct {
+	*testutil.StubbedRevalidator
+	dataSoFar          uint64
+	providerPausePoint int
+	pausePoints        []uint64
+	finalVoucher       datatransfer.VoucherResult
+	revalVouchers      []datatransfer.VoucherResult
+	tracker            *channelTracking
+}
+
+func (r *retrievalRevalidatorTracking) OnPullDataSent(chid datatransfer.ChannelID, additionalBytesSent uint64) (bool, datatransfer.VoucherResult, error) {
+	if !r.tracker.Tracking(chid) {
+		// We're not tracking this channel therefore we can't update its state
+		panic("channel not tracked")
+	}
+	r.dataSoFar += additionalBytesSent
+	if r.providerPausePoint < len(r.pausePoints) &&
+		r.dataSoFar >= r.pausePoints[r.providerPausePoint] {
+		var v datatransfer.VoucherResult = testutil.NewFakeDTType()
+		if len(r.revalVouchers) > r.providerPausePoint {
+			v = r.revalVouchers[r.providerPausePoint]
+		}
+		r.providerPausePoint++
+		return true, v, datatransfer.ErrPause
+	}
+	return true, nil, nil
+}
+
+func (r *retrievalRevalidatorTracking) OnPushDataReceived(chid datatransfer.ChannelID, additionalBytesReceived uint64) (bool, datatransfer.VoucherResult, error) {
+	return false, nil, nil
+}
+func (r *retrievalRevalidatorTracking) OnComplete(chid datatransfer.ChannelID) (bool, datatransfer.VoucherResult, error) {
+	return true, r.finalVoucher, datatransfer.ErrPause
+}
+
 // Test the ability to attach data from multiple hooks in the same extension payload by using
 // different names
 func TestMultipleMessagesInExtension(t *testing.T) {
@@ -1775,9 +1828,16 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	encodedFVR, err := encoding.Encode(finalVoucherResult)
 	require.NoError(t, err)
 
+	tracker := &channelTracking{tracked: make(map[datatransfer.ChannelID]bool)}
+
 	dt2.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 		if event.Code == datatransfer.Error {
 			errChan <- struct{}{}
+		}
+		// When we've received the Accept event we can finally know that this channel has been validated
+		// positively
+		if event.Code == datatransfer.Accept {
+			tracker.TrackChannel(channelState.ChannelID())
 		}
 		// Here we verify reception of voucherResults by the client
 		if event.Code == datatransfer.NewVoucherResult {
@@ -1832,8 +1892,8 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	// sending blocks immediately
 	sv.StubResult(respVoucher)
 
-	srv := &retrievalRevalidator{
-		testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult, voucherResults,
+	srv := &retrievalRevalidatorTracking{
+		testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult, voucherResults, tracker,
 	}
 	// The stubbed revalidator will authorize Revalidate and return ErrResume to finisht the transfer
 	srv.ExpectSuccessErrResume()
