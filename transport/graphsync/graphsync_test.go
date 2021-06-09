@@ -1018,6 +1018,9 @@ type fakeEvents struct {
 	OnReceiveDataErrorCalled    bool
 	OnReceiveDataErrorChannelID datatransfer.ChannelID
 
+	TransferQueuedCalled    bool
+	TransferQueuedChannelID datatransfer.ChannelID
+
 	ChannelCompletedSuccess  bool
 	RequestReceivedRequest   datatransfer.Request
 	RequestReceivedResponse  datatransfer.Response
@@ -1035,6 +1038,11 @@ func (fe *fakeEvents) OnRequestTimedOut(chid datatransfer.ChannelID, err error) 
 	fe.OnRequestTimedOutChannelId = chid
 
 	return nil
+}
+
+func (fe *fakeEvents) OnTransferQueued(chid datatransfer.ChannelID) {
+	fe.TransferQueuedCalled = true
+	fe.TransferQueuedChannelID = chid
 }
 
 func (fe *fakeEvents) OnRequestDisconnected(chid datatransfer.ChannelID, err error) error {

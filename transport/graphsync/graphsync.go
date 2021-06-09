@@ -474,7 +474,7 @@ func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData) {
 		request := msg.(datatransfer.Request)
 		if request.IsRestart() || request.IsNew() {
 			log.Infof("channelID=%s, pull request queued, req=%+v", chid, request)
-			// TODO Fire off a queued event here ?
+			t.events.OnTransferQueued(chid)
 		}
 	} else {
 		// when a data transfer response comes in on graphsync, this node
@@ -489,7 +489,7 @@ func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData) {
 		response := msg.(datatransfer.Response)
 		if response.IsNew() || response.IsRestart() {
 			log.Infof("channelID=%s, GS pull request queued in response to our push, req=%+v", chid, request)
-			// TODO Fire off a queued event here ?
+			t.events.OnTransferQueued(chid)
 		}
 	}
 }
