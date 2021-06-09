@@ -215,8 +215,8 @@ func (c *Channels) Accept(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.Accept)
 }
 
-func (c *Channels) TransferRequestQueuedinTransport(chid datatransfer.ChannelID) error {
-	return c.send(chid, datatransfer.TransferRequestQueuedinTransport)
+func (c *Channels) TransferRequestQueued(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.TransferRequestQueued)
 }
 
 // Restart marks a data transfer as restarted

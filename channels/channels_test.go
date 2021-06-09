@@ -132,9 +132,9 @@ func TestChannels(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, state.Status(), datatransfer.Ongoing)
 
-		err = channelList.TransferRequestQueuedinTransport(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
+		err = channelList.TransferRequestQueued(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
-		state = checkEvent(ctx, t, received, datatransfer.TransferRequestQueuedinTransport)
+		state = checkEvent(ctx, t, received, datatransfer.TransferRequestQueued)
 		require.Equal(t, state.Status(), datatransfer.Ongoing)
 	})
 

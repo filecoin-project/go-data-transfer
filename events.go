@@ -103,41 +103,41 @@ const (
 	// receiving data from the remote peer
 	ReceiveDataError
 
-	// TransferRequestQueuedinTransport indicates that a new data transfer request has been queued in the transport layer
-	TransferRequestQueuedinTransport
+	// TransferRequestQueued indicates that a new data transfer request has been queued in the transport layer
+	TransferRequestQueued
 )
 
 // Events are human readable names for data transfer events
 var Events = map[EventCode]string{
-	Open:                             "Open",
-	Accept:                           "Accept",
-	Restart:                          "Restart",
-	DataReceived:                     "DataReceived",
-	DataSent:                         "DataSent",
-	Cancel:                           "Cancel",
-	Error:                            "Error",
-	CleanupComplete:                  "CleanupComplete",
-	NewVoucher:                       "NewVoucher",
-	NewVoucherResult:                 "NewVoucherResult",
-	PauseInitiator:                   "PauseInitiator",
-	ResumeInitiator:                  "ResumeInitiator",
-	PauseResponder:                   "PauseResponder",
-	ResumeResponder:                  "ResumeResponder",
-	FinishTransfer:                   "FinishTransfer",
-	ResponderCompletes:               "ResponderCompletes",
-	ResponderBeginsFinalization:      "ResponderBeginsFinalization",
-	BeginFinalizing:                  "BeginFinalizing",
-	Disconnected:                     "Disconnected",
-	Complete:                         "Complete",
-	CompleteCleanupOnRestart:         "CompleteCleanupOnRestart",
-	DataQueued:                       "DataQueued",
-	DataQueuedProgress:               "DataQueuedProgress",
-	DataSentProgress:                 "DataSentProgress",
-	DataReceivedProgress:             "DataReceivedProgress",
-	RequestTimedOut:                  "RequestTimedOut",
-	SendDataError:                    "SendDataError",
-	ReceiveDataError:                 "ReceiveDataError",
-	TransferRequestQueuedinTransport: "TransferRequestQueuedinTransport",
+	Open:                        "Open",
+	Accept:                      "Accept",
+	Restart:                     "Restart",
+	DataReceived:                "DataReceived",
+	DataSent:                    "DataSent",
+	Cancel:                      "Cancel",
+	Error:                       "Error",
+	CleanupComplete:             "CleanupComplete",
+	NewVoucher:                  "NewVoucher",
+	NewVoucherResult:            "NewVoucherResult",
+	PauseInitiator:              "PauseInitiator",
+	ResumeInitiator:             "ResumeInitiator",
+	PauseResponder:              "PauseResponder",
+	ResumeResponder:             "ResumeResponder",
+	FinishTransfer:              "FinishTransfer",
+	ResponderCompletes:          "ResponderCompletes",
+	ResponderBeginsFinalization: "ResponderBeginsFinalization",
+	BeginFinalizing:             "BeginFinalizing",
+	Disconnected:                "Disconnected",
+	Complete:                    "Complete",
+	CompleteCleanupOnRestart:    "CompleteCleanupOnRestart",
+	DataQueued:                  "DataQueued",
+	DataQueuedProgress:          "DataQueuedProgress",
+	DataSentProgress:            "DataSentProgress",
+	DataReceivedProgress:        "DataReceivedProgress",
+	RequestTimedOut:             "RequestTimedOut",
+	SendDataError:               "SendDataError",
+	ReceiveDataError:            "ReceiveDataError",
+	TransferRequestQueued:       "TransferRequestQueued",
 }
 
 // Event is a struct containing information about a data transfer event

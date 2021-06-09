@@ -161,7 +161,7 @@ func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request datatra
 }
 
 func (m *manager) OnTransferQueued(chid datatransfer.ChannelID) {
-	m.channels.TransferRequestQueuedinTransport(chid)
+	m.channels.TransferRequestQueued(chid)
 }
 
 func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datatransfer.Response) error {
