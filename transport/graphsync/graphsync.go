@@ -449,11 +449,11 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 	}
 }
 
-// gsReqRecdHook is called when graphsync receives an incoming request for data
+// gsReqQueuedHook is called when graphsync enqueues an incoming request for data
 func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData) {
 	msg, err := extension.GetTransferData(request, t.supportedExtensions)
 	if err != nil {
-		return
+		log.Errorf("failed GetTransferData, req=%+v, err=%s", request, err)
 	}
 	// extension not found; probably not our request.
 	if msg == nil {
@@ -461,19 +461,13 @@ func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData) {
 	}
 
 	var chid datatransfer.ChannelID
-	var ch *dtChannel
 	if msg.IsRequest() {
 		// when a data transfer request comes in on graphsync, the remote peer
 		// initiated a pull
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}
-		// Lock the channel for the duration of this method
-		ch = t.trackDTChannel(chid)
-		ch.lk.Lock()
-		defer ch.lk.Unlock()
-
 		request := msg.(datatransfer.Request)
-		if request.IsRestart() || request.IsNew() {
-			log.Infof("channelID=%s, pull request queued, req=%+v", chid, request)
+		if request.IsNew() {
+			log.Infof("%s, pull request queued, req=%+v", chid, request)
 			t.events.OnTransferQueued(chid)
 		}
 	} else {
@@ -481,14 +475,9 @@ func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData) {
 		// initiated a push, and the remote peer responded with a request
 		// for data
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID, Responder: p}
-		// Lock the channel for the duration of this method
-		ch = t.trackDTChannel(chid)
-		ch.lk.Lock()
-		defer ch.lk.Unlock()
-
 		response := msg.(datatransfer.Response)
-		if response.IsNew() || response.IsRestart() {
-			log.Infof("channelID=%s, GS pull request queued in response to our push, req=%+v", chid, request)
+		if response.IsNew() {
+			log.Infof("%s, GS pull request queued in response to our push, req=%+v", chid, request)
 			t.events.OnTransferQueued(chid)
 		}
 	}
