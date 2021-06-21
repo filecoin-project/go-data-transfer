@@ -393,11 +393,13 @@ func (t *Transport) gsBlockSentHook(p peer.ID, request graphsync.RequestData, bl
 	// wire). So here we check if the block was actually sent
 	// over the wire before firing the data sent event.
 	if block.BlockSizeOnWire() == 0 {
+		log.Errorf("block sent hook called with zero block size for request %d to peer %s", request.ID(), p)
 		return
 	}
 
 	chid, ok := t.gsKeyToChannelID.load(graphsyncKey{request.ID(), p})
 	if !ok {
+		log.Errorf("block sent hook called but channel not found for request %d to peer %s", request.ID(), p)
 		return
 	}
 
@@ -413,13 +415,17 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 	// to be sent over the wire). So here we check if the block is actually
 	// going to be sent over the wire before firing the data queued event.
 	if block.BlockSizeOnWire() == 0 {
+		log.Errorf("outgoing block hook called with zero block size for request %d to peer %s", request.ID(), p)
 		return
 	}
 
 	chid, ok := t.gsKeyToChannelID.load(graphsyncKey{request.ID(), p})
 	if !ok {
+		log.Errorf("outgoing block hook called but channel not found for request %d to peer %s", request.ID(), p)
 		return
 	}
+
+	log.Debugf("outgoing block hook called for channel %s", chid)
 
 	// OnDataQueued is called when a block is queued to be sent to the remote
 	// peer. It can return ErrPause to pause the response (eg if payment is
@@ -1175,6 +1181,8 @@ func (m *gsKeyToChannelIDMap) any(ks ...graphsyncKey) (datatransfer.ChannelID, b
 func (m *gsKeyToChannelIDMap) set(key graphsyncKey, val datatransfer.ChannelID) {
 	m.lk.Lock()
 	defer m.lk.Unlock()
+
+	log.Debugf("mapping graphsync key %s to channel ID %s", key, val)
 
 	m.m[key] = val
 }
