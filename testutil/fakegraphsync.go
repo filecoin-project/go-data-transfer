@@ -106,7 +106,6 @@ type FakeGraphSync struct {
 	OutgoingRequestHook          graphsync.OnOutgoingRequestHook
 	IncomingBlockHook            graphsync.OnIncomingBlockHook
 	OutgoingBlockHook            graphsync.OnOutgoingBlockHook
-	IncomingRequestQueuedHook    graphsync.OnIncomingRequestQueuedHook
 	IncomingRequestHook          graphsync.OnIncomingRequestHook
 	CompletedResponseListener    graphsync.OnResponseCompletedListener
 	RequestUpdatedHook           graphsync.OnRequestUpdatedHook
@@ -284,14 +283,6 @@ func (fgs *FakeGraphSync) RegisterIncomingRequestHook(hook graphsync.OnIncomingR
 	fgs.IncomingRequestHook = hook
 	return func() {
 		fgs.IncomingRequestHook = nil
-	}
-}
-
-// RegisterIncomingRequestQueuedHook adds a hook that runs when an incoming GS request is queued.
-func (fgs *FakeGraphSync) RegisterIncomingRequestQueuedHook(hook graphsync.OnIncomingRequestQueuedHook) graphsync.UnregisterHookFunc {
-	fgs.IncomingRequestQueuedHook = hook
-	return func() {
-		fgs.IncomingRequestQueuedHook = nil
 	}
 }
 
