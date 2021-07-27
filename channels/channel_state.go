@@ -7,7 +7,7 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -107,7 +107,7 @@ func (c channelState) ReceivedCids() []cid.Cid {
 	return receivedCids
 }
 
-// ReceivedCids returns the number of cids received so far on this channel
+// ReceivedCidsLen returns the number of cids received so far on this channel
 func (c channelState) ReceivedCidsLen() int {
 	len, err := c.receivedCids.Len(c.ChannelID())
 	if err != nil {
