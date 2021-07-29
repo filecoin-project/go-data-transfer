@@ -376,8 +376,10 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 		dataReceiver = m.peerID
 	}
 
+	log.Infow("data-transfer request validated, will create & start tracking channel", "channelID", chid, "payloadCid", incoming.BaseCid())
 	_, err = m.channels.CreateNew(m.peerID, incoming.TransferID(), incoming.BaseCid(), stor, voucher, chid.Initiator, dataSender, dataReceiver)
 	if err != nil {
+		log.Errorw("failed to create and start tracking channel", "channelID", chid, "err", err)
 		return result, err
 	}
 	if result != nil {
