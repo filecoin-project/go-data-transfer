@@ -222,9 +222,16 @@ func cleanupConnection(ctx fsm.Context, env ChannelEnvironment, channel internal
 	if otherParty == env.ID() {
 		otherParty = channel.Responder
 	}
-	env.CleanupChannel(datatransfer.ChannelID{ID: channel.TransferID, Initiator: channel.Initiator, Responder: channel.Responder})
-	env.Unprotect(otherParty, datatransfer.ChannelID{ID: channel.TransferID, Initiator: channel.Initiator, Responder: channel.Responder}.String())
-	return ctx.Trigger(datatransfer.CleanupComplete)
+
+
+	// the state machine event loop will block on these calls if we don't spin up a go-routine here.
+	go func() {
+		env.CleanupChannel(datatransfer.ChannelID{ID: channel.TransferID, Initiator: channel.Initiator, Responder: channel.Responder})
+		env.Unprotect(otherParty, datatransfer.ChannelID{ID: channel.TransferID, Initiator: channel.Initiator, Responder: channel.Responder}.String())
+		_ = ctx.Trigger(datatransfer.CleanupComplete)
+	}()
+
+	return nil
 }
 
 // CleanupStates are the penultimate states for a channel
