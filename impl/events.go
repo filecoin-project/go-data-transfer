@@ -382,6 +382,7 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 		log.Errorw("failed to create and start tracking channel", "channelID", chid, "err", err)
 		return result, err
 	}
+	log.Debugw("successfully created and started tracking channel", "channelID", chid)
 	if result != nil {
 		err := m.channels.NewVoucherResult(chid, result)
 		if err != nil {
