@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
@@ -12,6 +11,7 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	ipld "github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -19,13 +19,6 @@ import (
 )
 
 var log = logging.Logger("dt_graphsync")
-
-// When restarting a data transfer, we cancel the existing graphsync request
-// before opening a new one.
-// These constants define the minimum and maximum time to wait for the request
-// to be cancelled.
-const minGSCancelWait = 100 * time.Millisecond
-const maxGSCancelWait = time.Second
 
 type graphsyncKey struct {
 	requestID graphsync.RequestID
@@ -177,36 +170,28 @@ func (t *Transport) consumeResponses(responseChan <-chan graphsync.ResponseProgr
 }
 
 // Read from the graphsync response and error channels until they are closed
-// or there is an error, then call the channel completed callback
+// or there is an error
 func (t *Transport) executeGsRequest(req *gsReq) {
-	defer req.onComplete()
-
 	lastError := t.consumeResponses(req.responseChan, req.errChan)
 
-	if _, ok := lastError.(graphsync.RequestContextCancelledErr); ok {
-		terr := xerrors.Errorf("graphsync request context cancelled")
-		log.Warnf("channel id %v: %s", req.channelID, terr)
-		if err := t.events.OnRequestTimedOut(req.channelID, terr); err != nil {
+	// Request cancelled by client
+	if _, ok := lastError.(graphsync.RequestClientCancelledErr); ok {
+		terr := xerrors.Errorf("graphsync request cancelled")
+		log.Warnf("channel %s: %s", req.channelID, terr)
+		if err := t.events.OnRequestCancelled(req.channelID, terr); err != nil {
 			log.Error(err)
 		}
 		return
 	}
 
+	// Request cancelled by responder
 	if _, ok := lastError.(graphsync.RequestCancelledErr); ok {
 		// TODO Should we do anything for RequestCancelledErr ?
 		return
 	}
 
-	// TODO: There seems to be a bug in graphsync. I believe it should return
-	// graphsync.RequestCancelledErr on the errChan if the request's context is
-	// cancelled, but it doesn't seem to be doing that
-	if req.gsReqCtx.Err() != nil {
-		log.Warnf("graphsync request cancelled for channel %s", req.channelID)
-		return
-	}
-
 	if lastError != nil {
-		log.Warnf("graphsync error: %s", lastError.Error())
+		log.Warnf("graphsync error on channel %s: %s", req.channelID, lastError)
 	}
 
 	log.Debugf("finished executing graphsync request for channel %s", req.channelID)
@@ -223,7 +208,7 @@ func (t *Transport) executeGsRequest(req *gsReq) {
 
 	err := t.events.OnChannelCompleted(req.channelID, completeErr)
 	if err != nil {
-		log.Errorf("processing OnChannelCompleted: %s", err)
+		log.Errorf("processing OnChannelCompleted %s: %s", req.channelID, err)
 	}
 }
 
@@ -256,7 +241,12 @@ func (t *Transport) CloseChannel(ctx context.Context, chid datatransfer.ChannelI
 	if err != nil {
 		return err
 	}
-	return ch.close()
+
+	err = ch.close(ctx)
+	if err != nil {
+		return xerrors.Errorf("closing channel: %w", err)
+	}
+	return nil
 }
 
 // CleanupChannel is called on the otherside of a cancel - removes any associated
@@ -309,10 +299,18 @@ func (t *Transport) Shutdown(ctx context.Context) error {
 	t.dtChannelsLk.Lock()
 	defer t.dtChannelsLk.Unlock()
 
+	var eg errgroup.Group
 	for _, ch := range t.dtChannels {
-		ch.shutdown()
+		ch := ch
+		eg.Go(func() error {
+			return ch.shutdown(ctx)
+		})
 	}
 
+	err := eg.Wait()
+	if err != nil {
+		return xerrors.Errorf("shutting down graphsync transport: %w", err)
+	}
 	return nil
 }
 
@@ -823,13 +821,6 @@ func (t *Transport) getDTChannel(chid datatransfer.ChannelID) (*dtChannel, error
 	return ch, nil
 }
 
-// Info needed to cancel a graphsync request, and wait for the cancellation
-// to complete
-type cancelRequest struct {
-	cancel    context.CancelFunc
-	completed chan struct{}
-}
-
 // Info needed to keep track of a data transfer channel
 type dtChannel struct {
 	peerID              peer.ID
@@ -840,8 +831,7 @@ type dtChannel struct {
 
 	lk                 sync.RWMutex
 	isOpen             bool
-	gsKey              graphsyncKey
-	cancelReq          *cancelRequest
+	gsKey              *graphsyncKey
 	requesterCancelled bool
 	xferStarted        bool
 	pendingExtensions  []graphsync.ExtensionData
@@ -855,10 +845,8 @@ type dtChannel struct {
 // Info needed to monitor an ongoing graphsync request
 type gsReq struct {
 	channelID    datatransfer.ChannelID
-	gsReqCtx     context.Context
 	responseChan <-chan graphsync.ResponseProgress
 	errChan      <-chan error
-	onComplete   func()
 }
 
 // Open a graphsync request for data to the remote peer
@@ -866,81 +854,32 @@ func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataS
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
-	// If there is an existing graphsync request for this channelID
-	if c.isOpen {
-		// Cancel the existing graphsync request
-		log.Warnf("Restarting %s - canceling existing graphsync request for channel", chid)
-		completed := c.cancelReq.completed
-		c.cancelReq.cancel()
-
-		// Wait for the cancel to go through
-		err := waitForCancelComplete(ctx, completed)
-		if err != nil {
-			return nil, err
-		}
+	// Cancel any existing graphsync request for this channel
+	err := c.cancelRequest(ctx)
+	if err != nil {
+		return nil, xerrors.Errorf("restarting graphsync request: %w", err)
 	}
 
-	// Create a cancellable context for the channel so that the graphsync
-	// request can be cancelled
-	gsReqCtx, gsReqCancel := context.WithCancel(ctx)
-	c.cancelReq = &cancelRequest{
-		cancel:    gsReqCancel,
-		completed: make(chan struct{}),
-	}
-
-	// Open graphsync request
+	// Open a new graphsync request
 	log.Infof("Opening graphsync request to %s for root %s with %d CIDs already received",
 		dataSender, root, len(doNotSendCids))
-	responseChan, errChan := c.gs.Request(gsReqCtx, dataSender, root, stor, exts...)
+	responseChan, errChan := c.gs.Request(ctx, dataSender, root, stor, exts...)
 
 	// Wait for graphsync "request opened" callback
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case gsKey := <-c.opened:
+		// Mark the channel as open and save the Graphsync request key
 		c.isOpen = true
-
-		// Save the Graphsync request key
-		c.gsKey = gsKey
-	}
-
-	// When the transfer completes, close the completed channel
-	onComplete := func() {
-		close(c.cancelReq.completed)
+		c.gsKey = &gsKey
 	}
 
 	return &gsReq{
 		channelID:    chid,
-		gsReqCtx:     gsReqCtx,
 		responseChan: responseChan,
 		errChan:      errChan,
-		onComplete:   onComplete,
 	}, nil
-}
-
-func waitForCancelComplete(ctx context.Context, completed chan struct{}) error {
-	// Wait for the cancel to propagate through to graphsync, and for
-	// the graphsync request to complete
-	select {
-	case <-completed:
-		// Graphsync request has completed.
-		// Now wait for a minimum backoff before initiating another
-		// graphsync request.
-		// We need to do this to make sure that graphsync has finished
-		// emitting all events for the current request before
-		// initiating a new one.
-		select {
-		case <-time.After(minGSCancelWait):
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	case <-time.After(maxGSCancelWait):
-		// Fail-safe: give up waiting after a certain amount of time
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }
 
 // gsReqOpened is called when graphsync makes a request to the remote peer to ask for data
@@ -981,7 +920,7 @@ func (c *dtChannel) gsDataRequestRcvd(gsKey graphsyncKey, hookActions graphsync.
 
 	// Save a mapping from the graphsync key to the channel ID so that
 	// subsequent graphsync callbacks are associated with this channel
-	c.gsKey = gsKey
+	c.gsKey = &gsKey
 	log.Infow("incoming graphsync request", "peer", gsKey.p, "graphsync request id", gsKey.requestID, "data transfer channel id", c.channelID)
 	c.gsKeyToChannelID.set(gsKey, c.channelID)
 
@@ -1051,16 +990,14 @@ func (c *dtChannel) resume(msg datatransfer.Message) error {
 	return c.gs.UnpauseResponse(c.gsKey.p, c.gsKey.requestID, extensions...)
 }
 
-func (c *dtChannel) close() error {
+func (c *dtChannel) close(ctx context.Context) error {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
 	// If it's a graphsync request
 	if c.gsKey.p == c.peerID {
 		// Cancel the request
-		log.Debugf("%s: cancelling request", c.channelID)
-		c.cancelReq.cancel()
-		return nil
+		return c.cancelRequest(ctx)
 	}
 
 	// It's a graphsync response
@@ -1091,7 +1028,7 @@ func (c *dtChannel) hasStore() bool {
 }
 
 // Use the given loader and storer to get / put blocks for the data-transfer.
-// Note that each data-transfer channel uses a separate multi-store.
+// Note that each data-transfer channel uses a separate blockstore.
 func (c *dtChannel) useStore(loader ipld.Loader, storer ipld.Storer) error {
 	c.storeLk.Lock()
 	defer c.storeLk.Unlock()
@@ -1126,14 +1063,34 @@ func (c *dtChannel) cleanup() {
 	c.gsKeyToChannelID.deleteRefs(c.channelID)
 }
 
-func (c *dtChannel) shutdown() {
+func (c *dtChannel) shutdown(ctx context.Context) error {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
 	// Cancel the graphsync request
-	if c.cancelReq != nil {
-		c.cancelReq.cancel()
+	return c.cancelRequest(ctx)
+}
+
+// Cancel the graphsync request
+func (c *dtChannel) cancelRequest(ctx context.Context) error {
+	// Check that the request has not already been cancelled
+	if c.gsKey == nil {
+		return nil
 	}
+
+	log.Debugf("%s: cancelling request", c.channelID)
+	err := c.gs.CancelRequest(ctx, c.gsKey.requestID)
+	if err != nil {
+		// Ignore "request not found" errors
+		if !xerrors.Is(graphsync.RequestNotFoundErr{}, err) {
+			return xerrors.Errorf("cancelling graphsync request for channel %s: %w", c.channelID, err)
+		}
+	}
+
+	// Clear the graphsync key to indicate that the request has been cancelled
+	c.gsKey = nil
+
+	return nil
 }
 
 // Used in graphsync callbacks to map from graphsync request to the
