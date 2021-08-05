@@ -897,7 +897,8 @@ func (c *dtChannel) gsReqOpened(gsKey graphsyncKey, hookActions graphsync.Outgoi
 }
 
 // gsDataRequestRcvd is called when the transport receives an incoming request
-// for data
+// for data.
+// Note: Must be called under the lock.
 func (c *dtChannel) gsDataRequestRcvd(gsKey graphsyncKey, hookActions graphsync.IncomingRequestHookActions) {
 	log.Debugf("%s: received request for data", c.channelID)
 
@@ -1071,7 +1072,8 @@ func (c *dtChannel) shutdown(ctx context.Context) error {
 	return c.cancelRequest(ctx)
 }
 
-// Cancel the graphsync request
+// Cancel the graphsync request.
+// Note: must be called under the lock.
 func (c *dtChannel) cancelRequest(ctx context.Context) error {
 	// Check that the request has not already been cancelled
 	if c.gsKey == nil {
