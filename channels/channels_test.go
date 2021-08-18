@@ -163,7 +163,6 @@ func TestChannels(t *testing.T) {
 		state = checkEvent(ctx, t, received, datatransfer.DataSent)
 		require.Equal(t, datatransfer.TransferFinished, state.Status())
 
-
 		// send a data-queued event and ensure it's a no-op.
 		_, err = channelList.DataQueued(chid, cids[1], 1)
 		require.NoError(t, err)
