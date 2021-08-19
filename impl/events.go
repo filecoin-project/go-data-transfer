@@ -169,7 +169,6 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 		log.Infow("received complete response", "chid", chid, "isAccepted", response.Accepted())
 	}
 
-
 	if response.IsCancel() {
 		log.Infof("channel %s: received cancel response, cancelling channel", chid)
 		return m.channels.Cancel(chid)
