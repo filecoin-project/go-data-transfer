@@ -3,6 +3,7 @@ package impl_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math/rand"
 	"os"
 	"testing"
@@ -1724,7 +1725,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
 	host1 := gsData.Host1 // initiator, data sender
 
-	root, origBytes := LoadRandomData(ctx, t, gsData.DagService1)
+	root, origBytes := LoadRandomData(ctx, t, gsData.DagService1, 256000)
 	gsData.OrigBytes = origBytes
 	rootCid := root.(cidlink.Link).Cid
 	tp1 := gsData.SetupGSTransportHost1()
@@ -1860,8 +1861,153 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	gsData.VerifyFileTransferred(t, root, true)
 }
 
-func LoadRandomData(ctx context.Context, t *testing.T, dagService ipldformat.DAGService) (ipld.Link, []byte) {
-	data := make([]byte, 256000)
+// completeRevalidator does not pause when sending the last voucher to confirm the deal is completed
+type completeRevalidator struct {
+	*retrievalRevalidator
+}
+
+func (r *completeRevalidator) OnComplete(chid datatransfer.ChannelID) (bool, datatransfer.VoucherResult, error) {
+	return true, r.finalVoucher, nil
+}
+
+func TestMultipleTransferCompletionRace(t *testing.T) {
+	pausePoints := []uint64{}
+
+	// Add more sizes here to trigger more transfers.
+	sizes := []int{200, 256000, 100000, 100000, 100000}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+	host1 := gsData.Host1 // initiator, data sender
+
+	tp1 := gsData.SetupGSTransportHost1()
+	tp2 := gsData.SetupGSTransportHost2()
+
+	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1)
+	require.NoError(t, err)
+	testutil.StartAndWaitForReady(ctx, t, dt1)
+
+	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, tp2)
+	require.NoError(t, err)
+	testutil.StartAndWaitForReady(ctx, t, dt2)
+
+	errChan := make(chan struct{}, 2)
+
+	clientGotResponse := make(chan struct{}, 1)
+	clientFinished := make(chan struct{}, 1)
+
+	// In this retrieval flow we expect 2 voucher results:
+	// The first one is sent as a response from the initial request telling the client
+	// the provider has accepted the request and is starting to send blocks
+	respVoucher := testutil.NewFakeDTType()
+	encodedRVR, err := encoding.Encode(respVoucher)
+	require.NoError(t, err)
+
+	// The final voucher result is sent by the provider to let the client know the deal is completed
+	finalVoucherResult := testutil.NewFakeDTType()
+	encodedFVR, err := encoding.Encode(finalVoucherResult)
+	require.NoError(t, err)
+
+	dt2.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+		if event.Code == datatransfer.Error {
+			errChan <- struct{}{}
+		}
+		// Here we verify reception of voucherResults by the client
+		if event.Code == datatransfer.NewVoucherResult {
+			voucherResult := channelState.LastVoucherResult()
+			encodedVR, err := encoding.Encode(voucherResult)
+			require.NoError(t, err)
+
+			// If this voucher result is the response voucher no action is needed
+			// we just know that the provider has accepted the transfer and is sending blocks
+			if bytes.Equal(encodedVR, encodedRVR) {
+				// The test will fail if no response voucher is received
+				clientGotResponse <- struct{}{}
+			}
+
+			// If this voucher result is the final voucher result we record it in the channel
+			if bytes.Equal(encodedVR, encodedFVR) {
+				clientFinished <- struct{}{}
+			}
+		}
+	})
+
+	providerFinished := make(chan struct{}, 1)
+	dt1.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+		if event.Code == datatransfer.Error {
+			fmt.Println(event.Message)
+			errChan <- struct{}{}
+		}
+		if channelState.Status() == datatransfer.Completed {
+			providerFinished <- struct{}{}
+		}
+	})
+
+	sv := testutil.NewStubbedValidator()
+	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+	// Stub in the validator so it returns that exact voucher when calling ValidatePull
+	// this validator will not pause transfer when accepting a transfer and will start
+	// sending blocks immediately
+	sv.StubResult(respVoucher)
+
+	// no need for intermediary voucher results
+	voucherResults := []datatransfer.VoucherResult{}
+
+	srv := &completeRevalidator{
+		&retrievalRevalidator{
+			testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult, voucherResults,
+		},
+	}
+	require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
+
+	// Register our response voucher with the client
+	require.NoError(t, dt2.RegisterVoucherResultType(respVoucher))
+
+	// for each size we create a new random DAG of the given size and try to retrieve it
+	for _, size := range sizes {
+		root, origBytes := LoadRandomData(ctx, t, gsData.DagService1, size)
+		gsData.OrigBytes = origBytes
+		rootCid := root.(cidlink.Link).Cid
+
+		voucher := testutil.NewFakeDTType()
+		_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
+		require.NoError(t, err)
+
+		// Expect the client to receive a response voucher, the provider to complete the transfer and
+		// the client to finish the transfer
+		for clientGotResponse != nil || providerFinished != nil || clientFinished != nil {
+			select {
+			case <-ctx.Done():
+				t.Fatal("Did not complete successful data transfer")
+			case <-clientGotResponse:
+				clientGotResponse = nil
+			case <-providerFinished:
+				providerFinished = nil
+			case <-clientFinished:
+				if clientGotResponse != nil {
+					t.Fatal("received completion before acceptance")
+				}
+				clientFinished = nil
+			case <-errChan:
+				t.Fatal("received unexpected error")
+			}
+		}
+		sv.VerifyExpectations(t)
+		srv.VerifyExpectations(t)
+		gsData.VerifyFileTransferred(t, root, true)
+
+		// reset the channels for the next transfer
+		errChan = make(chan struct{}, 2)
+		clientGotResponse = make(chan struct{}, 1)
+		clientFinished = make(chan struct{}, 1)
+		providerFinished = make(chan struct{}, 1)
+	}
+}
+
+func LoadRandomData(ctx context.Context, t *testing.T, dagService ipldformat.DAGService, size int) (ipld.Link, []byte) {
+	data := make([]byte, size)
 	rand.New(rand.NewSource(time.Now().UnixNano())).Read(data)
 
 	// import to UnixFS
@@ -1874,7 +2020,7 @@ func LoadRandomData(ctx context.Context, t *testing.T, dagService ipldformat.DAG
 		Dagserv:    bufferedDS,
 	}
 
-	db, err := params.New(chunker.NewSizeSplitter(bytes.NewReader(data), int64(1<<10)))
+	db, err := params.New(chunker.NewSizeSplitter(bytes.NewReader(data), 128000))
 	require.NoError(t, err)
 
 	nd, err := balanced.Layout(db)
