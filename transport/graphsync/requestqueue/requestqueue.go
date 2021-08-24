@@ -5,13 +5,14 @@ import (
 	"math"
 	"time"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipfs/go-peertaskqueue"
 	"github.com/ipfs/go-peertaskqueue/peertask"
 	ipld "github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 )
 
 const (

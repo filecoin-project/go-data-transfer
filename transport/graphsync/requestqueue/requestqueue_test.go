@@ -5,15 +5,16 @@ import (
 	"sync/atomic"
 	"testing"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/testutil"
-	"github.com/filecoin-project/go-data-transfer/transport/graphsync/requestqueue"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
 	ipld "github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/testutil"
+	"github.com/filecoin-project/go-data-transfer/transport/graphsync/requestqueue"
 )
 
 func TestRequestQueue(t *testing.T) {
