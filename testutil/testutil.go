@@ -55,6 +55,7 @@ func GenerateCids(n int) []cid.Cid {
 }
 
 var peerSeq int
+var transferIDSeq datatransfer.TransferID
 
 // GeneratePeers creates n peer ids.
 func GeneratePeers(n int) []peer.ID {
@@ -65,6 +66,16 @@ func GeneratePeers(n int) []peer.ID {
 		peerIds = append(peerIds, p)
 	}
 	return peerIds
+}
+
+// GenerateTransferIDs creates n transfer ids.
+func GenerateTransferIDs(n int) []datatransfer.TransferID {
+	transferIDs := make([]datatransfer.TransferID, 0, n)
+	for i := 0; i < n; i++ {
+		transferIDSeq++
+		transferIDs = append(transferIDs, transferIDSeq)
+	}
+	return transferIDs
 }
 
 // ContainsPeer returns true if a peer is found n a list of peers.
