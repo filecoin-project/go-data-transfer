@@ -448,7 +448,7 @@ func (mc *monitoredChannel) doRestartChannel() error {
 		// If the restart message could not be sent, try again
 		return mc.doRestartChannel()
 	}
-	log.Debugf("%s: restart completed successfully", mc.chid)
+	log.Infof("%s: restart completed successfully", mc.chid)
 
 	return nil
 }
