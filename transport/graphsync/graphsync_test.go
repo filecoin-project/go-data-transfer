@@ -759,6 +759,57 @@ func TestManager(t *testing.T) {
 				gsData.fgs.AssertCancelRequestReceived(ctxt, t)
 			},
 		},
+		"open channel push request queues into request queue": {
+			requestConfig: gsRequestConfig{
+				dtIsResponse: true,
+			},
+			action: func(gsData *harness) {
+				stor, _ := gsData.outgoing.Selector()
+
+				go gsData.outgoingRequestHook()
+				_ = gsData.transport.OpenChannel(
+					gsData.ctx,
+					gsData.other,
+					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other},
+					cidlink.Link{Cid: gsData.outgoing.BaseCid()},
+					stor,
+					nil,
+					gsData.incoming)
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				gsData.fgs.AssertNoRequestReceived(t)
+				require.True(t, events.TransferQueuedCalled)
+				gsData.transport.Start(gsData.ctx)
+				gsData.fgs.AssertRequestReceived(gsData.ctx, t)
+			},
+		},
+		"open channel push request, paused prior to start, pauses when started": {
+			requestConfig: gsRequestConfig{
+				dtIsResponse: true,
+			},
+			action: func(gsData *harness) {
+				stor, _ := gsData.outgoing.Selector()
+
+				go gsData.outgoingRequestHook()
+				chid := datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other}
+				_ = gsData.transport.OpenChannel(
+					gsData.ctx,
+					gsData.other,
+					chid,
+					cidlink.Link{Cid: gsData.outgoing.BaseCid()},
+					stor,
+					nil,
+					gsData.incoming)
+				_ = gsData.transport.PauseChannel(gsData.ctx, chid)
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				gsData.fgs.AssertNoRequestReceived(t)
+				require.True(t, events.TransferQueuedCalled)
+				gsData.transport.Start(gsData.ctx)
+				gsData.fgs.AssertRequestReceived(gsData.ctx, t)
+				gsData.fgs.AssertPauseRequestReceived(gsData.ctx, t)
+			},
+		},
 		"OnChannelCompleted called when outgoing request completes successfully": {
 			action: func(gsData *harness) {
 				gsData.fgs.LeaveRequestsOpen()

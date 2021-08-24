@@ -168,6 +168,7 @@ func NewInstance(ctx context.Context, net tn.Network, tempDir string, diskBasedD
 	storer := storeutil.StorerForBlockstore(bstore)
 	gs := gsimpl.New(ctx, gsNet, loader, storer, gsimpl.RejectAllRequestsByDefault())
 	transport := gstransport.NewTransport(p, gs)
+	transport.Start(ctx)
 	dt, err := dtimpl.NewDataTransfer(namespace.Wrap(dstore, datastore.NewKey("/data-transfers/transfers")), os.TempDir(), dtNet, transport)
 	if err != nil {
 		return Instance{}, err

@@ -174,7 +174,7 @@ func (gsData *GraphsyncTestingData) SetupGraphsyncHost1() graphsync.GraphExchang
 }
 
 // SetupGSTransportHost1 sets up a new grapshync transport over real graphsync on the first host
-func (gsData *GraphsyncTestingData) SetupGSTransportHost1(opts ...gstransport.Option) datatransfer.Transport {
+func (gsData *GraphsyncTestingData) SetupGSTransportHost1(ctx context.Context, opts ...gstransport.Option) datatransfer.Transport {
 	// setup graphsync
 	gs := gsData.SetupGraphsyncHost1()
 	if len(gsData.host1Protocols) != 0 {
@@ -184,7 +184,9 @@ func (gsData *GraphsyncTestingData) SetupGSTransportHost1(opts ...gstransport.Op
 		}
 		opts = append(opts, gstransport.SupportedExtensions(supportedExtensions))
 	}
-	return gstransport.NewTransport(gsData.Host1.ID(), gs, opts...)
+	tp := gstransport.NewTransport(gsData.Host1.ID(), gs, opts...)
+	tp.Start(ctx)
+	return tp
 }
 
 // SetupGraphsyncHost2 sets up a new, real graphsync instance on top of the second host
@@ -199,7 +201,7 @@ func (gsData *GraphsyncTestingData) SetupGraphsyncHost2() graphsync.GraphExchang
 }
 
 // SetupGSTransportHost2 sets up a new grapshync transport over real graphsync on the second host
-func (gsData *GraphsyncTestingData) SetupGSTransportHost2(opts ...gstransport.Option) datatransfer.Transport {
+func (gsData *GraphsyncTestingData) SetupGSTransportHost2(ctx context.Context, opts ...gstransport.Option) datatransfer.Transport {
 	// setup graphsync
 	gs := gsData.SetupGraphsyncHost2()
 	if len(gsData.host2Protocols) != 0 {
@@ -209,7 +211,9 @@ func (gsData *GraphsyncTestingData) SetupGSTransportHost2(opts ...gstransport.Op
 		}
 		opts = append(opts, gstransport.SupportedExtensions(supportedExtensions))
 	}
-	return gstransport.NewTransport(gsData.Host2.ID(), gs, opts...)
+	tp := gstransport.NewTransport(gsData.Host2.ID(), gs, opts...)
+	tp.Start(ctx)
+	return tp
 }
 
 // LoadUnixFSFile loads a fixtures file we can test dag transfer with

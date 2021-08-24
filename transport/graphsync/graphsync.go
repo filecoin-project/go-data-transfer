@@ -17,6 +17,7 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
+	"github.com/filecoin-project/go-data-transfer/transport/graphsync/requestqueue"
 )
 
 var log = logging.Logger("dt_graphsync")
@@ -26,6 +27,8 @@ var log = logging.Logger("dt_graphsync")
 // This constant defines the maximum time to wait for the request to be
 // cancelled.
 const maxGSCancelWait = time.Second
+
+const defaultMaxInProgressPushRequests = 6
 
 type graphsyncKey struct {
 	requestID graphsync.RequestID
@@ -73,6 +76,15 @@ func RegisterCompletedResponseListener(l func(channelID datatransfer.ChannelID))
 	}
 }
 
+// MaxInProgressPushRequests changes the maximum number of outgoing
+// graphsync requests that are processed in parallel (default 6)
+// for push requests
+func MaxInProgressPushRequests(maxInProgressPushRequests uint64) Option {
+	return func(t *Transport) {
+		t.maxInProgressPushRequests = maxInProgressPushRequests
+	}
+}
+
 // Transport manages graphsync hooks for data transfer, translating from
 // graphsync hooks to semantic data transfer events
 type Transport struct {
@@ -84,6 +96,8 @@ type Transport struct {
 	unregisterFuncs           []graphsync.UnregisterHookFunc
 	completedRequestListener  func(channelID datatransfer.ChannelID)
 	completedResponseListener func(channelID datatransfer.ChannelID)
+	maxInProgressPushRequests uint64
+	requestQueue              *requestqueue.RequestQueue
 
 	// Map from data transfer channel ID to information about that channel
 	dtChannelsLk sync.RWMutex
@@ -97,16 +111,24 @@ type Transport struct {
 // NewTransport makes a new hooks manager with the given hook events interface
 func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, options ...Option) *Transport {
 	t := &Transport{
-		gs:                  gs,
-		peerID:              peerID,
-		supportedExtensions: defaultSupportedExtensions,
-		dtChannels:          make(map[datatransfer.ChannelID]*dtChannel),
-		gsKeyToChannelID:    newGSKeyToChannelIDMap(),
+		gs:                        gs,
+		peerID:                    peerID,
+		supportedExtensions:       defaultSupportedExtensions,
+		dtChannels:                make(map[datatransfer.ChannelID]*dtChannel),
+		gsKeyToChannelID:          newGSKeyToChannelIDMap(),
+		maxInProgressPushRequests: defaultMaxInProgressPushRequests,
 	}
 	for _, option := range options {
 		option(t)
 	}
+	t.requestQueue = requestqueue.NewRequestQueue(t.runDeferredRequest, t.maxInProgressPushRequests)
 	return t
+}
+
+// Start starts the request queue for incoming push requests that trigger outgoing
+// graphsync requests
+func (t *Transport) Start(ctx context.Context) {
+	t.requestQueue.Start(ctx)
 }
 
 // OpenChannel initiates an outgoing request for the other peer to send data
@@ -149,19 +171,46 @@ func (t *Transport) OpenChannel(ctx context.Context,
 		exts = append(exts, doNotSendExt)
 	}
 
-	// Start tracking the data-transfer channel
 	ch := t.trackDTChannel(channelID)
+
+	// if we initiated this data transfer or the channel is open, run it immediately, otherwise
+	// put it in the request queue to rate limit DDOS attacks for push transfers
+	if channelID.Initiator == t.peerID || ch.isOpen {
+		// Start tracking the data-transfer channel
+
+		// Open a graphsync request to the remote peer
+		req, err := ch.open(ctx, channelID, dataSender, root, stor, doNotSendCids, exts)
+		if err != nil {
+			return err
+		}
+
+		// Process incoming data
+		go t.executeGsRequest(req)
+	} else {
+		t.requestQueue.AddRequest(ctx, channelID, dataSender, root, stor, doNotSendCids, exts)
+		t.events.OnTransferQueued(channelID)
+	}
+
+	return nil
+}
+
+func (t *Transport) runDeferredRequest(ctx context.Context, channelID datatransfer.ChannelID, dataSender peer.ID, root ipld.Link, stor ipld.Node, doNotSendCids []cid.Cid, exts []graphsync.ExtensionData) {
+	// Start tracking the data-transfer channel
+	ch, err := t.getDTChannel(channelID)
+	if err != nil {
+		log.Warnf("error processing request from %s: %s", dataSender, err)
+		return
+	}
 
 	// Open a graphsync request to the remote peer
 	req, err := ch.open(ctx, channelID, dataSender, root, stor, doNotSendCids, exts)
 	if err != nil {
-		return err
+		log.Warnf("error processing request from %s: %s", dataSender, err)
+		return
 	}
 
-	// Process incoming data
-	go t.executeGsRequest(req)
-
-	return nil
+	// Process incoming data -- run synchronously to make queue behavior as expected
+	t.executeGsRequest(req)
 }
 
 // Read from the graphsync response and error channels until they are closed,
@@ -854,6 +903,7 @@ type dtChannel struct {
 	completed          chan struct{}
 	requesterCancelled bool
 	xferStarted        bool
+	startPaused        bool
 	pendingExtensions  []graphsync.ExtensionData
 
 	opened chan graphsyncKey
@@ -913,6 +963,13 @@ func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataS
 		// Mark the channel as open and save the Graphsync request key
 		c.isOpen = true
 		c.gsKey = &gsKey
+		if c.startPaused {
+			err := c.gs.PauseRequest(c.gsKey.requestID)
+			if err != nil {
+				return nil, err
+			}
+			c.startPaused = false
+		}
 	}
 
 	return &gsReq{
@@ -986,6 +1043,11 @@ func (c *dtChannel) gsDataRequestRcvd(gsKey graphsyncKey, hookActions graphsync.
 func (c *dtChannel) pause() error {
 	c.lk.Lock()
 	defer c.lk.Unlock()
+
+	if c.gsKey == nil {
+		c.startPaused = true
+		return nil
+	}
 
 	// If it's a graphsync request
 	if c.gsKey.p == c.peerID {

@@ -49,7 +49,7 @@ func TestRestartPush(t *testing.T) {
 				var err error
 				require.NoError(t, rh.dt1.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
-				tp1 := rh.gsData.SetupGSTransportHost1()
+				tp1 := rh.gsData.SetupGSTransportHost1(rh.testCtx)
 				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.TempDir1, rh.gsData.DtNet1, tp1)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
@@ -70,7 +70,7 @@ func TestRestartPush(t *testing.T) {
 				var err error
 				require.NoError(t, rh.dt2.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
-				tp2 := rh.gsData.SetupGSTransportHost2()
+				tp2 := rh.gsData.SetupGSTransportHost2(rh.testCtx)
 				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.TempDir2, rh.gsData.DtNet2, tp2)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt2.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
@@ -214,7 +214,7 @@ func TestRestartPush(t *testing.T) {
 
 			// WAIT FOR DATA TRANSFER TO FINISH -> SHOULD WORK NOW
 			// we should get 2 completes
-			_, _, err = waitF(10*time.Second, 2)
+			_, _, err = waitF(100000*time.Second, 2)
 			require.NoError(t, err)
 
 			// verify all cids are present on the receiver
@@ -260,7 +260,7 @@ func TestRestartPull(t *testing.T) {
 				var err error
 				require.NoError(t, rh.dt2.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
-				tp2 := rh.gsData.SetupGSTransportHost2()
+				tp2 := rh.gsData.SetupGSTransportHost2(rh.testCtx)
 				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.TempDir2, rh.gsData.DtNet2, tp2)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt2.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
@@ -281,7 +281,7 @@ func TestRestartPull(t *testing.T) {
 				var err error
 				require.NoError(t, rh.dt1.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
-				tp1 := rh.gsData.SetupGSTransportHost1()
+				tp1 := rh.gsData.SetupGSTransportHost1(rh.testCtx)
 				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.TempDir1, rh.gsData.DtNet1, tp1)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
@@ -470,7 +470,7 @@ type restartHarness struct {
 
 func newRestartHarness(t *testing.T) *restartHarness {
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	ctx, cancel := context.WithCancel(ctx)
 
 	// Setup host
 	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
@@ -482,8 +482,8 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	t.Logf("peer2 is %s", peer2.Pretty())
 
 	// Setup data transfer
-	tp1 := gsData.SetupGSTransportHost1()
-	tp2 := gsData.SetupGSTransportHost2()
+	tp1 := gsData.SetupGSTransportHost1(ctx)
+	tp2 := gsData.SetupGSTransportHost2(ctx)
 
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1)
 	require.NoError(t, err)
