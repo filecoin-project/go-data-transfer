@@ -22,6 +22,11 @@ import (
 
 var log = logging.Logger("dt_graphsync")
 
+const (
+	restartPriority = 100
+	newPriority     = 10
+)
+
 // When restarting a data transfer, we cancel the existing graphsync request
 // before opening a new one.
 // This constant defines the maximum time to wait for the request to be
@@ -171,11 +176,12 @@ func (t *Transport) OpenChannel(ctx context.Context,
 		exts = append(exts, doNotSendExt)
 	}
 
+	// Start tracking the data-transfer channel
 	ch := t.trackDTChannel(channelID)
 
 	// if we initiated this data transfer or the channel is open, run it immediately, otherwise
 	// put it in the request queue to rate limit DDOS attacks for push transfers
-	if channelID.Initiator == t.peerID || ch.isOpen {
+	if channelID.Initiator == t.peerID {
 		// Start tracking the data-transfer channel
 
 		// Open a graphsync request to the remote peer
@@ -187,7 +193,11 @@ func (t *Transport) OpenChannel(ctx context.Context,
 		// Process incoming data
 		go t.executeGsRequest(req)
 	} else {
-		t.requestQueue.AddRequest(ctx, channelID, dataSender, root, stor, doNotSendCids, exts)
+		if msg.IsRestart() {
+			t.requestQueue.AddRequest(ctx, channelID, dataSender, root, stor, doNotSendCids, exts, restartPriority)
+		} else {
+			t.requestQueue.AddRequest(ctx, channelID, dataSender, root, stor, doNotSendCids, exts, newPriority)
+		}
 		t.events.OnTransferQueued(channelID)
 	}
 

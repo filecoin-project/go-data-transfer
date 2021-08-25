@@ -2,7 +2,6 @@ package requestqueue
 
 import (
 	"context"
-	"math"
 	"time"
 
 	"github.com/ipfs/go-cid"
@@ -29,11 +28,21 @@ type RequestQueue struct {
 	ticker     *time.Ticker
 }
 
+type taskMerger struct {
+}
+
+func (tm taskMerger) HasNewInfo(task peertask.Task, existing []peertask.Task) bool {
+	return true
+}
+
+func (tm taskMerger) Merge(task peertask.Task, existing *peertask.Task) {
+}
+
 func NewRequestQueue(runDeferredRequest RunDeferredRequestFn, maxInProcessRequests uint64) *RequestQueue {
 	return &RequestQueue{
 		maxInProcessRequests: maxInProcessRequests,
 		runDeferredRequest:   runDeferredRequest,
-		queue:                peertaskqueue.New(),
+		queue:                peertaskqueue.New(peertaskqueue.TaskMerger(taskMerger{})),
 		workSignal:           make(chan struct{}, 1),
 		ticker:               time.NewTicker(thawSpeed),
 	}
@@ -77,8 +86,8 @@ type requestInfo struct {
 	exts          []graphsync.ExtensionData
 }
 
-func (orq *RequestQueue) AddRequest(ctx context.Context, chid datatransfer.ChannelID, dataSender peer.ID, root ipld.Link, stor ipld.Node, doNotSendCids []cid.Cid, exts []graphsync.ExtensionData) {
-	orq.queue.PushTasks(dataSender, peertask.Task{Topic: chid, Priority: math.MaxInt32, Data: requestInfo{ctx, root, stor, doNotSendCids, exts}, Work: 1})
+func (orq *RequestQueue) AddRequest(ctx context.Context, chid datatransfer.ChannelID, dataSender peer.ID, root ipld.Link, stor ipld.Node, doNotSendCids []cid.Cid, exts []graphsync.ExtensionData, priority int) {
+	orq.queue.PushTasks(dataSender, peertask.Task{Topic: chid, Priority: priority, Data: requestInfo{ctx, root, stor, doNotSendCids, exts}, Work: 1})
 	select {
 	case orq.workSignal <- struct{}{}:
 	default:

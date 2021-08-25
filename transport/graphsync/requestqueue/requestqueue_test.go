@@ -2,6 +2,7 @@ package requestqueue_test
 
 import (
 	"context"
+	"math"
 	"sync/atomic"
 	"testing"
 
@@ -36,9 +37,9 @@ func TestRequestQueue(t *testing.T) {
 	requestQueue := requestqueue.NewRequestQueue(fakeDeferredRequestFn, 2)
 	// queue requests, putting 3 for first peer in first, followed by one for second peer
 	for i := 0; i < 3; i++ {
-		requestQueue.AddRequest(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[i]}, peers[1], cidlink.Link{Cid: cids[i]}, stor, nil, nil)
+		requestQueue.AddRequest(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[i]}, peers[1], cidlink.Link{Cid: cids[i]}, stor, nil, nil, math.MaxInt32)
 	}
-	requestQueue.AddRequest(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[2], ID: transferIds[3]}, peers[2], cidlink.Link{Cid: cids[3]}, stor, nil, nil)
+	requestQueue.AddRequest(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[2], ID: transferIds[3]}, peers[2], cidlink.Link{Cid: cids[3]}, stor, nil, nil, math.MaxInt32)
 
 	requestQueue.Start(ctx)
 
@@ -65,9 +66,24 @@ func TestRequestQueue(t *testing.T) {
 	require.Equal(t, atomic.LoadUint64(&inProgressRequests), uint64(2))
 	require.Equal(t, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[1]}, thirdChannelId)
 
+	// test adding a new task with a channelID that is pending
+	requestQueue.AddRequest(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[2]}, peers[1], cidlink.Link{Cid: cids[2]}, stor, nil, nil, math.MaxInt32)
+
+	// test adding a new task with a channelID that is active
+	requestQueue.AddRequest(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[1]}, peers[1], cidlink.Link{Cid: cids[1]}, stor, nil, nil, math.MaxInt32)
+
 	// read next
 	advance <- struct{}{}
 	fourthChannelID := <-executedChannels
 	require.Equal(t, atomic.LoadUint64(&inProgressRequests), uint64(2))
 	require.Equal(t, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[2]}, fourthChannelID)
+
+	// read next
+	advance <- struct{}{}
+	fifthChannelID := <-executedChannels
+	require.Equal(t, atomic.LoadUint64(&inProgressRequests), uint64(2))
+	// the next task should be the one that was added while a duplicate was active -- it will run again.
+	// the one that was added that duplicated a pending task is ignored
+	require.Equal(t, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[1]}, fifthChannelID)
+
 }
