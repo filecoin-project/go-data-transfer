@@ -973,6 +973,8 @@ func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataS
 		// Mark the channel as open and save the Graphsync request key
 		c.isOpen = true
 		c.gsKey = &gsKey
+		// a pause was called while this request was still just queued -- so
+		// we need to immediately pause the request
 		if c.startPaused {
 			err := c.gs.PauseRequest(c.gsKey.requestID)
 			if err != nil {
@@ -1054,6 +1056,9 @@ func (c *dtChannel) pause() error {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
+	// pause could potentially be called before the request
+	// is actually started cause of the request queue
+	// if this is the case, mark it to be paused when restarted
 	if c.gsKey == nil {
 		c.startPaused = true
 		return nil

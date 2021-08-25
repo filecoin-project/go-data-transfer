@@ -214,7 +214,7 @@ func TestRestartPush(t *testing.T) {
 
 			// WAIT FOR DATA TRANSFER TO FINISH -> SHOULD WORK NOW
 			// we should get 2 completes
-			_, _, err = waitF(100000*time.Second, 2)
+			_, _, err = waitF(10*time.Second, 2)
 			require.NoError(t, err)
 
 			// verify all cids are present on the receiver
