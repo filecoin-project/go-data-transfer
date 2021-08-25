@@ -385,23 +385,18 @@ func TestPushRequestRateLimiting(t *testing.T) {
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt2)
 
-	incomingFinished := make(chan struct{}, requestCount)
+	type dtEvent struct {
+		datatransfer.EventCode
+		channelID datatransfer.ChannelID
+	}
+	events := make(chan dtEvent, 3*requestCount)
 	errChan := make(chan string, 2*requestCount)
-	queued := make(chan struct{}, requestCount)
-	accepted := make(chan struct{}, requestCount)
 	var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-
 		if event.Code == datatransfer.Error {
 			errChan <- event.Message
 		}
-		if channelState.SelfPeer() == gsData.Host1.ID() && event.Code == datatransfer.Accept {
-			accepted <- struct{}{}
-		}
-		if channelState.SelfPeer() == gsData.Host2.ID() && event.Code == datatransfer.TransferRequestQueued {
-			queued <- struct{}{}
-		}
-		if channelState.SelfPeer() == gsData.Host2.ID() && channelState.Status() == datatransfer.Completed {
-			incomingFinished <- struct{}{}
+		if channelState.SelfPeer() == gsData.Host2.ID() {
+			events <- dtEvent{event.Code, channelState.ChannelID()}
 		}
 	}
 	dt1.SubscribeToEvents(subscriber)
@@ -451,20 +446,25 @@ func TestPushRequestRateLimiting(t *testing.T) {
 		_, err = dt1.OpenPushDataChannel(ctx, gsData.Host2.ID(), vouchers[i], rootCid, gsData.AllSelector)
 		require.NoError(t, err)
 	}
-	accepts := 0
 	completes := 0
 	queues := 0
-	for accepts < requestCount || completes < requestCount || queues < requestCount {
+	uniqueRequests := map[datatransfer.ChannelID]struct{}{}
+	for completes < requestCount || queues < requestCount {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Did not complete successful data transfer")
-		case <-incomingFinished:
-			completes++
-		case <-accepted:
-			accepts++
-			require.LessOrEqual(t, accepts-completes, simultaneousInProgress)
-		case <-queued:
-			queues++
+		case ev := <-events:
+			switch ev.EventCode {
+			case datatransfer.Complete:
+				delete(uniqueRequests, ev.channelID)
+				completes++
+			case datatransfer.DataQueued:
+				uniqueRequests[ev.channelID] = struct{}{}
+				require.LessOrEqual(t, len(uniqueRequests), simultaneousInProgress)
+			case datatransfer.TransferRequestQueued:
+				queues++
+			default:
+			}
 		case err := <-errChan:
 			t.Fatalf("received error on data transfer: %s", err)
 		}
