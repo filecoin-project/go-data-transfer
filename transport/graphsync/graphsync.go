@@ -126,7 +126,7 @@ func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, options ...Option)
 	for _, option := range options {
 		option(t)
 	}
-	t.requestQueue = requestqueue.NewRequestQueue(t.runDeferredRequest, t.maxInProgressPushRequests)
+	t.requestQueue = requestqueue.NewRequestQueue(t.maxInProgressPushRequests)
 	return t
 }
 
@@ -179,6 +179,12 @@ func (t *Transport) OpenChannel(ctx context.Context,
 	// Start tracking the data-transfer channel
 	ch := t.trackDTChannel(channelID)
 
+	wasInProgress, err := ch.cancelInProgressRequests(ctx)
+
+	if err != nil {
+		return err
+	}
+
 	// if we initiated this data transfer or the channel is open, run it immediately, otherwise
 	// put it in the request queue to rate limit DDOS attacks for push transfers
 	if channelID.Initiator == t.peerID {
@@ -193,34 +199,16 @@ func (t *Transport) OpenChannel(ctx context.Context,
 		// Process incoming data
 		go t.executeGsRequest(req)
 	} else {
-		if msg.IsRestart() {
-			t.requestQueue.AddRequest(ctx, channelID, dataSender, root, stor, doNotSendCids, exts, restartPriority)
+		dr := &deferredRequest{t, ch, channelID, dataSender, ctx, root, stor, doNotSendCids, exts}
+		if wasInProgress {
+			t.requestQueue.AddRequest(ctx, dr, restartPriority)
 		} else {
-			t.requestQueue.AddRequest(ctx, channelID, dataSender, root, stor, doNotSendCids, exts, newPriority)
+			t.requestQueue.AddRequest(ctx, dr, newPriority)
 		}
 		t.events.OnTransferQueued(channelID)
 	}
 
 	return nil
-}
-
-func (t *Transport) runDeferredRequest(ctx context.Context, channelID datatransfer.ChannelID, dataSender peer.ID, root ipld.Link, stor ipld.Node, doNotSendCids []cid.Cid, exts []graphsync.ExtensionData) {
-	// Start tracking the data-transfer channel
-	ch, err := t.getDTChannel(channelID)
-	if err != nil {
-		log.Warnf("error processing request from %s: %s", dataSender, err)
-		return
-	}
-
-	// Open a graphsync request to the remote peer
-	req, err := ch.open(ctx, channelID, dataSender, root, stor, doNotSendCids, exts)
-	if err != nil {
-		log.Warnf("error processing request from %s: %s", dataSender, err)
-		return
-	}
-
-	// Process incoming data -- run synchronously to make queue behavior as expected
-	t.executeGsRequest(req)
 }
 
 // Read from the graphsync response and error channels until they are closed,
@@ -930,8 +918,7 @@ type gsReq struct {
 	onComplete   func()
 }
 
-// Open a graphsync request for data to the remote peer
-func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataSender peer.ID, root ipld.Link, stor ipld.Node, doNotSendCids []cid.Cid, exts []graphsync.ExtensionData) (*gsReq, error) {
+func (c *dtChannel) cancelInProgressRequests(ctx context.Context) (bool, error) {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
@@ -941,15 +928,23 @@ func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataS
 		completed := c.completed
 		err := c.cancelRequest(ctx)
 		if err != nil {
-			return nil, xerrors.Errorf("restarting graphsync request: %w", err)
+			return false, xerrors.Errorf("restarting graphsync request: %w", err)
 		}
 
 		// Wait for the cancel to go through
 		err = waitForCancelComplete(ctx, completed)
 		if err != nil {
-			return nil, xerrors.Errorf("waiting for cancelled graphsync request to complete: %w", err)
+			return false, xerrors.Errorf("waiting for cancelled graphsync request to complete: %w", err)
 		}
+		return true, nil
 	}
+	return false, nil
+}
+
+// Open a graphsync request for data to the remote peer
+func (c *dtChannel) open(ctx context.Context, chid datatransfer.ChannelID, dataSender peer.ID, root ipld.Link, stor ipld.Node, doNotSendCids []cid.Cid, exts []graphsync.ExtensionData) (*gsReq, error) {
+	c.lk.Lock()
+	defer c.lk.Unlock()
 
 	// Set up a completed channel that will be closed when the request
 	// completes (or is cancelled)
@@ -1291,4 +1286,36 @@ func (m *gsKeyToChannelIDMap) deleteRefs(id datatransfer.ChannelID) {
 			delete(m.m, k)
 		}
 	}
+}
+
+type deferredRequest struct {
+	t             *Transport
+	ch            *dtChannel
+	channelID     datatransfer.ChannelID
+	dataSender    peer.ID
+	ctx           context.Context
+	root          ipld.Link
+	stor          ipld.Node
+	doNotSendCids []cid.Cid
+	exts          []graphsync.ExtensionData
+}
+
+func (dr *deferredRequest) DataSender() peer.ID {
+	return dr.dataSender
+}
+
+func (dr *deferredRequest) ChannelID() datatransfer.ChannelID {
+	return dr.channelID
+}
+
+func (dr *deferredRequest) Execute() {
+	// Open a graphsync request to the remote peer
+	req, err := dr.ch.open(dr.ctx, dr.channelID, dr.dataSender, dr.root, dr.stor, dr.doNotSendCids, dr.exts)
+	if err != nil {
+		log.Warnf("error processing request from %s: %s", dr.dataSender, err)
+		return
+	}
+
+	// Process incoming data -- run synchronously to make queue behavior as expected
+	dr.t.executeGsRequest(req)
 }

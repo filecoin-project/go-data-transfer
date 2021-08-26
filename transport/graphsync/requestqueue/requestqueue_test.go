@@ -6,10 +6,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/ipfs/go-cid"
-	"github.com/ipfs/go-graphsync"
-	ipld "github.com/ipld/go-ipld-prime"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 
@@ -22,24 +18,20 @@ func TestRequestQueue(t *testing.T) {
 	ctx := context.Background()
 	peers := testutil.GeneratePeers(3)
 	transferIds := testutil.GenerateTransferIDs(4)
-	cids := testutil.GenerateCids(4)
-	stor := testutil.AllSelector()
 	executedChannels := make(chan datatransfer.ChannelID)
 	advance := make(chan struct{})
 	inProgressRequests := uint64(0)
-	fakeDeferredRequestFn := func(ctx context.Context, chid datatransfer.ChannelID, dataSender peer.ID, root ipld.Link, stor ipld.Node, doNotSendCids []cid.Cid, exts []graphsync.ExtensionData) {
-		atomic.AddUint64(&inProgressRequests, 1)
-		executedChannels <- chid
-		<-advance
-		atomic.AddUint64(&inProgressRequests, ^uint64(0))
+
+	makeFakeRequest := func(p peer.ID, chid datatransfer.ChannelID) fakeRequest {
+		return fakeRequest{chid, p, executedChannels, advance, &inProgressRequests}
 	}
 
-	requestQueue := requestqueue.NewRequestQueue(fakeDeferredRequestFn, 2)
+	requestQueue := requestqueue.NewRequestQueue(2)
 	// queue requests, putting 3 for first peer in first, followed by one for second peer
 	for i := 0; i < 3; i++ {
-		requestQueue.AddRequest(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[i]}, peers[1], cidlink.Link{Cid: cids[i]}, stor, nil, nil, math.MaxInt32)
+		requestQueue.AddRequest(ctx, makeFakeRequest(peers[1], datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[i]}), math.MaxInt32)
 	}
-	requestQueue.AddRequest(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[2], ID: transferIds[3]}, peers[2], cidlink.Link{Cid: cids[3]}, stor, nil, nil, math.MaxInt32)
+	requestQueue.AddRequest(ctx, makeFakeRequest(peers[2], datatransfer.ChannelID{Initiator: peers[0], Responder: peers[2], ID: transferIds[3]}), math.MaxInt32)
 
 	requestQueue.Start(ctx)
 
@@ -67,10 +59,10 @@ func TestRequestQueue(t *testing.T) {
 	require.Equal(t, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[1]}, thirdChannelId)
 
 	// test adding a new task with a channelID that is pending
-	requestQueue.AddRequest(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[2]}, peers[1], cidlink.Link{Cid: cids[2]}, stor, nil, nil, math.MaxInt32)
+	requestQueue.AddRequest(ctx, makeFakeRequest(peers[1], datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[2]}), math.MaxInt32)
 
 	// test adding a new task with a channelID that is active
-	requestQueue.AddRequest(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[1]}, peers[1], cidlink.Link{Cid: cids[1]}, stor, nil, nil, math.MaxInt32)
+	requestQueue.AddRequest(ctx, makeFakeRequest(peers[1], datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[1]}), math.MaxInt32)
 
 	// read next
 	advance <- struct{}{}
@@ -86,4 +78,25 @@ func TestRequestQueue(t *testing.T) {
 	// the one that was added that duplicated a pending task is ignored
 	require.Equal(t, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: transferIds[1]}, fifthChannelID)
 
+}
+
+type fakeRequest struct {
+	channelID          datatransfer.ChannelID
+	dataSender         peer.ID
+	executedChannels   chan<- datatransfer.ChannelID
+	advance            <-chan struct{}
+	inProgressRequests *uint64
+}
+
+func (fr fakeRequest) DataSender() peer.ID {
+	return fr.dataSender
+}
+func (fr fakeRequest) ChannelID() datatransfer.ChannelID {
+	return fr.channelID
+}
+func (fr fakeRequest) Execute() {
+	atomic.AddUint64(fr.inProgressRequests, 1)
+	fr.executedChannels <- fr.channelID
+	<-fr.advance
+	atomic.AddUint64(fr.inProgressRequests, ^uint64(0))
 }
