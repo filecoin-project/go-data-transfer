@@ -13,7 +13,7 @@ require (
 	github.com/ipfs/go-cid v0.0.7
 	github.com/ipfs/go-datastore v0.4.5
 	github.com/ipfs/go-ds-badger v0.2.6
-	github.com/ipfs/go-graphsync v0.8.0
+	github.com/ipfs/go-graphsync v0.9.0
 	github.com/ipfs/go-ipfs-blockstore v1.0.1
 	github.com/ipfs/go-ipfs-blocksutil v0.0.1
 	github.com/ipfs/go-ipfs-chunker v0.0.5
@@ -25,14 +25,16 @@ require (
 	github.com/ipfs/go-log/v2 v2.1.1
 	github.com/ipfs/go-merkledag v0.3.2
 	github.com/ipfs/go-unixfs v0.2.4
-	github.com/ipld/go-ipld-prime v0.9.1-0.20210324083106-dc342a9917db
+	github.com/ipld/go-ipld-prime v0.12.0
 	github.com/jbenet/go-random v0.0.0-20190219211222-123a90aedc0c
 	github.com/jpillora/backoff v1.0.0
 	github.com/libp2p/go-libp2p v0.13.0
 	github.com/libp2p/go-libp2p-core v0.8.5
+	github.com/libp2p/go-libp2p-record v0.1.1 // indirect
 	github.com/stretchr/testify v1.6.1
 	github.com/whyrusleeping/cbor-gen v0.0.0-20210219115102-f37d292932f2
 	go.uber.org/atomic v1.6.0
-	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+	golang.org/x/tools v0.1.1-0.20210225150353-54dc8c5edb56 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 )
