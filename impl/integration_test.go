@@ -22,6 +22,7 @@ import (
 	chunker "github.com/ipfs/go-ipfs-chunker"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	ipldformat "github.com/ipfs/go-ipld-format"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-merkledag"
 	"github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
@@ -1870,14 +1871,13 @@ func (r *completeRevalidator) OnComplete(chid datatransfer.ChannelID) (bool, dat
 	return true, r.finalVoucher, nil
 }
 
-func TestMultipleTransferCompletionRace(t *testing.T) {
-	pausePoints := []uint64{}
+func TestMultipleParallelTransfers(t *testing.T) {
+	SetDTLogLevelDebug()
 
 	// Add more sizes here to trigger more transfers.
-	sizes := []int{200, 256000, 100000, 100000, 100000}
+	sizes := []int{300000, 256000, 200000, 256000}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
 	host1 := gsData.Host1 // initiator, data sender
@@ -1893,11 +1893,6 @@ func TestMultipleTransferCompletionRace(t *testing.T) {
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt2)
 
-	errChan := make(chan struct{}, 2)
-
-	clientGotResponse := make(chan struct{}, 1)
-	clientFinished := make(chan struct{}, 1)
-
 	// In this retrieval flow we expect 2 voucher results:
 	// The first one is sent as a response from the initial request telling the client
 	// the provider has accepted the request and is starting to send blocks
@@ -1907,43 +1902,6 @@ func TestMultipleTransferCompletionRace(t *testing.T) {
 
 	// The final voucher result is sent by the provider to let the client know the deal is completed
 	finalVoucherResult := testutil.NewFakeDTType()
-	encodedFVR, err := encoding.Encode(finalVoucherResult)
-	require.NoError(t, err)
-
-	dt2.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-		if event.Code == datatransfer.Error {
-			errChan <- struct{}{}
-		}
-		// Here we verify reception of voucherResults by the client
-		if event.Code == datatransfer.NewVoucherResult {
-			voucherResult := channelState.LastVoucherResult()
-			encodedVR, err := encoding.Encode(voucherResult)
-			require.NoError(t, err)
-
-			// If this voucher result is the response voucher no action is needed
-			// we just know that the provider has accepted the transfer and is sending blocks
-			if bytes.Equal(encodedVR, encodedRVR) {
-				// The test will fail if no response voucher is received
-				clientGotResponse <- struct{}{}
-			}
-
-			// If this voucher result is the final voucher result we record it in the channel
-			if bytes.Equal(encodedVR, encodedFVR) {
-				clientFinished <- struct{}{}
-			}
-		}
-	})
-
-	providerFinished := make(chan struct{}, 1)
-	dt1.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-		if event.Code == datatransfer.Error {
-			fmt.Println(event.Message)
-			errChan <- struct{}{}
-		}
-		if channelState.Status() == datatransfer.Completed {
-			providerFinished <- struct{}{}
-		}
-	})
 
 	sv := testutil.NewStubbedValidator()
 	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
@@ -1955,10 +1913,9 @@ func TestMultipleTransferCompletionRace(t *testing.T) {
 	// no need for intermediary voucher results
 	voucherResults := []datatransfer.VoucherResult{}
 
-	srv := &completeRevalidator{
-		&retrievalRevalidator{
-			testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult, voucherResults,
-		},
+	pausePoints := []uint64{}
+	srv := &retrievalRevalidator{
+		testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult, voucherResults,
 	}
 	require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
 
@@ -1967,42 +1924,89 @@ func TestMultipleTransferCompletionRace(t *testing.T) {
 
 	// for each size we create a new random DAG of the given size and try to retrieve it
 	for _, size := range sizes {
-		root, origBytes := LoadRandomData(ctx, t, gsData.DagService1, size)
-		gsData.OrigBytes = origBytes
-		rootCid := root.(cidlink.Link).Cid
+		size := size
+		t.Run(fmt.Sprintf("size %d", size), func(t *testing.T) {
+			t.Parallel()
 
-		voucher := testutil.NewFakeDTType()
-		_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
-		require.NoError(t, err)
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+			defer cancel()
 
-		// Expect the client to receive a response voucher, the provider to complete the transfer and
-		// the client to finish the transfer
-		for clientGotResponse != nil || providerFinished != nil || clientFinished != nil {
-			select {
-			case <-ctx.Done():
-				t.Fatal("Did not complete successful data transfer")
-			case <-clientGotResponse:
-				clientGotResponse = nil
-			case <-providerFinished:
-				providerFinished = nil
-			case <-clientFinished:
-				if clientGotResponse != nil {
-					t.Fatal("received completion before acceptance")
+			errChan := make(chan struct{}, 2)
+
+			clientGotResponse := make(chan struct{}, 1)
+			clientFinished := make(chan struct{}, 1)
+
+			dt2.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if event.Code == datatransfer.Error {
+					errChan <- struct{}{}
 				}
-				clientFinished = nil
-			case <-errChan:
-				t.Fatal("received unexpected error")
-			}
-		}
-		sv.VerifyExpectations(t)
-		srv.VerifyExpectations(t)
-		gsData.VerifyFileTransferred(t, root, true)
+				// Here we verify reception of voucherResults by the client
+				if event.Code == datatransfer.NewVoucherResult {
+					voucherResult := channelState.LastVoucherResult()
+					encodedVR, err := encoding.Encode(voucherResult)
+					require.NoError(t, err)
 
-		// reset the channels for the next transfer
-		errChan = make(chan struct{}, 2)
-		clientGotResponse = make(chan struct{}, 1)
-		clientFinished = make(chan struct{}, 1)
-		providerFinished = make(chan struct{}, 1)
+					// If this voucher result is the response voucher no action is needed
+					// we just know that the provider has accepted the transfer and is sending blocks
+					if bytes.Equal(encodedVR, encodedRVR) {
+						// The test will fail if no response voucher is received
+						clientGotResponse <- struct{}{}
+					}
+				}
+
+				if channelState.Status() == datatransfer.Completed {
+					clientFinished <- struct{}{}
+				}
+			})
+
+			providerFinished := make(chan struct{}, 1)
+			dt1.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if event.Code == datatransfer.Error {
+					fmt.Println(event.Message)
+					errChan <- struct{}{}
+				}
+				if channelState.Status() == datatransfer.Completed {
+					providerFinished <- struct{}{}
+				}
+			})
+
+			root, origBytes := LoadRandomData(ctx, t, gsData.DagService1, size)
+			gsData.OrigBytes = origBytes
+			rootCid := root.(cidlink.Link).Cid
+
+			voucher := testutil.NewFakeDTType()
+			_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
+			require.NoError(t, err)
+
+			// Expect the client to receive a response voucher, the provider to complete the transfer and
+			// the client to finish the transfer
+			for clientGotResponse != nil || providerFinished != nil || clientFinished != nil {
+				select {
+				case <-ctx.Done():
+					reason := "Did not complete successful data transfer"
+					switch true {
+					case clientGotResponse != nil:
+						reason = "client did not get initial response"
+					case clientFinished != nil:
+						reason = "client did not finish"
+					case providerFinished != nil:
+						reason = "provider did not finish"
+					}
+					t.Fatal(reason)
+				case <-clientGotResponse:
+					clientGotResponse = nil
+				case <-providerFinished:
+					providerFinished = nil
+				case <-clientFinished:
+					clientFinished = nil
+				case <-errChan:
+					t.Fatal("received unexpected error")
+				}
+			}
+			sv.VerifyExpectations(t)
+			srv.VerifyExpectations(t)
+			gsData.VerifyFileTransferred(t, root, true)
+		})
 	}
 }
 
@@ -2074,10 +2078,10 @@ func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
 
 }
 
-//func SetDTLogLevelDebug() {
-//	_ = logging.SetLogLevel("dt-impl", "debug")
-//	_ = logging.SetLogLevel("dt-chanmon", "debug")
-//	_ = logging.SetLogLevel("dt_graphsync", "debug")
-//	_ = logging.SetLogLevel("data_transfer", "debug")
-//	_ = logging.SetLogLevel("data_transfer_network", "debug")
-//}
+func SetDTLogLevelDebug() {
+	_ = logging.SetLogLevel("dt-impl", "debug")
+	_ = logging.SetLogLevel("dt-chanmon", "debug")
+	_ = logging.SetLogLevel("dt_graphsync", "debug")
+	_ = logging.SetLogLevel("data-transfer", "debug")
+	_ = logging.SetLogLevel("data_transfer_network", "debug")
+}
