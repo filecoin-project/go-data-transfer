@@ -1902,6 +1902,8 @@ func TestMultipleParallelTransfers(t *testing.T) {
 
 	// The final voucher result is sent by the provider to let the client know the deal is completed
 	finalVoucherResult := testutil.NewFakeDTType()
+	encodedFVR, err := encoding.Encode(finalVoucherResult)
+	require.NoError(t, err)
 
 	sv := testutil.NewStubbedValidator()
 	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
@@ -1917,6 +1919,7 @@ func TestMultipleParallelTransfers(t *testing.T) {
 	srv := &retrievalRevalidator{
 		testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult, voucherResults,
 	}
+	srv.ExpectSuccessErrResume()
 	require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
 
 	// Register our response voucher with the client
@@ -1928,7 +1931,7 @@ func TestMultipleParallelTransfers(t *testing.T) {
 		t.Run(fmt.Sprintf("size %d", size), func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 			defer cancel()
 
 			errChan := make(chan struct{}, 2)
@@ -1936,7 +1939,13 @@ func TestMultipleParallelTransfers(t *testing.T) {
 			clientGotResponse := make(chan struct{}, 1)
 			clientFinished := make(chan struct{}, 1)
 
+			var chid datatransfer.ChannelID
+			chidReceived := make(chan struct{})
 			dt2.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				<-chidReceived
+				if chid != channelState.ChannelID() {
+					return
+				}
 				if event.Code == datatransfer.Error {
 					errChan <- struct{}{}
 				}
@@ -1952,6 +1961,12 @@ func TestMultipleParallelTransfers(t *testing.T) {
 						// The test will fail if no response voucher is received
 						clientGotResponse <- struct{}{}
 					}
+
+					// If this voucher result is the final voucher result we need
+					// to send a new voucher to unpause the provider and complete the transfer
+					if bytes.Equal(encodedVR, encodedFVR) {
+						_ = dt2.SendVoucher(ctx, chid, testutil.NewFakeDTType())
+					}
 				}
 
 				if channelState.Status() == datatransfer.Completed {
@@ -1961,6 +1976,10 @@ func TestMultipleParallelTransfers(t *testing.T) {
 
 			providerFinished := make(chan struct{}, 1)
 			dt1.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				<-chidReceived
+				if chid != channelState.ChannelID() {
+					return
+				}
 				if event.Code == datatransfer.Error {
 					fmt.Println(event.Message)
 					errChan <- struct{}{}
@@ -1971,13 +1990,12 @@ func TestMultipleParallelTransfers(t *testing.T) {
 			})
 
 			root, origBytes := LoadRandomData(ctx, t, gsData.DagService1, size)
-			gsData.OrigBytes = origBytes
 			rootCid := root.(cidlink.Link).Cid
 
 			voucher := testutil.NewFakeDTType()
-			_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
+			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
 			require.NoError(t, err)
-
+			close(chidReceived)
 			// Expect the client to receive a response voucher, the provider to complete the transfer and
 			// the client to finish the transfer
 			for clientGotResponse != nil || providerFinished != nil || clientFinished != nil {
@@ -2005,7 +2023,7 @@ func TestMultipleParallelTransfers(t *testing.T) {
 			}
 			sv.VerifyExpectations(t)
 			srv.VerifyExpectations(t)
-			gsData.VerifyFileTransferred(t, root, true)
+			testutil.VerifyHasFile(gsData.Ctx, t, gsData.DagService2, root, origBytes)
 		})
 	}
 }
