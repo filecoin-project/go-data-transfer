@@ -31,6 +31,7 @@ type DecoderByTypeFunc func(identifier datatransfer.TypeIdentifier) (encoding.De
 type ReceivedCidsReader interface {
 	ToArray(chid datatransfer.ChannelID) ([]cid.Cid, error)
 	Len(chid datatransfer.ChannelID) (int, error)
+	Total(chid datatransfer.ChannelID) (int64, error)
 }
 
 type Notifier func(datatransfer.Event, datatransfer.ChannelState)
@@ -59,6 +60,7 @@ type Channels struct {
 	stateMachines        fsm.Group
 	migrateStateMachines func(context.Context) error
 	seenCIDs             *cidsets.CIDSetManager
+	blockRcvdIdx         *blocksReceivedIndex
 }
 
 // ChannelEnvironment -- just a proxy for DTNetwork for now
@@ -79,8 +81,10 @@ func New(ds datastore.Batching,
 	selfPeer peer.ID) (*Channels, error) {
 
 	seenCIDsDS := namespace.Wrap(ds, datastore.NewKey("seencids"))
+	blockRcvdIdxDS := namespace.Wrap(ds, datastore.NewKey("block-rcvd-index"))
 	c := &Channels{
 		seenCIDs:             cidsets.NewCIDSetManager(seenCIDsDS),
+		blockRcvdIdx:         newBlocksReceivedIndex(blockRcvdIdxDS),
 		notifier:             notifier,
 		voucherDecoder:       voucherDecoder,
 		voucherResultDecoder: voucherResultDecoder,
@@ -126,14 +130,14 @@ func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 	log.Debugw("process data transfer listeners", "name", datatransfer.Events[evtCode], "transfer ID", realChannel.TransferID)
 	c.notifier(evt, c.fromInternalChannelState(realChannel))
 
-	// When the channel has been cleaned up, remove the caches of seen cids
+	// When the channel has been cleaned up, remove the block caches
 	if evt.Code == datatransfer.CleanupComplete {
 		chid := datatransfer.ChannelID{
 			Initiator: realChannel.Initiator,
 			Responder: realChannel.Responder,
 			ID:        realChannel.TransferID,
 		}
-		err := c.removeSeenCIDCaches(chid)
+		err := c.removeBlockCaches(chid)
 		if err != nil {
 			log.Errorf("failed to clean up channel %s: %s", err)
 		}
@@ -241,7 +245,12 @@ func (c *Channels) DataQueued(chid datatransfer.ChannelID, k cid.Cid, delta uint
 }
 
 // Returns true if this is the first time the block has been received
-func (c *Channels) DataReceived(chid datatransfer.ChannelID, k cid.Cid, delta uint64) (bool, error) {
+func (c *Channels) DataReceived(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64) (bool, error) {
+	// Update the blocks-received index
+	if err := c.blockRcvdIdx.update(chid, index); err != nil {
+		return false, err
+	}
+	// Fire data-received event
 	return c.fireProgressEvent(chid, datatransfer.DataReceived, datatransfer.DataReceivedProgress, k, delta)
 }
 
@@ -355,9 +364,11 @@ func (c *Channels) HasChannel(chid datatransfer.ChannelID) (bool, error) {
 	return c.stateMachines.Has(chid)
 }
 
-// removeSeenCIDCaches cleans up the caches of "seen" blocks, ie
+// removeBlockCaches cleans up the caches of "seen" blocks, ie
 // blocks that have already been queued / sent / received
-func (c *Channels) removeSeenCIDCaches(chid datatransfer.ChannelID) error {
+// and the received block index
+func (c *Channels) removeBlockCaches(chid datatransfer.ChannelID) error {
+	// Clean up seen block caches
 	progressStates := []datatransfer.EventCode{
 		datatransfer.DataQueued,
 		datatransfer.DataSent,
@@ -370,7 +381,9 @@ func (c *Channels) removeSeenCIDCaches(chid datatransfer.ChannelID) error {
 			return err
 		}
 	}
-	return nil
+
+	// Clean up block-received index
+	return c.blockRcvdIdx.delete(chid)
 }
 
 // fireProgressEvent fires
@@ -434,6 +447,7 @@ func seenCidsSetID(chid datatransfer.ChannelID, evt datatransfer.EventCode) cids
 func (c *Channels) fromInternalChannelState(ch internal.ChannelState) datatransfer.ChannelState {
 	rcr := &receivedCidsReader{
 		seenCIDs: c.seenCIDs,
+		bri:      c.blockRcvdIdx,
 	}
 	return fromInternalChannelState(ch, c.voucherDecoder, c.voucherResultDecoder, rcr)
 }
@@ -447,6 +461,7 @@ func (c *Channels) fromInternalChannelState(ch internal.ChannelState) datatransf
 // these methods will return an empty array after that point.
 type receivedCidsReader struct {
 	seenCIDs *cidsets.CIDSetManager
+	bri      *blocksReceivedIndex
 }
 
 func (r *receivedCidsReader) ToArray(chid datatransfer.ChannelID) ([]cid.Cid, error) {
@@ -457,6 +472,10 @@ func (r *receivedCidsReader) ToArray(chid datatransfer.ChannelID) ([]cid.Cid, er
 func (r *receivedCidsReader) Len(chid datatransfer.ChannelID) (int, error) {
 	sid := seenCidsSetID(chid, datatransfer.DataReceived)
 	return r.seenCIDs.SetLen(sid)
+}
+
+func (r *receivedCidsReader) Total(chid datatransfer.ChannelID) (int64, error) {
+	return r.bri.get(chid)
 }
 
 var _ ReceivedCidsReader = (*receivedCidsReader)(nil)

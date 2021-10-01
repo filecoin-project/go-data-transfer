@@ -107,9 +107,19 @@ func (c channelState) ReceivedCids() []cid.Cid {
 	return receivedCids
 }
 
-// ReceivedCids returns the number of cids received so far on this channel
+// ReceivedCids returns the number of unique cids received so far on this channel
 func (c channelState) ReceivedCidsLen() int {
 	len, err := c.receivedCids.Len(c.ChannelID())
+	if err != nil {
+		log.Error(err)
+	}
+	return len
+}
+
+// ReceivedCidsTotal returns the number of (non-unique) cids received so far
+// on the channel
+func (c channelState) ReceivedCidsTotal() int64 {
+	len, err := c.receivedCids.Total(c.ChannelID())
 	if err != nil {
 		log.Error(err)
 	}
