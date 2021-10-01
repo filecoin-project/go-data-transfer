@@ -136,7 +136,7 @@ type ChannelState interface {
 	ReceivedCidsLen() int
 
 	// ReceivedCidsTotal returns the number of (non-unique) cids received so far
-	// on the channel
+	// on the channel - note that a block can exist in more than one place in the DAG
 	ReceivedCidsTotal() int64
 
 	// Queued returns the number of bytes read from the node and queued for sending

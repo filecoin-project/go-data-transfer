@@ -40,6 +40,9 @@ type channelState struct {
 	sent uint64
 	// total bytes received by this node (0 if sender)
 	received uint64
+	// number of blocks that have been received, including blocks that are
+	// present in more than one place in the DAG
+	receivedBlocksTotal int64
 	// more informative status on a channel
 	message string
 	// additional vouchers
@@ -117,13 +120,9 @@ func (c channelState) ReceivedCidsLen() int {
 }
 
 // ReceivedCidsTotal returns the number of (non-unique) cids received so far
-// on the channel
+// on the channel - note that a block can exist in more than one place in the DAG
 func (c channelState) ReceivedCidsTotal() int64 {
-	len, err := c.receivedCids.Total(c.ChannelID())
-	if err != nil {
-		log.Error(err)
-	}
-	return len
+	return c.receivedBlocksTotal
 }
 
 // Sender returns the peer id for the node that is sending data
@@ -223,6 +222,7 @@ func fromInternalChannelState(c internal.ChannelState, voucherDecoder DecoderByT
 		queued:               c.Queued,
 		sent:                 c.Sent,
 		received:             c.Received,
+		receivedBlocksTotal:  c.ReceivedBlocksTotal,
 		message:              c.Message,
 		vouchers:             c.Vouchers,
 		voucherResults:       c.VoucherResults,
