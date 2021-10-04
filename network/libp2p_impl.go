@@ -143,6 +143,9 @@ func (impl *libp2pDataTransferNetwork) openStream(ctx context.Context, id peer.I
 					id, nAttempts, impl.maxStreamOpenAttempts, time.Since(start))
 			}
 
+			// Cache the peer's protocol version
+			impl.setPeerProtocol(id, s.Protocol())
+
 			return s, err
 		}
 
@@ -226,7 +229,10 @@ func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 		return
 	}
 
+	// Cache the peer's protocol version
 	p := s.Conn().RemotePeer()
+	dtnet.setPeerProtocol(p, s.Protocol())
+
 	for {
 		var received datatransfer.Message
 		var err error
@@ -349,11 +355,6 @@ func (impl *libp2pDataTransferNetwork) clearPeerProtocol(p peer.ID) {
 	delete(impl.peerProtocols, p)
 }
 
-// Cache the peer's protocol version when a stream is opened
-func (impl *libp2pDataTransferNetwork) OpenedStream(n network.Network, stream network.Stream) {
-	impl.setPeerProtocol(stream.Conn().RemotePeer(), stream.Protocol())
-}
-
 // Clear the peer protocol version cache for the peer when the peer disconnects
 func (impl *libp2pDataTransferNetwork) Disconnected(n network.Network, conn network.Conn) {
 	impl.clearPeerProtocol(conn.RemotePeer())
@@ -362,4 +363,5 @@ func (impl *libp2pDataTransferNetwork) Disconnected(n network.Network, conn netw
 func (impl *libp2pDataTransferNetwork) Listen(n network.Network, multiaddr ma.Multiaddr)      {}
 func (impl *libp2pDataTransferNetwork) ListenClose(n network.Network, multiaddr ma.Multiaddr) {}
 func (impl *libp2pDataTransferNetwork) Connected(n network.Network, conn network.Conn)        {}
+func (impl *libp2pDataTransferNetwork) OpenedStream(n network.Network, stream network.Stream) {}
 func (impl *libp2pDataTransferNetwork) ClosedStream(n network.Network, stream network.Stream) {}
