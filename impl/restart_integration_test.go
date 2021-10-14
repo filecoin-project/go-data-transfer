@@ -109,6 +109,9 @@ func TestRestartPush(t *testing.T) {
 
 			var chid datatransfer.ChannelID
 			var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if channelState.Message() != "" {
+					t.Logf("Event: %s, Current Status message: %s", datatransfer.Events[event.Code], channelState.Message())
+				}
 				if event.Code == datatransfer.DataQueued {
 					if channelState.Queued() > 0 {
 						queued <- channelState.Queued()
