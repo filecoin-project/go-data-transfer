@@ -119,6 +119,19 @@ func (m *Monitor) addChannel(chid datatransfer.ChannelID, isPush bool) *monitore
 	return mpc
 }
 
+// IsChannelMonitored returns true if the given channel ID is monitored
+func (m *Monitor) IsChannelMonitored(chid datatransfer.ChannelID) bool {
+	if !m.enabled() {
+		return false
+	}
+
+	m.lk.Lock()
+	defer m.lk.Unlock()
+
+	_, ok := m.channels[chid]
+	return ok
+}
+
 func (m *Monitor) Shutdown() {
 	// Cancel the context for the Monitor
 	m.stop()

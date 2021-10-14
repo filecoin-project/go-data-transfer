@@ -125,6 +125,10 @@ func NewDataTransfer(ds datastore.Batching, cidListsDir string, dataTransferNetw
 	return m, nil
 }
 
+func (m *manager) IsChannelMonitored(chid datatransfer.ChannelID) bool {
+	return m.channelMonitor.IsChannelMonitored(chid)
+}
+
 func (m *manager) voucherDecoder(voucherType datatransfer.TypeIdentifier) (encoding.Decoder, bool) {
 	decoder, has := m.validatedTypes.Decoder(voucherType)
 	if !has {

@@ -16,6 +16,7 @@ import (
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/channelmonitor"
 	. "github.com/filecoin-project/go-data-transfer/impl"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
@@ -29,6 +30,19 @@ const largeFile = "lorem_large.txt"
 type peerError struct {
 	p   peer.ID
 	err error
+}
+
+var monitorConfig = channelmonitor.Config{
+
+	AcceptTimeout:          time.Hour * 24,
+	RestartDebounce:        time.Second * 10,
+	RestartBackoff:         time.Second * 20,
+	MaxConsecutiveRestarts: 15,
+	//RestartAckTimeout:      time.Second * 30,
+	CompleteTimeout: time.Minute * 40,
+
+	// Called when a restart completes successfully
+	//OnRestartComplete func(id datatransfer.ChannelID)
 }
 
 func TestRestartPush(t *testing.T) {
@@ -50,7 +64,7 @@ func TestRestartPush(t *testing.T) {
 				require.NoError(t, rh.dt1.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp1 := rh.gsData.SetupGSTransportHost1()
-				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.TempDir1, rh.gsData.DtNet1, tp1)
+				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.TempDir1, rh.gsData.DtNet1, tp1, ChannelRestartConfig(monitorConfig))
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
@@ -118,6 +132,11 @@ func TestRestartPush(t *testing.T) {
 				if event.Code == datatransfer.DataSent {
 					if channelState.Sent() > 0 {
 						sent <- channelState.Sent()
+						if rh.dt1.IsChannelMonitored(chid) {
+							t.Log("Send Channel is monitored")
+						} else {
+							t.Log("Send Channel is NOT monitored")
+						}
 					}
 				}
 
@@ -485,10 +504,10 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	tp1 := gsData.SetupGSTransportHost1()
 	tp2 := gsData.SetupGSTransportHost2()
 
-	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1)
+	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1, ChannelRestartConfig(monitorConfig))
 	require.NoError(t, err)
 
-	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, tp2)
+	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.TempDir2, gsData.DtNet2, tp2, ChannelRestartConfig(monitorConfig))
 	require.NoError(t, err)
 
 	sv := testutil.NewStubbedValidator()
