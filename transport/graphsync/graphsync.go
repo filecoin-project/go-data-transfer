@@ -404,6 +404,43 @@ func (t *Transport) UseStore(channelID datatransfer.ChannelID, lsys ipld.LinkSys
 	return ch.useStore(lsys)
 }
 
+type ChannelGraphsyncRequests struct {
+	Current graphsync.RequestID
+	Other   []graphsync.RequestID
+}
+
+type ChannelsForPeer struct {
+	SendingChannels   map[datatransfer.ChannelID]ChannelGraphsyncRequests
+	ReceivingChannels map[datatransfer.ChannelID]ChannelGraphsyncRequests
+}
+
+// ChannelsForPeer identifies which channels are open and which request IDs they map to
+func (t *Transport) ChannelsForPeer(p peer.ID) ChannelsForPeer {
+	t.dtChannelsLk.RLock()
+	defer t.dtChannelsLk.RUnlock()
+	sending := make(map[datatransfer.ChannelID]ChannelGraphsyncRequests)
+	receiving := make(map[datatransfer.ChannelID]ChannelGraphsyncRequests)
+	t.gsKeyToChannelID.forEach(func(k graphsyncKey, chid datatransfer.ChannelID) {
+		if chid.Initiator == p || chid.Responder == p {
+			collection := sending
+			if k.p == t.peerID {
+				collection = receiving
+			}
+			channelGraphsyncRequests := collection[chid]
+			if t.dtChannels[chid] != nil && t.dtChannels[chid].gsKey != nil && (*t.dtChannels[chid].gsKey) == k {
+				channelGraphsyncRequests.Current = k.requestID
+			} else {
+				channelGraphsyncRequests.Other = append(channelGraphsyncRequests.Other, k.requestID)
+			}
+			collection[chid] = channelGraphsyncRequests
+		}
+	})
+	return ChannelsForPeer{
+		SendingChannels:   sending,
+		ReceivingChannels: receiving,
+	}
+}
+
 // gsOutgoingRequestHook is called when a graphsync request is made
 func (t *Transport) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestData, hookActions graphsync.OutgoingRequestHookActions) {
 	message, _ := extension.GetTransferData(request, t.supportedExtensions)
@@ -547,10 +584,12 @@ func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData) {
 		// when a data transfer request comes in on graphsync, the remote peer
 		// initiated a pull
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}
-		request := msg.(datatransfer.Request)
-		if request.IsNew() {
-			log.Infof("%s, pull request queued, req=%+v", chid, request)
+		dtRequest := msg.(datatransfer.Request)
+		if dtRequest.IsNew() {
+			log.Infof("%s, pull request queued, req_id=%d", chid, request.ID())
 			t.events.OnTransferQueued(chid)
+		} else {
+			log.Infof("%s, pull restart request queued, req_id=%d", chid, request.ID())
 		}
 	} else {
 		// when a data transfer response comes in on graphsync, this node
@@ -561,6 +600,8 @@ func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData) {
 		if response.IsNew() {
 			log.Infof("%s, GS pull request queued in response to our push, req_id=%d", chid, request.ID())
 			t.events.OnTransferQueued(chid)
+		} else {
+			log.Infof("%s, GS pull request queued in response to our restart push, req_id=%d", chid, request.ID())
 		}
 	}
 }
@@ -593,7 +634,7 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		// initiated a pull
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}
 
-		log.Debugf("%s: received request for data (pull)", chid)
+		log.Debugf("%s: received request for data (pull), req_id=%d", chid, request.ID())
 
 		// Lock the channel for the duration of this method
 		ch = t.trackDTChannel(chid)
@@ -608,7 +649,7 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		// for data
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID, Responder: p}
 
-		log.Debugf("%s: received request for data (push)", chid)
+		log.Debugf("%s: received request for data (push), req_id=%d", chid, request.ID())
 
 		// Lock the channel for the duration of this method
 		ch = t.trackDTChannel(chid)
@@ -1042,7 +1083,7 @@ func (c *dtChannel) gsReqOpened(gsKey graphsyncKey, hookActions graphsync.Outgoi
 // for data.
 // Note: Must be called under the lock.
 func (c *dtChannel) gsDataRequestRcvd(gsKey graphsyncKey, hookActions graphsync.IncomingRequestHookActions) {
-	log.Debugf("%s: received request for data", c.channelID)
+	log.Debugf("%s: received request for data, req_id=%d", c.channelID, gsKey.requestID)
 
 	// If the requester had previously cancelled their request, send any
 	// message that was queued since the cancel
