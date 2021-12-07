@@ -840,8 +840,8 @@ func TestManager(t *testing.T) {
 				require.Equal(t, channelsForPeer, ChannelsForPeer{
 					ReceivingChannels: map[datatransfer.ChannelID]ChannelGraphsyncRequests{
 						events.ChannelOpenedChannelID: {
-							Current: gsData.altRequest.ID(),
-							Other:   []graphsync.RequestID{gsData.request.ID()},
+							Current:  gsData.altRequest.ID(),
+							Previous: []graphsync.RequestID{gsData.request.ID()},
 						},
 					},
 					SendingChannels: map[datatransfer.ChannelID]ChannelGraphsyncRequests{},

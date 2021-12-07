@@ -404,11 +404,18 @@ func (t *Transport) UseStore(channelID datatransfer.ChannelID, lsys ipld.LinkSys
 	return ch.useStore(lsys)
 }
 
+// ChannelGraphsyncRequests describes any graphsync request IDs associated with a given channel
 type ChannelGraphsyncRequests struct {
+	// Current is the current request ID for the transfer
 	Current graphsync.RequestID
-	Other   []graphsync.RequestID
+	// Previous are ids of previous GraphSync requests in a transfer that
+	// has been restarted. We may be interested to know if these IDs are active
+	// on either side of the request
+	Previous []graphsync.RequestID
 }
 
+// ChannelsForPeer describes current active channels for a given peer and their
+// associated graphsync requests
 type ChannelsForPeer struct {
 	SendingChannels   map[datatransfer.ChannelID]ChannelGraphsyncRequests
 	ReceivingChannels map[datatransfer.ChannelID]ChannelGraphsyncRequests
@@ -418,19 +425,36 @@ type ChannelsForPeer struct {
 func (t *Transport) ChannelsForPeer(p peer.ID) ChannelsForPeer {
 	t.dtChannelsLk.RLock()
 	defer t.dtChannelsLk.RUnlock()
+
+	// cannot have active transfers with self
+	if p == t.peerID {
+		return ChannelsForPeer{
+			SendingChannels:   map[datatransfer.ChannelID]ChannelGraphsyncRequests{},
+			ReceivingChannels: map[datatransfer.ChannelID]ChannelGraphsyncRequests{},
+		}
+	}
+
 	sending := make(map[datatransfer.ChannelID]ChannelGraphsyncRequests)
 	receiving := make(map[datatransfer.ChannelID]ChannelGraphsyncRequests)
+	// loop through every graphsync request key we're currently tracking
 	t.gsKeyToChannelID.forEach(func(k graphsyncKey, chid datatransfer.ChannelID) {
+		// if the associated channel ID includes the requested peer
 		if chid.Initiator == p || chid.Responder == p {
+			// determine whether the requested peer is one at least one end of the channel
+			// and whether we're receving from that peer or sending to it
 			collection := sending
 			if k.p == t.peerID {
 				collection = receiving
 			}
 			channelGraphsyncRequests := collection[chid]
+			// finally, determine if the request key matches the current GraphSync key we're tracking for
+			// this channel, indicating it's the current graphsync request
 			if t.dtChannels[chid] != nil && t.dtChannels[chid].gsKey != nil && (*t.dtChannels[chid].gsKey) == k {
 				channelGraphsyncRequests.Current = k.requestID
 			} else {
-				channelGraphsyncRequests.Other = append(channelGraphsyncRequests.Other, k.requestID)
+				// otherwise this id was a previous graphsync request on a channel that was restarted
+				// and it has not been cleaned up yet
+				channelGraphsyncRequests.Previous = append(channelGraphsyncRequests.Previous, k.requestID)
 			}
 			collection[chid] = channelGraphsyncRequests
 		}
