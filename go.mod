@@ -4,15 +4,14 @@ go 1.15
 
 require (
 	github.com/bep/debounce v1.2.0
-	github.com/filecoin-project/go-ds-versioning v0.0.0-20211119000042-d0cf38743fe7
+	github.com/filecoin-project/go-ds-versioning v0.0.0-20211206185234-508abd7c2aff
 	github.com/filecoin-project/go-statemachine v0.0.0-20200925024713-05bd7c71fbfe
-	github.com/filecoin-project/go-statestore v0.1.2-0.20211118230537-43557b6c5ce5 // indirect
 	github.com/hannahhoward/cbor-gen-for v0.0.0-20200817222906-ea96cece81f1
 	github.com/hannahhoward/go-pubsub v0.0.0-20200423002714-8d62886cc36e
 	github.com/ipfs/go-block-format v0.0.3
 	github.com/ipfs/go-blockservice v0.2.1
 	github.com/ipfs/go-cid v0.0.7
-	github.com/ipfs/go-datastore v0.5.0
+	github.com/ipfs/go-datastore v0.5.1
 	github.com/ipfs/go-ds-badger v0.3.0
 	github.com/ipfs/go-graphsync v0.10.6-0.20211119000532-c416dad3bd56
 	github.com/ipfs/go-ipfs-blockstore v1.1.0
