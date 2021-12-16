@@ -593,7 +593,7 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 }
 
 // gsReqQueuedHook is called when graphsync enqueues an incoming request for data
-func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData) {
+func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData, hookActions graphsync.RequestQueuedHookActions) {
 	msg, err := extension.GetTransferData(request, t.supportedExtensions)
 	if err != nil {
 		log.Errorf("failed GetTransferData, req=%+v, err=%s", request, err)
@@ -627,6 +627,10 @@ func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData) {
 		} else {
 			log.Infof("%s, GS pull request queued in response to our restart push, req_id=%d", chid, request.ID())
 		}
+	}
+	augmentContext := t.events.OnContextAugment(chid)
+	if augmentContext != nil {
+		hookActions.AugmentContext(augmentContext)
 	}
 }
 
@@ -1101,6 +1105,35 @@ func (c *dtChannel) gsReqOpened(gsKey graphsyncKey, hookActions graphsync.Outgoi
 	c.gsKeyToChannelID.set(gsKey, c.channelID)
 
 	c.opened <- gsKey
+}
+
+func (c *dtChannel) gsDataRequestQueued(gsKey graphsyncKey, hookActions graphsync.IncomingRequestHookActions) {
+	log.Debugf("%s: received request for data, req_id=%d", c.channelID, gsKey.requestID)
+
+	// If the requester had previously cancelled their request, send any
+	// message that was queued since the cancel
+	if c.requesterCancelled {
+		c.requesterCancelled = false
+
+		extensions := c.pendingExtensions
+		c.pendingExtensions = nil
+		for _, ext := range extensions {
+			hookActions.SendExtensionData(ext)
+		}
+	}
+
+	// Tell graphsync to load blocks from the registered store
+	if c.hasStore() {
+		hookActions.UsePersistenceOption("data-transfer-" + c.channelID.String())
+	}
+
+	// Save a mapping from the graphsync key to the channel ID so that
+	// subsequent graphsync callbacks are associated with this channel
+	c.gsKey = &gsKey
+	log.Infow("incoming graphsync request", "peer", gsKey.p, "graphsync request id", gsKey.requestID, "data transfer channel id", c.channelID)
+	c.gsKeyToChannelID.set(gsKey, c.channelID)
+
+	c.isOpen = true
 }
 
 // gsDataRequestRcvd is called when the transport receives an incoming request

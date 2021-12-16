@@ -299,6 +299,13 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	return nil
 }
 
+func (m *manager) OnContextAugment(chid datatransfer.ChannelID) func(context.Context) context.Context {
+	return func(ctx context.Context) context.Context {
+		ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
+		return ctx
+	}
+}
+
 func (m *manager) receiveRestartRequest(chid datatransfer.ChannelID, incoming datatransfer.Request) (datatransfer.Response, error) {
 	log.Infof("channel %s: received restart request", chid)
 

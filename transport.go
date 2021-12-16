@@ -69,6 +69,8 @@ type EventsHandler interface {
 	// OnReceiveDataError is called when a network error occurs receiving data
 	// at the transport layer
 	OnReceiveDataError(chid ChannelID, err error) error
+
+	OnContextAugment(chid ChannelID) func(context.Context) context.Context
 }
 
 /*

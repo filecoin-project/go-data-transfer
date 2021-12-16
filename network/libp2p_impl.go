@@ -12,6 +12,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -160,19 +163,36 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 	p peer.ID,
 	outgoing datatransfer.Message) error {
 
+	ctx, span := otel.Tracer("data-transfer").Start(ctx, "sendMessage", trace.WithAttributes(
+		attribute.String("to", p.String()),
+		attribute.Int64("transferID", int64(outgoing.TransferID())),
+		attribute.Bool("isRequest", outgoing.IsRequest()),
+		attribute.Bool("isNew", outgoing.IsNew()),
+		attribute.Bool("isRestart", outgoing.IsRestart()),
+		attribute.Bool("isUpdate", outgoing.IsUpdate()),
+		attribute.Bool("isCancel", outgoing.IsCancel()),
+		attribute.Bool("isPaused", outgoing.IsPaused()),
+	))
+
+	defer span.End()
 	s, err := dtnet.openStream(ctx, p, dtnet.dtProtocols...)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 
 	outgoing, err = outgoing.MessageForProtocol(s.Protocol())
 	if err != nil {
-		return xerrors.Errorf("failed to convert message for protocol: %w", err)
+		err = xerrors.Errorf("failed to convert message for protocol: %w", err)
+		span.RecordError(err)
+		return err
 	}
 
 	if err = dtnet.msgToStream(ctx, s, outgoing); err != nil {
+		span.RecordError(err)
 		if err2 := s.Reset(); err2 != nil {
 			log.Error(err)
+			span.RecordError(err2)
 			return err2
 		}
 		return err
