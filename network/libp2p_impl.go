@@ -186,6 +186,7 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 	if err != nil {
 		err = xerrors.Errorf("failed to convert message for protocol: %w", err)
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
