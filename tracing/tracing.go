@@ -25,11 +25,10 @@ func NewSpansIndex() *SpansIndex {
 func (si *SpansIndex) SpanForChannel(ctx context.Context, chid datatransfer.ChannelID) (context.Context, trace.Span) {
 	si.spansLk.RLock()
 	span, ok := si.spans[chid]
+	si.spansLk.RUnlock()
 	if ok {
-		si.spansLk.RUnlock()
 		return trace.ContextWithSpan(ctx, span), span
 	}
-	si.spansLk.RUnlock()
 	si.spansLk.Lock()
 	defer si.spansLk.Unlock()
 	// need to recheck under the write lock
