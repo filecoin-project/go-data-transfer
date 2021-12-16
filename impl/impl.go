@@ -218,6 +218,7 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 	if err := m.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		_ = m.channels.Error(chid, err)
 
 		// If push channel monitoring is enabled, shutdown the monitor as it
