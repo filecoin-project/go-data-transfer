@@ -293,6 +293,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 	updateRequest, err := message.VoucherRequest(channelID.ID, voucher.Type(), voucher)
 	if err != nil {
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherPeer(), updateRequest); err != nil {
