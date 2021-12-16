@@ -4,10 +4,11 @@ import (
 	"context"
 	"sync"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 )
 
 type SpansIndex struct {
