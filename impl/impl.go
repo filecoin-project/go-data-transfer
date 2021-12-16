@@ -287,6 +287,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 	if channelID.Initiator != m.peerID {
 		err := errors.New("cannot send voucher for request we did not initiate")
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	updateRequest, err := message.VoucherRequest(channelID.ID, voucher.Type(), voucher)
