@@ -323,6 +323,7 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 	err = m.transport.CloseChannel(ctx, chid)
 	if err != nil {
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Warnf("unable to close channel %s: %s", chid, err)
 	}
 
