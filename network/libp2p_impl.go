@@ -191,12 +191,14 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 	}
 
 	if err = dtnet.msgToStream(ctx, s, outgoing); err != nil {
-		span.RecordError(err)
 		if err2 := s.Reset(); err2 != nil {
 			log.Error(err)
 			span.RecordError(err2)
+			span.SetStatus(codes.Error, err2.Error())
 			return err2
 		}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
