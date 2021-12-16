@@ -300,6 +300,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.OnRequestDisconnected(channelID, err)
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	return m.channels.NewVoucher(channelID, voucher)
