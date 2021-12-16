@@ -259,6 +259,7 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, nil, req); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		_ = m.channels.Error(chid, err)
 
 		// If pull channel monitoring is enabled, shutdown the monitor as it
