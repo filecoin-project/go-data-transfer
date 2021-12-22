@@ -36,9 +36,11 @@ func (si *SpansIndex) SpanForChannel(ctx context.Context, chid datatransfer.Chan
 	if ok {
 		return trace.ContextWithSpan(ctx, span), span
 	}
-	return otel.Tracer("data-transfer").Start(ctx, "transfer", trace.WithAttributes(
+	ctx, span = otel.Tracer("data-transfer").Start(ctx, "transfer", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 	))
+	si.spans[chid] = span
+	return ctx, span
 }
 
 func (si *SpansIndex) EndChannelSpan(chid datatransfer.ChannelID) {

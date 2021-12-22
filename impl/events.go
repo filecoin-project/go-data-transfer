@@ -70,7 +70,8 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 	if err != nil || result != nil {
 		msg, err := m.processRevalidationResult(chid, result, err)
 		if msg != nil {
-			if err := m.dataTransferNetwork.SendMessage(context.TODO(), chid.Initiator, msg); err != nil {
+			ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
+			if err := m.dataTransferNetwork.SendMessage(ctx, chid.Initiator, msg); err != nil {
 				return err
 			}
 		}
@@ -263,7 +264,8 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 			if msg != nil {
 				// Send the other peer a message that the transfer has completed
 				log.Infow("sending completion message to initiator", "chid", chid)
-				if err := m.dataTransferNetwork.SendMessage(context.Background(), chid.Initiator, msg); err != nil {
+				ctx, _ := m.spansIndex.SpanForChannel(context.Background(), chid)
+				if err := m.dataTransferNetwork.SendMessage(ctx, chid.Initiator, msg); err != nil {
 					err := xerrors.Errorf("channel %s: failed to send completion message to initiator: %w", chid, err)
 					log.Warnw("failed to send completion message to initiator", "chid", chid, "err", err)
 					return m.OnRequestDisconnected(chid, err)

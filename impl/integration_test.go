@@ -83,10 +83,34 @@ func TestRoundTrip(t *testing.T) {
 		isPull            bool
 		customSourceStore bool
 		customTargetStore bool
+		expectedTraces    []string
 	}{
-		"roundtrip for push requests": {},
+		"roundtrip for push requests": {
+			expectedTraces: []string{
+				// initiator: send push request
+				"transfer(0)->sendMessage(0)",
+				// initiator: receive GS request and execute response
+				"transfer(0)->response(0)->executeTask(0)",
+				// initiator: receive completion message from responder that they got all the data
+				"transfer(0)->receiveResponse(0)",
+				// responder: receive dt request, execute graphsync request in response
+				"transfer(1)->receiveRequest(0)->request(0)->executeTask(0)",
+				// responder: send message indicating we received all data
+				"transfer(1)->sendMessage(0)",
+			},
+		},
 		"roundtrip for pull requests": {
 			isPull: true,
+			expectedTraces: []string{
+				// initiator: execute outgoing graphsync request
+				"transfer(0)->request(0)->executeTask(0)",
+				// initiator: receive completion message from responder that they sent all the data
+				"transfer(0)->receiveResponse(0)",
+				// responder: receive GS request and execute response
+				"transfer(1)->response(0)->executeTask(0)",
+				// responder: send message indicating we sent all data
+				"transfer(1)->sendMessage(0)",
+			},
 		},
 		"custom source, push": {
 			customSourceStore: true,
@@ -115,6 +139,7 @@ func TestRoundTrip(t *testing.T) {
 	for testCase, data := range testCases {
 		for pname, ps := range protocolsForTest {
 			t.Run(testCase+pname, func(t *testing.T) {
+				ctx, collectTracing := testutil.SetupTracing(ctx)
 				ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 				defer cancel()
 
@@ -246,6 +271,10 @@ func TestRoundTrip(t *testing.T) {
 					assert.Equal(t, chid.Initiator, host2.ID())
 				} else {
 					assert.Equal(t, chid.Initiator, host1.ID())
+				}
+				traces := collectTracing(t).TracesToStrings()
+				for _, expectedTrace := range data.expectedTraces {
+					require.Contains(t, traces, expectedTrace)
 				}
 			})
 		}
@@ -1771,7 +1800,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 			Name: extension.ExtensionDataTransfer1_1,
 			Data: extData,
 		})
-		builder := gsmsg.NewBuilder(0)
+		builder := gsmsg.NewBuilder()
 		builder.AddRequest(request)
 		gsmessage, err := builder.Build()
 		require.NoError(t, err)
@@ -1793,7 +1822,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 			Name: extension.ExtensionDataTransfer1_1,
 			Data: extData,
 		})
-		builder := gsmsg.NewBuilder(0)
+		builder := gsmsg.NewBuilder()
 		builder.AddRequest(request)
 		gsmessage, err := builder.Build()
 		require.NoError(t, err)
@@ -1850,7 +1879,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 		}
 
 		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()))
-		builder := gsmsg.NewBuilder(0)
+		builder := gsmsg.NewBuilder()
 		builder.AddRequest(request)
 		gsmessage, err := builder.Build()
 		require.NoError(t, err)
@@ -1891,7 +1920,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				})
 
 				// initiator requests data over graphsync network
-				builder := gsmsg.NewBuilder(0)
+				builder := gsmsg.NewBuilder()
 				builder.AddRequest(gsRequest)
 				gsmessage, err := builder.Build()
 				require.NoError(t, err)
@@ -1920,7 +1949,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 					Name: extension.ExtensionDataTransfer1_1,
 					Data: extData,
 				})
-				builder := gsmsg.NewBuilder(0)
+				builder := gsmsg.NewBuilder()
 				builder.AddRequest(request)
 				gsmessage, err := builder.Build()
 				require.NoError(t, err)

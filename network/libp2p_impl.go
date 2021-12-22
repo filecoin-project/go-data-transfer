@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/xerrors"
 
