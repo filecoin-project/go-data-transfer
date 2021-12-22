@@ -106,7 +106,7 @@ func (r *receiver) receiveResponse(
 	incoming datatransfer.Response) error {
 	chid := datatransfer.ChannelID{Initiator: r.manager.peerID, Responder: sender, ID: incoming.TransferID()}
 	ctx, _ = r.manager.spansIndex.SpanForChannel(ctx, chid)
-	ctx, span := otel.Tracer("data-transfer").Start(ctx, "receiveRequest", trace.WithAttributes(
+	ctx, span := otel.Tracer("data-transfer").Start(ctx, "receiveResponse", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 		attribute.Bool("accepted", incoming.Accepted()),
 		attribute.Bool("isComplete", incoming.IsComplete()),
