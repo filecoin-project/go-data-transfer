@@ -70,6 +70,8 @@ type EventsHandler interface {
 	// at the transport layer
 	OnReceiveDataError(chid ChannelID, err error) error
 
+	// OnContextAugment allows the transport to attach data transfer tracing information
+	// to its local context, in order to create a hierarchical trace
 	OnContextAugment(chid ChannelID) func(context.Context) context.Context
 }
 
