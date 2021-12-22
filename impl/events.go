@@ -269,9 +269,8 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 					err := xerrors.Errorf("channel %s: failed to send completion message to initiator: %w", chid, err)
 					log.Warnw("failed to send completion message to initiator", "chid", chid, "err", err)
 					return m.OnRequestDisconnected(chid, err)
-				} else {
-					log.Infow("successfully sent completion message to initiator", "chid", chid)
 				}
+				log.Infow("successfully sent completion message to initiator", "chid", chid)
 			}
 			if msg.Accepted() {
 				if msg.IsPaused() {
