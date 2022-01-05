@@ -42,6 +42,15 @@ func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
 // calls revalidators so they can pause / resume the channel or send a
 // message over the transport.
 func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64) error {
+	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
+	ctx, span := otel.Tracer("data-transfer").Start(ctx, "data-received", trace.WithAttributes(
+		attribute.String("channelID", chid.String()),
+		attribute.String("link", link.String()),
+		attribute.Int64("index", index),
+		attribute.Int64("size", int64(size)),
+	))
+	defer span.End()
+
 	isNew, err := m.channels.DataReceived(chid, link.(cidlink.Link).Cid, size, index)
 	if err != nil {
 		return err
@@ -96,6 +105,8 @@ func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
 	ctx, span := otel.Tracer("data-transfer").Start(ctx, "data-queued", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
+		attribute.String("link", link.String()),
+		attribute.Int64("size", int64(size)),
 	))
 	defer span.End()
 
@@ -141,6 +152,8 @@ func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size u
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
 	ctx, span := otel.Tracer("data-transfer").Start(ctx, "data-sent", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
+		attribute.String("link", link.String()),
+		attribute.Int64("size", int64(size)),
 	))
 	defer span.End()
 
