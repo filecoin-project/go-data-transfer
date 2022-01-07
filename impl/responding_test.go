@@ -419,7 +419,7 @@ func TestDataTransferResponding(t *testing.T) {
 				msg, err := h.transport.EventHandler.OnDataQueued(
 					channelID(h.id, h.peers),
 					cidlink.Link{Cid: testutil.GenerateCids(1)[0]},
-					12345)
+					12345, 1, true)
 				require.EqualError(t, err, datatransfer.ErrPause.Error())
 				response, ok := msg.(datatransfer.Response)
 				require.True(t, ok)

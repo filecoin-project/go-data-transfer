@@ -3,6 +3,8 @@ package channels
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ipfs/go-cid"
@@ -56,6 +58,8 @@ type Channels struct {
 	notifier             Notifier
 	voucherDecoder       DecoderByTypeFunc
 	voucherResultDecoder DecoderByTypeFunc
+	queuedBlocksTotal    map[datatransfer.ChannelID]*int64
+	queuedBlocksTotalLk  sync.RWMutex
 	stateMachines        fsm.Group
 	migrateStateMachines func(context.Context) error
 	seenCIDs             *cidsets.CIDSetManager
@@ -84,6 +88,7 @@ func New(ds datastore.Batching,
 		notifier:             notifier,
 		voucherDecoder:       voucherDecoder,
 		voucherResultDecoder: voucherResultDecoder,
+		queuedBlocksTotal:    make(map[datatransfer.ChannelID]*int64),
 	}
 	channelMigrations, err := migrations.GetChannelStateMigrations(selfPeer, cidLists)
 	if err != nil {
@@ -234,14 +239,46 @@ func (c *Channels) CompleteCleanupOnRestart(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.CompleteCleanupOnRestart)
 }
 
-// Returns true if this is the first time the block has been sent
-func (c *Channels) DataSent(chid datatransfer.ChannelID, k cid.Cid, delta uint64) (bool, error) {
-	return c.fireProgressEvent(chid, datatransfer.DataSent, datatransfer.DataSentProgress, k, delta)
+func (c *Channels) DataSent(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) error {
+	return c.fireProgressEvent(chid, datatransfer.DataSent, datatransfer.DataSentProgress, k, delta, index, unique)
 }
 
-// Returns true if this is the first time the block has been queued
-func (c *Channels) DataQueued(chid datatransfer.ChannelID, k cid.Cid, delta uint64) (bool, error) {
-	return c.fireProgressEvent(chid, datatransfer.DataQueued, datatransfer.DataQueuedProgress, k, delta)
+func (c *Channels) queuedBlocksTotalValue(chid datatransfer.ChannelID) (*int64, error) {
+	c.queuedBlocksTotalLk.RLock()
+	queuedBlocksTotalValue := c.queuedBlocksTotal[chid]
+	c.queuedBlocksTotalLk.RUnlock()
+	if queuedBlocksTotalValue != nil {
+		return queuedBlocksTotalValue, nil
+	}
+	c.queuedBlocksTotalLk.Lock()
+	defer c.queuedBlocksTotalLk.Unlock()
+	queuedBlocksTotalValue = c.queuedBlocksTotal[chid]
+	if queuedBlocksTotalValue != nil {
+		return queuedBlocksTotalValue, nil
+	}
+	chst, err := c.GetByID(context.TODO(), chid)
+	if err != nil {
+		return nil, err
+	}
+	queuedBlocksTotalValue = new(int64)
+	atomic.StoreInt64(queuedBlocksTotalValue, chst.QueuedCidsTotal())
+	c.queuedBlocksTotal[chid] = queuedBlocksTotalValue
+	return queuedBlocksTotalValue, nil
+}
+func (c *Channels) DataQueued(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) (bool, error) {
+	queuedBlocksTotalValue, err := c.queuedBlocksTotalValue(chid)
+	if err != nil {
+		return false, err
+	}
+	err = c.fireProgressEvent(chid, datatransfer.DataQueued, datatransfer.DataQueuedProgress, k, delta, index, unique)
+	if err != nil && !unique {
+		return false, err
+	}
+	queuedBlockTotal := atomic.LoadInt64(queuedBlocksTotalValue)
+	if index <= queuedBlockTotal {
+		return false, nil
+	}
+	return atomic.CompareAndSwapInt64(queuedBlocksTotalValue, queuedBlockTotal, index), nil
 }
 
 // Returns true if this is the first time the block has been received
@@ -409,27 +446,20 @@ func (c *Channels) removeSeenCIDCaches(chid datatransfer.ChannelID) error {
 // fire both DataSent AND DataSentProgress.
 // If a block is resent, the method will fire DataSent but not DataSentProgress.
 // Returns true if the block is new (both the event and a progress event were fired).
-func (c *Channels) fireProgressEvent(chid datatransfer.ChannelID, evt datatransfer.EventCode, progressEvt datatransfer.EventCode, k cid.Cid, delta uint64) (bool, error) {
+func (c *Channels) fireProgressEvent(chid datatransfer.ChannelID, evt datatransfer.EventCode, progressEvt datatransfer.EventCode, k cid.Cid, delta uint64, index int64, unique bool) error {
 	if err := c.checkChannelExists(chid, evt); err != nil {
-		return false, err
-	}
-
-	// Check if the block has already been seen
-	sid := seenCidsSetID(chid, evt)
-	seen, err := c.seenCIDs.InsertSetCID(sid, k)
-	if err != nil {
-		return false, err
+		return err
 	}
 
 	// If the block has not been seen before, fire the progress event
-	if !seen {
-		if err := c.stateMachines.Send(chid, progressEvt, delta); err != nil {
-			return false, err
+	if unique {
+		if err := c.stateMachines.Send(chid, progressEvt, index, delta); err != nil {
+			return err
 		}
 	}
 
 	// Fire the regular event
-	return !seen, c.stateMachines.Send(chid, evt)
+	return c.stateMachines.Send(chid, evt, index)
 }
 
 func (c *Channels) send(chid datatransfer.ChannelID, code datatransfer.EventCode, args ...interface{}) error {
