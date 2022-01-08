@@ -88,10 +88,8 @@ var ChannelEvents = fsm.Events{
 		}),
 
 	fsm.Event(datatransfer.DataSentProgress).FromMany(transferringStates...).ToNoChange().
-		Action(func(chst *internal.ChannelState, sentBlocksTotal int64, delta uint64) error {
-			if sentBlocksTotal > chst.SentBlocksTotal {
-				chst.Sent += delta
-			}
+		Action(func(chst *internal.ChannelState, delta uint64) error {
+			chst.Sent += delta
 			chst.AddLog("sending data")
 			return nil
 		}),
@@ -107,10 +105,8 @@ var ChannelEvents = fsm.Events{
 			return nil
 		}),
 	fsm.Event(datatransfer.DataQueuedProgress).FromMany(transferringStates...).ToNoChange().
-		Action(func(chst *internal.ChannelState, queuedBlocksTotal int64, delta uint64) error {
-			if queuedBlocksTotal > chst.QueuedBlocksTotal {
-				chst.Queued += delta
-			}
+		Action(func(chst *internal.ChannelState, delta uint64) error {
+			chst.Queued += delta
 			chst.AddLog("")
 			return nil
 		}),

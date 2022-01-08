@@ -1238,7 +1238,7 @@ func (fe *fakeEvents) OnChannelOpened(chid datatransfer.ChannelID) error {
 	return fe.OnChannelOpenedError
 }
 
-func (fe *fakeEvents) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64) error {
+func (fe *fakeEvents) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
 	fe.OnDataReceivedCalled = true
 	return fe.OnDataReceivedError
 }

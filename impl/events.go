@@ -41,7 +41,7 @@ func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
 // It fires an event on the channel, updating the sum of received data and
 // calls revalidators so they can pause / resume the channel or send a
 // message over the transport.
-func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64) error {
+func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
 	ctx, span := otel.Tracer("data-transfer").Start(ctx, "dataReceived", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
@@ -51,7 +51,7 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 	))
 	defer span.End()
 
-	isNew, err := m.channels.DataReceived(chid, link.(cidlink.Link).Cid, size, index)
+	isNew, err := m.channels.DataReceived(chid, link.(cidlink.Link).Cid, size, index, unique)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size u
 	))
 	defer span.End()
 
-	err := m.channels.DataSent(chid, link.(cidlink.Link).Cid, size, index, unique)
+	_, err := m.channels.DataSent(chid, link.(cidlink.Link).Cid, size, index, unique)
 	return err
 }
 

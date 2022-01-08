@@ -23,7 +23,7 @@ type EventsHandler interface {
 	// - nil = proceed with sending data
 	// - error = cancel this request
 	// - err == ErrPause - pause this request
-	OnDataReceived(chid ChannelID, link ipld.Link, size uint64, index int64) error
+	OnDataReceived(chid ChannelID, link ipld.Link, size uint64, index int64, unique bool) error
 
 	// OnDataQueued is called when data is queued for sending for the given channel ID
 	// return values are:

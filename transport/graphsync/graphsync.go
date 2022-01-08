@@ -527,7 +527,7 @@ func (t *Transport) gsIncomingBlockHook(p peer.ID, response graphsync.ResponseDa
 		return
 	}
 
-	err := t.events.OnDataReceived(chid, block.Link(), block.BlockSize(), block.Index())
+	err := t.events.OnDataReceived(chid, block.Link(), block.BlockSize(), block.Index(), block.BlockSizeOnWire() != 0)
 	if err != nil && err != datatransfer.ErrPause {
 		hookActions.TerminateWithError(err)
 		return
