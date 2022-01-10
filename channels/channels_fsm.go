@@ -1,6 +1,7 @@
 package channels
 
 import (
+	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
@@ -103,6 +104,24 @@ var ChannelEvents = fsm.Events{
 			chst.AddLog("")
 			return nil
 		}),
+
+	fsm.Event(datatransfer.CIDMissing).FromMany(transferringStates...).ToJustRecord().
+		Action(func(chst *internal.ChannelState, missing cid.Cid) error {
+			// TODO: find a more efficient way to do this
+			var found bool
+			for _, c := range chst.MissingCids {
+				if c.Equals(missing) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				chst.MissingCids = append(chst.MissingCids, missing)
+			}
+			chst.AddLog("")
+			return nil
+		}),
+
 	fsm.Event(datatransfer.Disconnected).FromAny().ToNoChange().Action(func(chst *internal.ChannelState, err error) error {
 		chst.Message = err.Error()
 		chst.AddLog("data transfer disconnected: %s", chst.Message)

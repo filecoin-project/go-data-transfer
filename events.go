@@ -110,6 +110,9 @@ const (
 
 	// Opened is fired when a request for data is sent from this node to a peer
 	Opened
+
+	// CIDMissing is fired when the sender is missing a section of the graph in the response
+	CIDMissing
 )
 
 // Events are human readable names for data transfer events

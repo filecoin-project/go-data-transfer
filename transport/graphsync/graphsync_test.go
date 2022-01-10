@@ -1498,3 +1498,7 @@ func (m *mockChannelState) LastVoucherResult() datatransfer.VoucherResult {
 func (m *mockChannelState) Stages() *datatransfer.ChannelStages {
 	panic("implement me")
 }
+
+func (m *mockChannelState) MissingCids() []cid.Cid {
+	panic("implement me")
+}
