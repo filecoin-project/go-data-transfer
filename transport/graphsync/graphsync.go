@@ -238,6 +238,10 @@ func (t *Transport) consumeResponses(req *gsReq) error {
 	log.Infof("channel %s: finished consuming graphsync response channel", req.channelID)
 
 	for err := range req.errChan {
+		// graphsync returns a stream of errors, where some can simply report the remote
+		// peer was missing a block
+		// here, we check for that type of error and record this missing block, rather than
+		// fail the transfer
 		var remoteMissingBlockErr graphsync.RemoteMissingBlockErr
 		if errors.As(err, &remoteMissingBlockErr) {
 			t.events.OnLinkMissing(req.channelID, remoteMissingBlockErr.Link)

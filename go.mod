@@ -14,7 +14,7 @@ require (
 	github.com/ipfs/go-datastore v0.5.1
 	github.com/ipfs/go-ds-badger v0.3.0
 	github.com/ipfs/go-graphsync v0.11.6-0.20220113000344-21cd7bd1f01d
-	github.com/ipfs/go-ipfs-blockstore v1.1.0
+	github.com/ipfs/go-ipfs-blockstore v1.1.2
 	github.com/ipfs/go-ipfs-blocksutil v0.0.1
 	github.com/ipfs/go-ipfs-chunker v0.0.5
 	github.com/ipfs/go-ipfs-delay v0.0.1

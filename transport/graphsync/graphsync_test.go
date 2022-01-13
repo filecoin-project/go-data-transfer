@@ -503,7 +503,7 @@ func TestManager(t *testing.T) {
 
 		"recognized incoming request will record unsuccessful request completion": {
 			responseConfig: gsResponseConfig{
-				status: graphsync.RequestCompletedPartial,
+				status: graphsync.RequestFailedUnknown,
 			},
 			action: func(gsData *harness) {
 				gsData.incomingRequestHook()
