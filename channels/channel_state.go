@@ -2,7 +2,6 @@ package channels
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -217,7 +216,6 @@ func (c channelState) Stages() *datatransfer.ChannelStages {
 }
 
 func fromInternalChannelState(c internal.ChannelState, voucherDecoder DecoderByTypeFunc, voucherResultDecoder DecoderByTypeFunc, receivedCidsReader ReceivedCidsReader) datatransfer.ChannelState {
-	fmt.Println(c.MissingCids)
 	return channelState{
 		selfPeer:             c.SelfPeer,
 		isPull:               c.Initiator == c.Recipient,

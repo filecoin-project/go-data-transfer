@@ -147,6 +147,7 @@ var Events = map[EventCode]string{
 	ReceiveDataError:            "ReceiveDataError",
 	TransferRequestQueued:       "TransferRequestQueued",
 	RequestCancelled:            "RequestCancelled",
+	CIDMissing:                  "CIDMissing",
 }
 
 // Event is a struct containing information about a data transfer event
