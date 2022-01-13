@@ -113,6 +113,10 @@ const (
 
 	// CIDMissing is fired when the sender is missing a section of the graph in the response
 	CIDMissing
+
+	// CleanupCompletePartial causes a completing request to transition to a PartiallyCompleted state
+	// rather than a full Completed state
+	CleanupCompletePartial
 )
 
 // Events are human readable names for data transfer events
@@ -148,6 +152,7 @@ var Events = map[EventCode]string{
 	TransferRequestQueued:       "TransferRequestQueued",
 	RequestCancelled:            "RequestCancelled",
 	CIDMissing:                  "CIDMissing",
+	CleanupCompletePartial:      "CleanupCompletePartial",
 }
 
 // Event is a struct containing information about a data transfer event

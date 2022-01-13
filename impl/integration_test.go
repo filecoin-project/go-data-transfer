@@ -328,7 +328,7 @@ func TestRoundTripMissingBlocks(t *testing.T) {
 					}
 				}
 
-				if channelState.Status() == datatransfer.Completed {
+				if channelState.Status() == datatransfer.Completed || channelState.Status() == datatransfer.PartiallyCompleted {
 					finished <- struct{}{}
 				}
 				if event.Code == datatransfer.Error {
@@ -384,6 +384,7 @@ func TestRoundTripMissingBlocks(t *testing.T) {
 			}
 			cs, err := dt2.ChannelState(ctx, chid)
 			require.NoError(t, err)
+			require.Equal(t, cs.Status(), datatransfer.PartiallyCompleted)
 			missingCids := cs.MissingCids()
 			require.Len(t, missingCids, 2)
 			require.Contains(t, missingCids, partialTree.MissingLeafLink.(cidlink.Link).Cid)
