@@ -49,11 +49,15 @@ func (bic *blockIndexCache) getValue(evt datatransfer.EventCode, chid datatransf
 func (bic *blockIndexCache) updateIfGreater(evt datatransfer.EventCode, chid datatransfer.ChannelID, newIndex int64, readFromOriginal readOriginalFn) (bool, error) {
 	value, err := bic.getValue(evt, chid, readFromOriginal)
 	if err != nil {
-		return false, nil
+		return false, err
 	}
-	currentIndex := atomic.LoadInt64(value)
-	if newIndex <= currentIndex {
-		return false, nil
+	for {
+		currentIndex := atomic.LoadInt64(value)
+		if newIndex <= currentIndex {
+			return false, nil
+		}
+		if atomic.CompareAndSwapInt64(value, currentIndex, newIndex) {
+			return true, nil
+		}
 	}
-	return atomic.CompareAndSwapInt64(value, currentIndex, newIndex), nil
 }
