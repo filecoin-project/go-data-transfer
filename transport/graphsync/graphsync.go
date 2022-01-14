@@ -7,9 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
-	"github.com/ipfs/go-graphsync/cidset"
 	"github.com/ipfs/go-graphsync/donotsendfirstblocks"
 	logging "github.com/ipfs/go-log/v2"
 	ipld "github.com/ipld/go-ipld-prime"
@@ -180,40 +178,10 @@ func (t *Transport) getRestartExtension(ctx context.Context, p peer.ID, channel 
 	}
 
 	switch protocol {
-	case datatransfer.ProtocolDataTransfer1_0:
-		// Doesn't support restart extensions
-		return nil, nil
-	case datatransfer.ProtocolDataTransfer1_1:
-		// Supports do-not-send-cids extension
-		return getDoNotSendCidsExtension(channel)
 	default: // Versions higher than 1.1
 		// Supports do-not-send-first-blocks extension
 		return getDoNotSendFirstBlocksExtension(channel)
 	}
-}
-
-// Send a list of CIDs that have already been received, so that the peer
-// doesn't send those blocks again
-func getDoNotSendCidsExtension(channel datatransfer.ChannelState) ([]graphsync.ExtensionData, error) {
-	doNotSendCids := channel.ReceivedCids()
-	if len(doNotSendCids) == 0 {
-		return nil, nil
-	}
-
-	// Make sure the CIDs are unique
-	set := cid.NewSet()
-	for _, c := range doNotSendCids {
-		set.Add(c)
-	}
-	bz, err := cidset.EncodeCidSet(set)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to encode cid set: %w", err)
-	}
-	doNotSendExt := graphsync.ExtensionData{
-		Name: graphsync.ExtensionDoNotSendCIDs,
-		Data: bz,
-	}
-	return []graphsync.ExtensionData{doNotSendExt}, nil
 }
 
 // Skip the first N blocks because they were already received
@@ -1065,7 +1033,7 @@ func (c *dtChannel) open(
 	// Open a new graphsync request
 	msg := fmt.Sprintf("Opening graphsync request to %s for root %s", dataSender, root)
 	if channel != nil {
-		msg += fmt.Sprintf(" with %d CIDs already received", channel.ReceivedCidsLen())
+		msg += fmt.Sprintf(" with %d Blocks already received", channel.ReceivedCidsTotal())
 	}
 	log.Info(msg)
 	responseChan, errChan := c.gs.Request(ctx, dataSender, root, stor, exts...)

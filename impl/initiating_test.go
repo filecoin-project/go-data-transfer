@@ -392,8 +392,6 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				require.Equal(t, openChannel.Root, cidlink.Link{Cid: h.baseCid})
 				require.Equal(t, openChannel.Selector, h.stor)
 				require.True(t, openChannel.Message.IsRequest())
-				// received cids should be a part of the channel req
-				require.ElementsMatch(t, []cid.Cid{testCids[0], testCids[1]}, openChannel.Channel.ReceivedCids())
 
 				receivedRequest, ok := openChannel.Message.(datatransfer.Request)
 				require.True(t, ok)

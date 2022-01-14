@@ -186,7 +186,6 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, datatransfer.Requested, state.Status())
 		require.Equal(t, uint64(0), state.Received())
 		require.Equal(t, uint64(0), state.Sent())
-		require.Empty(t, state.ReceivedCids())
 
 		isNew, err := channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[0], 50, 1, true)
 		require.NoError(t, err)
@@ -195,7 +194,6 @@ func TestChannels(t *testing.T) {
 		state = checkEvent(ctx, t, received, datatransfer.DataReceived)
 		require.Equal(t, uint64(50), state.Received())
 		require.Equal(t, uint64(0), state.Sent())
-		require.Equal(t, []cid.Cid{cids[0]}, state.ReceivedCids())
 
 		isNew, err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 100, 1, true)
 		require.NoError(t, err)
@@ -204,7 +202,6 @@ func TestChannels(t *testing.T) {
 		state = checkEvent(ctx, t, received, datatransfer.DataSent)
 		require.Equal(t, uint64(50), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
-		require.Equal(t, []cid.Cid{cids[0]}, state.ReceivedCids())
 
 		// send block again has no effect
 		isNew, err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 100, 1, true)
@@ -220,7 +217,6 @@ func TestChannels(t *testing.T) {
 		require.False(t, isNew)
 		isNew, err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200, 2, true)
 		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
-		require.Equal(t, []cid.Cid{cids[0]}, state.ReceivedCids())
 		require.False(t, isNew)
 
 		isNew, err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 50, 2, true)
@@ -230,7 +226,6 @@ func TestChannels(t *testing.T) {
 		state = checkEvent(ctx, t, received, datatransfer.DataReceived)
 		require.Equal(t, uint64(100), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
-		require.ElementsMatch(t, []cid.Cid{cids[0], cids[1]}, state.ReceivedCids())
 
 		isNew, err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 25, 2, false)
 		require.NoError(t, err)
@@ -238,7 +233,6 @@ func TestChannels(t *testing.T) {
 		state = checkEvent(ctx, t, received, datatransfer.DataSent)
 		require.Equal(t, uint64(100), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
-		require.ElementsMatch(t, []cid.Cid{cids[0], cids[1]}, state.ReceivedCids())
 
 		isNew, err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[0], 50, 3, false)
 		require.NoError(t, err)
@@ -246,8 +240,6 @@ func TestChannels(t *testing.T) {
 		state = checkEvent(ctx, t, received, datatransfer.DataReceived)
 		require.Equal(t, uint64(100), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
-
-		require.ElementsMatch(t, []cid.Cid{cids[0], cids[1]}, state.ReceivedCids())
 	})
 
 	t.Run("missing cids", func(t *testing.T) {
@@ -568,7 +560,6 @@ func TestMigrationsV0(t *testing.T) {
 		require.Equal(t, messages[i], channel.Message())
 		require.Equal(t, vouchers[i], channel.LastVoucher())
 		require.Equal(t, voucherResults[i], channel.LastVoucherResult())
-		require.Len(t, channel.ReceivedCids(), 0)
 	}
 }
 func TestMigrationsV1(t *testing.T) {

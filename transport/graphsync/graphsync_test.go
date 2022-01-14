@@ -11,7 +11,6 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
-	"github.com/ipfs/go-graphsync/cidset"
 	"github.com/ipfs/go-graphsync/donotsendfirstblocks"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -708,38 +707,6 @@ func TestManager(t *testing.T) {
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				require.True(t, events.OnReceiveDataErrorCalled)
-			},
-		},
-		"open channel adds cids to the DoNotSendCids extension for v1.1 protocol": {
-			protocol: datatransfer.ProtocolDataTransfer1_1,
-			action: func(gsData *harness) {
-				cids := testutil.GenerateCids(2)
-				channel := &mockChannelState{receivedCids: cids}
-				stor, _ := gsData.outgoing.Selector()
-
-				go gsData.outgoingRequestHook()
-				_ = gsData.transport.OpenChannel(
-					gsData.ctx,
-					gsData.other,
-					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self},
-					cidlink.Link{Cid: gsData.outgoing.BaseCid()},
-					stor,
-					channel,
-					gsData.outgoing)
-			},
-			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				requestReceived := gsData.fgs.AssertRequestReceived(gsData.ctx, t)
-
-				ext := requestReceived.Extensions
-				require.Len(t, ext, 3)
-				doNotSend := ext[2]
-
-				name := doNotSend.Name
-				require.Equal(t, graphsync.ExtensionDoNotSendCIDs, name)
-				data := doNotSend.Data
-				cs, err := cidset.DecodeCidSet(data)
-				require.NoError(t, err)
-				require.Equal(t, cs.Len(), 2)
 			},
 		},
 		"open channel sends missing Cids": {

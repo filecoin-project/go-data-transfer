@@ -387,7 +387,6 @@ func TestRestartPull(t *testing.T) {
 			sent := make(chan uint64, totalIncrements)
 			received := make(chan uint64, totalIncrements)
 			receivedTillNow := atomic.NewInt32(0)
-			var receivedCids []cid.Cid
 
 			// counters we will check at the end for correctness
 			opens := atomic.NewInt32(0)
@@ -420,15 +419,6 @@ func TestRestartPull(t *testing.T) {
 					finishedPeersLk.Lock()
 					{
 						finishedPeers = append(finishedPeers, channelState.SelfPeer())
-
-						// When the receiving peer completes, record received CIDs
-						// before they get cleaned up
-						if channelState.SelfPeer() == rh.peer2 {
-							chs, err := rh.dt2.InProgressChannels(rh.testCtx)
-							require.NoError(t, err)
-							require.Len(t, chs, 1)
-							receivedCids = chs[chid].ReceivedCids()
-						}
 					}
 					finishedPeersLk.Unlock()
 					finished <- channelState.SelfPeer()
@@ -501,9 +491,6 @@ func TestRestartPull(t *testing.T) {
 			// we should get 2 completes
 			_, _, err = waitF(10*time.Second, 2)
 			require.NoError(t, err)
-
-			// verify all cids are present on the receiver
-			require.Equal(t, totalIncrements, len(receivedCids))
 
 			testutil.VerifyHasFile(rh.testCtx, t, rh.destDagService, rh.root, rh.origBytes)
 			rh.sv.VerifyExpectations(t)

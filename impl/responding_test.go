@@ -664,8 +664,6 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.Equal(t, openChannel.Root, cidlink.Link{Cid: h.baseCid})
 				require.Equal(t, openChannel.Selector, h.stor)
 				// assert do not send cids are sent
-				require.ElementsMatch(t, []cid.Cid{testCids[0], testCids[1]}, openChannel.Channel.ReceivedCids())
-				require.EqualValues(t, 2, openChannel.Channel.ReceivedCidsTotal())
 				require.False(t, openChannel.Message.IsRequest())
 				response, ok := openChannel.Message.(datatransfer.Response)
 				require.True(t, ok)
@@ -875,8 +873,6 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.Equal(t, openChannel.Root, cidlink.Link{Cid: h.baseCid})
 				require.Equal(t, openChannel.Selector, h.stor)
 				require.True(t, openChannel.Message.IsRequest())
-				// received cids should be a part of the channel req
-				require.ElementsMatch(t, openChannel.Channel.ReceivedCids(), testCids)
 				require.EqualValues(t, len(testCids), openChannel.Channel.ReceivedCidsTotal())
 
 				// assert a restart request is in the channel
