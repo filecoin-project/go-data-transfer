@@ -12,7 +12,6 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	ipld "github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 
@@ -35,19 +34,16 @@ type graphsyncKey struct {
 
 var defaultSupportedExtensions = []graphsync.ExtensionName{
 	extension.ExtensionDataTransfer1_1,
-	extension.ExtensionDataTransfer1_0,
 }
 
 var incomingReqExtensions = []graphsync.ExtensionName{
 	extension.ExtensionIncomingRequest1_1,
 	extension.ExtensionDataTransfer1_1,
-	extension.ExtensionDataTransfer1_0,
 }
 
 var outgoingBlkExtensions = []graphsync.ExtensionName{
 	extension.ExtensionOutgoingBlock1_1,
 	extension.ExtensionDataTransfer1_1,
-	extension.ExtensionDataTransfer1_0,
 }
 
 // Option is an option for setting up the graphsync transport
@@ -74,19 +70,12 @@ func RegisterCompletedResponseListener(l func(channelID datatransfer.ChannelID))
 	}
 }
 
-type PeerProtocol interface {
-	// Protocol returns the protocol version of the peer, connecting to
-	// the peer if necessary
-	Protocol(context.Context, peer.ID) (protocol.ID, error)
-}
-
 // Transport manages graphsync hooks for data transfer, translating from
 // graphsync hooks to semantic data transfer events
 type Transport struct {
-	events       datatransfer.EventsHandler
-	gs           graphsync.GraphExchange
-	peerProtocol PeerProtocol
-	peerID       peer.ID
+	events datatransfer.EventsHandler
+	gs     graphsync.GraphExchange
+	peerID peer.ID
 
 	supportedExtensions       []graphsync.ExtensionName
 	unregisterFuncs           []graphsync.UnregisterHookFunc
@@ -103,10 +92,9 @@ type Transport struct {
 }
 
 // NewTransport makes a new hooks manager with the given hook events interface
-func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, pp PeerProtocol, options ...Option) *Transport {
+func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, options ...Option) *Transport {
 	t := &Transport{
 		gs:                  gs,
-		peerProtocol:        pp,
 		peerID:              peerID,
 		supportedExtensions: defaultSupportedExtensions,
 		dtChannels:          make(map[datatransfer.ChannelID]*dtChannel),
@@ -170,18 +158,7 @@ func (t *Transport) getRestartExtension(ctx context.Context, p peer.ID, channel 
 	if channel == nil {
 		return nil, nil
 	}
-
-	// Get the peer's protocol version
-	protocol, err := t.peerProtocol.Protocol(ctx, p)
-	if err != nil {
-		return nil, err
-	}
-
-	switch protocol {
-	default: // Versions higher than 1.1
-		// Supports do-not-send-first-blocks extension
-		return getDoNotSendFirstBlocksExtension(channel)
-	}
+	return getDoNotSendFirstBlocksExtension(channel)
 }
 
 // Skip the first N blocks because they were already received

@@ -763,8 +763,8 @@ func TestManager(t *testing.T) {
 				requestReceived := gsData.fgs.AssertRequestReceived(gsData.ctx, t)
 
 				ext := requestReceived.Extensions
-				require.Len(t, ext, 3)
-				doNotSend := ext[2]
+				require.Len(t, ext, 2)
+				doNotSend := ext[1]
 
 				name := doNotSend.Name
 				require.Equal(t, graphsync.ExtensionsDoNotSendFirstBlocks, name)
@@ -1091,13 +1091,7 @@ func TestManager(t *testing.T) {
 			fgs := testutil.NewFakeGraphSync()
 			outgoing := testutil.NewDTRequest(t, transferID)
 			incoming := testutil.NewDTResponse(t, transferID)
-			pp := testutil.NewMockPeerProtocol()
-			proto := datatransfer.ProtocolDataTransfer1_2
-			if data.protocol != "" {
-				proto = data.protocol
-			}
-			pp.SetProtocol(peers[1], proto)
-			transport := NewTransport(peers[0], fgs, pp)
+			transport := NewTransport(peers[0], fgs)
 			gsData := &harness{
 				ctx:                         ctx,
 				outgoing:                    outgoing,

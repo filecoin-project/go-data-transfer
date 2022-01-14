@@ -61,10 +61,6 @@ var protocolsForTest = map[string]struct {
 	host2Protocols []protocol.ID
 }{
 	"(v1.2 -> v1.2)": {nil, nil},
-	"(v1.0 -> v1.2)": {[]protocol.ID{datatransfer.ProtocolDataTransfer1_0}, nil},
-	"(v1.2 -> v1.0)": {nil, []protocol.ID{datatransfer.ProtocolDataTransfer1_0}},
-	"(v1.1 -> v1.2)": {[]protocol.ID{datatransfer.ProtocolDataTransfer1_1}, nil},
-	"(v1.2 -> v1.1)": {nil, []protocol.ID{datatransfer.ProtocolDataTransfer1_1}},
 }
 
 // tests data transfer for the protocol combinations that support restart messages
@@ -73,8 +69,6 @@ var protocolsForRestartTest = map[string]struct {
 	host2Protocols []protocol.ID
 }{
 	"(v1.2 -> v1.2)": {nil, nil},
-	"(v1.1 -> v1.2)": {[]protocol.ID{datatransfer.ProtocolDataTransfer1_1}, nil},
-	"(v1.2 -> v1.1)": {nil, []protocol.ID{datatransfer.ProtocolDataTransfer1_1}},
 }
 
 func TestRoundTrip(t *testing.T) {
@@ -566,7 +560,7 @@ func TestManyReceiversAtOnce(t *testing.T) {
 				destDagService := merkledag.NewDAGService(blockservice.New(altBs, offline.Exchange(altBs)))
 
 				gs := gsimpl.New(gsData.Ctx, gsnet, lsys)
-				gsTransport := tp.NewTransport(host.ID(), gs, dtnet)
+				gsTransport := tp.NewTransport(host.ID(), gs)
 
 				dtDs := namespace.Wrap(ds, datastore.NewKey("datatransfer"))
 
@@ -2027,7 +2021,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 	gsData.GsNet2.SetDelegate(gsr)
 
 	gs1 := gsData.SetupGraphsyncHost1()
-	tp1 := tp.NewTransport(host1.ID(), gs1, gsData.DtNet1)
+	tp1 := tp.NewTransport(host1.ID(), gs1)
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.TempDir1, gsData.DtNet1, tp1)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt1)
