@@ -20,7 +20,6 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels/internal"
 	"github.com/filecoin-project/go-data-transfer/channels/internal/migrations"
-	"github.com/filecoin-project/go-data-transfer/cidlists"
 	"github.com/filecoin-project/go-data-transfer/encoding"
 )
 
@@ -64,7 +63,6 @@ type ChannelEnvironment interface {
 
 // New returns a new thread safe list of channels
 func New(ds datastore.Batching,
-	cidLists cidlists.CIDLists,
 	notifier Notifier,
 	voucherDecoder DecoderByTypeFunc,
 	voucherResultDecoder DecoderByTypeFunc,
@@ -77,7 +75,7 @@ func New(ds datastore.Batching,
 		voucherResultDecoder: voucherResultDecoder,
 	}
 	c.blockIndexCache = newBlockIndexCache()
-	channelMigrations, err := migrations.GetChannelStateMigrations(selfPeer, cidLists)
+	channelMigrations, err := migrations.GetChannelStateMigrations(selfPeer)
 	if err != nil {
 		return nil, err
 	}

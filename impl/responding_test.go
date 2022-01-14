@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
@@ -559,7 +558,7 @@ func TestDataTransferResponding(t *testing.T) {
 			h.network = testutil.NewFakeNetwork(h.peers[0])
 			h.transport = testutil.NewFakeTransport()
 			h.ds = dss.MutexWrap(datastore.NewMapDatastore())
-			dt, err := NewDataTransfer(h.ds, os.TempDir(), h.network, h.transport)
+			dt, err := NewDataTransfer(h.ds, h.network, h.transport)
 			require.NoError(t, err)
 			testutil.StartAndWaitForReady(ctx, t, dt)
 			h.dt = dt
@@ -979,7 +978,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			h.network = testutil.NewFakeNetwork(h.peers[0])
 			h.transport = testutil.NewFakeTransport()
 			h.ds = dss.MutexWrap(datastore.NewMapDatastore())
-			dt, err := NewDataTransfer(h.ds, os.TempDir(), h.network, h.transport)
+			dt, err := NewDataTransfer(h.ds, h.network, h.transport)
 			require.NoError(t, err)
 			testutil.StartAndWaitForReady(ctx, t, dt)
 			h.dt = dt

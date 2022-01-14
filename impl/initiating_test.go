@@ -3,7 +3,6 @@ package impl_test
 import (
 	"context"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
@@ -335,7 +334,7 @@ func TestDataTransferInitiating(t *testing.T) {
 			h.network = testutil.NewFakeNetwork(h.peers[0])
 			h.transport = testutil.NewFakeTransport()
 			h.ds = dss.MutexWrap(datastore.NewMapDatastore())
-			dt, err := NewDataTransfer(h.ds, os.TempDir(), h.network, h.transport, verify.options...)
+			dt, err := NewDataTransfer(h.ds, h.network, h.transport, verify.options...)
 			require.NoError(t, err)
 			testutil.StartAndWaitForReady(ctx, t, dt)
 			h.dt = dt
@@ -580,7 +579,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			h.voucherValidator = testutil.NewStubbedValidator()
 
 			// setup data transfer``
-			dt, err := NewDataTransfer(h.ds, os.TempDir(), h.network, h.transport)
+			dt, err := NewDataTransfer(h.ds, h.network, h.transport)
 			require.NoError(t, err)
 			testutil.StartAndWaitForReady(ctx, t, dt)
 			h.dt = dt
