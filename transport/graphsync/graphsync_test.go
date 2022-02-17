@@ -889,7 +889,7 @@ func TestManager(t *testing.T) {
 				for _, ext := range requestReceived.Extensions {
 					extensions[ext.Name] = ext.Data
 				}
-				request := testutil.NewFakeRequest(graphsync.RequestID(rand.Int31()), extensions)
+				request := testutil.NewFakeRequest(graphsync.NewRequestID(), extensions)
 				gsData.fgs.OutgoingRequestHook(gsData.other, request, gsData.outgoingRequestHookActions)
 				_ = gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				ctxt, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -990,7 +990,7 @@ func TestManager(t *testing.T) {
 				for _, ext := range requestReceived.Extensions {
 					extensions[ext.Name] = ext.Data
 				}
-				request := testutil.NewFakeRequest(graphsync.RequestID(rand.Int31()), extensions)
+				request := testutil.NewFakeRequest(graphsync.NewRequestID(), extensions)
 				gsData.fgs.OutgoingRequestHook(gsData.other, request, gsData.outgoingRequestHookActions)
 				select {
 				case <-gsData.ctx.Done():
@@ -1048,9 +1048,9 @@ func TestManager(t *testing.T) {
 			defer cancel()
 			peers := testutil.GeneratePeers(2)
 			transferID := datatransfer.TransferID(rand.Uint64())
-			requestID := graphsync.RequestID(rand.Int31())
+			requestID := graphsync.NewRequestID()
 			request := data.requestConfig.makeRequest(t, transferID, requestID)
-			altRequest := data.requestConfig.makeRequest(t, transferID, graphsync.RequestID(rand.Int31()))
+			altRequest := data.requestConfig.makeRequest(t, transferID, graphsync.NewRequestID())
 			response := data.responseConfig.makeResponse(t, transferID, requestID)
 			updatedRequest := data.updatedConfig.makeRequest(t, transferID, requestID)
 			block := testutil.NewFakeBlockData()

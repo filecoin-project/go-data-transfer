@@ -5,10 +5,9 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	cborgen "github.com/whyrusleeping/cbor-gen"
-
-	"github.com/filecoin-project/go-data-transfer/encoding"
 )
 
 var (
@@ -27,9 +26,8 @@ type Message interface {
 	IsPaused() bool
 	IsCancel() bool
 	TransferID() TransferID
-	cborgen.CBORMarshaler
-	cborgen.CBORUnmarshaler
 	ToNet(w io.Writer) error
+	AsNode() schema.TypedNode
 	MessageForProtocol(targetProtocol protocol.ID) (newMsg Message, err error)
 }
 
@@ -38,8 +36,8 @@ type Request interface {
 	Message
 	IsPull() bool
 	IsVoucher() bool
-	VoucherType() TypeIdentifier
-	Voucher(decoder encoding.Decoder) (encoding.Encodable, error)
+	VoucherType() schema.TypeName
+	Voucher(proto datamodel.NodePrototype) (datamodel.Node, error)
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
 	IsRestartExistingChannelRequest() bool
@@ -52,7 +50,7 @@ type Response interface {
 	IsVoucherResult() bool
 	IsComplete() bool
 	Accepted() bool
-	VoucherResultType() TypeIdentifier
-	VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error)
+	VoucherResultType() schema.TypeName
+	VoucherResult(proto datamodel.NodePrototype) (datamodel.Node, error)
 	EmptyVoucherResult() bool
 }

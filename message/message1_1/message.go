@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	cborgen "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 
@@ -14,7 +14,7 @@ import (
 )
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
+func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype datatransfer.TypeIdentifier, voucher datamodel.Node, baseCid cid.Cid, selector datamodel.Node) (datatransfer.Request, error) {
 	vbytes, err := encoding.Encode(voucher)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)

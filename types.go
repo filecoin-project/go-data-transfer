@@ -6,28 +6,19 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
-
-	"github.com/filecoin-project/go-data-transfer/encoding"
 )
 
 //go:generate cbor-gen-for ChannelID ChannelStages ChannelStage Log
-
-// TypeIdentifier is a unique string identifier for a type of encodable object in a
-// registry
-type TypeIdentifier string
 
 // EmptyTypeIdentifier means there is no voucher present
 const EmptyTypeIdentifier = TypeIdentifier("")
 
 // Registerable is a type of object in a registry. It must be encodable and must
 // have a single method that uniquely identifies its type
-type Registerable interface {
-	encoding.Encodable
-	// Type is a unique string identifier for this voucher type
-	Type() TypeIdentifier
-}
+type Registerable = schema.TypedNode
 
 // Voucher is used to validate
 // a data transfer request against the underlying storage or retrieval deal
