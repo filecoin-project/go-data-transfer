@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"math/rand"
@@ -11,7 +10,6 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/traversal"
@@ -32,10 +30,7 @@ func matchDtMessage(t *testing.T, extensions []graphsync.ExtensionData) datatran
 		}
 	}
 	require.NotNil(t, matchedExtension)
-	buf := new(bytes.Buffer)
-	err := dagcbor.Encode(matchedExtension.Data, buf)
-	require.NoError(t, err)
-	received, err := message.FromNet(buf)
+	received, err := message.FromIPLD(matchedExtension.Data)
 	require.NoError(t, err)
 	return received
 }

@@ -1,9 +1,13 @@
 package message1_1
 
 import (
+	"bytes"
 	"io"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/ipld/go-ipld-prime/datamodel"
+	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 )
 
 //go:generate cbor-gen-for --map-encoding transferMessage1_1
@@ -29,6 +33,22 @@ func (tm *transferMessage1_1) TransferID() datatransfer.TransferID {
 		return tm.Request.TransferID()
 	}
 	return tm.Response.TransferID()
+}
+
+// ToNet serializes a transfer message type. It is simply a wrapper for MarshalCBOR, to provide
+// symmetry with FromNet
+func (tm *transferMessage1_1) ToIPLD() (datamodel.Node, error) {
+	buf := new(bytes.Buffer)
+	err := tm.ToNet(buf)
+	if err != nil {
+		return nil, err
+	}
+	nb := basicnode.Prototype.Any.NewBuilder()
+	err = dagcbor.Decode(nb, buf)
+	if err != nil {
+		return nil, err
+	}
+	return nb.Build(), nil
 }
 
 // ToNet serializes a transfer message type. It is simply a wrapper for MarshalCBOR, to provide

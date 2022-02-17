@@ -26,9 +26,7 @@ import (
 	"github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -1836,17 +1834,13 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		}
 		requestReceived := messageReceived.message.(datatransfer.Request)
 
-		var buf bytes.Buffer
 		response, err := message.NewResponse(requestReceived.TransferID(), true, false, voucherResult.Type(), voucherResult)
 		require.NoError(t, err)
-		err = response.ToNet(&buf)
-		require.NoError(t, err)
-		nb := basicnode.Prototype.Any.NewBuilder()
-		err = dagcbor.Decode(nb, &buf)
+		nd, err := response.ToIPLD()
 		require.NoError(t, err)
 		request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 			Name: extension.ExtensionDataTransfer1_1,
-			Data: nb.Build(),
+			Data: nd,
 		})
 		builder := gsmsg.NewBuilder()
 		builder.AddRequest(request)
@@ -1859,17 +1853,13 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	})
 
 	t.Run("when no request is initiated", func(t *testing.T) {
-		var buf bytes.Buffer
 		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint64()), true, false, voucher.Type(), voucher)
 		require.NoError(t, err)
-		err = response.ToNet(&buf)
-		require.NoError(t, err)
-		nb := basicnode.Prototype.Any.NewBuilder()
-		err = dagcbor.Decode(nb, &buf)
+		nd, err := response.ToIPLD()
 		require.NoError(t, err)
 		request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 			Name: extension.ExtensionDataTransfer1_1,
-			Data: nb.Build(),
+			Data: nd,
 		})
 		builder := gsmsg.NewBuilder()
 		builder.AddRequest(request)
@@ -1958,15 +1948,10 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				voucher := testutil.NewFakeDTType()
 				request, err := message.NewRequest(id, false, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
-				buf := new(bytes.Buffer)
-				err = request.ToNet(buf)
-				require.NoError(t, err)
-				nb := basicnode.Prototype.Any.NewBuilder()
-				err = dagcbor.Decode(nb, buf)
-				require.NoError(t, err)
+				nd, err := request.ToIPLD()
 				gsRequest := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 					Name: extension.ExtensionDataTransfer1_1,
-					Data: nb.Build(),
+					Data: nd,
 				})
 
 				// initiator requests data over graphsync network
@@ -1991,15 +1976,11 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				dtRequest, err := message.NewRequest(id, false, true, voucher.Type(), voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
 
-				buf := new(bytes.Buffer)
-				err = dtRequest.ToNet(buf)
-				require.NoError(t, err)
-				nb := basicnode.Prototype.Any.NewBuilder()
-				err = dagcbor.Decode(nb, buf)
+				nd, err := dtRequest.ToIPLD()
 				require.NoError(t, err)
 				request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 					Name: extension.ExtensionDataTransfer1_1,
-					Data: nb.Build(),
+					Data: nd,
 				})
 				builder := gsmsg.NewBuilder()
 				builder.AddRequest(request)

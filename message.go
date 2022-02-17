@@ -5,6 +5,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	cborgen "github.com/whyrusleeping/cbor-gen"
 
@@ -30,6 +31,7 @@ type Message interface {
 	cborgen.CBORMarshaler
 	cborgen.CBORUnmarshaler
 	ToNet(w io.Writer) error
+	ToIPLD() (datamodel.Node, error)
 	MessageForProtocol(targetProtocol protocol.ID) (newMsg Message, err error)
 }
 

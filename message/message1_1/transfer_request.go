@@ -7,6 +7,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -137,6 +138,20 @@ func (trq *transferRequest1_1) IsCancel() bool {
 // IsPartial returns true if this is a partial request
 func (trq *transferRequest1_1) IsPartial() bool {
 	return trq.Part
+}
+
+func (trq *transferRequest1_1) ToIPLD() (datamodel.Node, error) {
+	buf := new(bytes.Buffer)
+	err := trq.ToNet(buf)
+	if err != nil {
+		return nil, err
+	}
+	nb := basicnode.Prototype.Any.NewBuilder()
+	err = dagcbor.Decode(nb, buf)
+	if err != nil {
+		return nil, err
+	}
+	return nb.Build(), nil
 }
 
 // ToNet serializes a transfer request. It's a wrapper for MarshalCBOR to provide

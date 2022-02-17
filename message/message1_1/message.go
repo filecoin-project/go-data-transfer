@@ -1,10 +1,13 @@
 package message1_1
 
 import (
+	"bytes"
 	"io"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	cborgen "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 
@@ -180,4 +183,14 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 		return tresp.Request, nil
 	}
 	return tresp.Response, nil
+}
+
+// FromNet can read a network stream to deserialize a GraphSyncMessage
+func FromIPLD(nd datamodel.Node) (datatransfer.Message, error) {
+	buf := new(bytes.Buffer)
+	err := dagcbor.Encode(nd, buf)
+	if err != nil {
+		return nil, err
+	}
+	return FromNet(buf)
 }

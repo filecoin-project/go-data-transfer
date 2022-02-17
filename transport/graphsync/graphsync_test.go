@@ -1,7 +1,6 @@
 package graphsync_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -13,7 +12,6 @@ import (
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipfs/go-graphsync/donotsendfirstblocks"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
@@ -1290,13 +1288,9 @@ func (dtc *dtConfig) extensions(t *testing.T, transferID datatransfer.TransferID
 			} else {
 				msg = testutil.NewDTRequest(t, transferID)
 			}
-			buf := new(bytes.Buffer)
-			err := msg.ToNet(buf)
+			nd, err := msg.ToIPLD()
 			require.NoError(t, err)
-			nb := basicnode.Prototype.Any.NewBuilder()
-			err = dagcbor.Decode(nb, buf)
-			require.NoError(t, err)
-			extensions[extName] = nb.Build()
+			extensions[extName] = nd
 		}
 	}
 	return extensions
@@ -1336,38 +1330,27 @@ func (grc *gsResponseConfig) makeResponse(t *testing.T, transferID datatransfer.
 }
 
 func assertDecodesToMessage(t *testing.T, data datamodel.Node, expected datatransfer.Message) {
-	buf := new(bytes.Buffer)
-	err := dagcbor.Encode(data, buf)
-	require.NoError(t, err)
-	actual, err := message.FromNet(buf)
+	actual, err := message.FromIPLD(data)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
 }
 
 func assertHasOutgoingMessage(t *testing.T, extensions []graphsync.ExtensionData, expected datatransfer.Message) {
-	buf := new(bytes.Buffer)
-	err := expected.ToNet(buf)
-	require.NoError(t, err)
-	nb := basicnode.Prototype.Any.NewBuilder()
-	err = dagcbor.Decode(nb, buf)
+	nd, err := expected.ToIPLD()
 	require.NoError(t, err)
 	expectedExt := graphsync.ExtensionData{
 		Name: extension.ExtensionDataTransfer1_1,
-		Data: nb.Build(),
+		Data: nd,
 	}
 	require.Contains(t, extensions, expectedExt)
 }
 
 func assertHasExtensionMessage(t *testing.T, name graphsync.ExtensionName, extensions []graphsync.ExtensionData, expected datatransfer.Message) {
-	buf := new(bytes.Buffer)
-	err := expected.ToNet(buf)
-	require.NoError(t, err)
-	nb := basicnode.Prototype.Any.NewBuilder()
-	err = dagcbor.Decode(nb, buf)
+	nd, err := expected.ToIPLD()
 	require.NoError(t, err)
 	expectedExt := graphsync.ExtensionData{
 		Name: name,
-		Data: nb.Build(),
+		Data: nd,
 	}
 	require.Contains(t, extensions, expectedExt)
 }
