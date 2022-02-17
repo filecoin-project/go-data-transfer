@@ -14,34 +14,25 @@ import (
 )
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype datatransfer.TypeIdentifier, voucher datamodel.Node, baseCid cid.Cid, selector datamodel.Node) (datatransfer.Request, error) {
-	vbytes, err := encoding.Encode(voucher)
-	if err != nil {
-		return nil, xerrors.Errorf("Creating request: %w", err)
-	}
+func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, voucher datatransfer.Registerable, baseCid cid.Cid, selector datamodel.Node) (datatransfer.Request, error) {
 	if baseCid == cid.Undef {
 		return nil, xerrors.Errorf("base CID must be defined")
 	}
-	selBytes, err := encoding.Encode(selector)
-	if err != nil {
-		return nil, xerrors.Errorf("Error encoding selector")
-	}
-
-	var typ uint64
+	var typ int64
 	if isRestart {
-		typ = uint64(types.RestartMessage)
+		typ = int64(types.RestartMessage)
 	} else {
-		typ = uint64(types.NewMessage)
+		typ = int64(types.NewMessage)
 	}
 
 	return &transferRequest1_1{
 		Type:   typ,
 		Pull:   isPull,
-		Vouch:  &cborgen.Deferred{Raw: vbytes},
-		Stor:   &cborgen.Deferred{Raw: selBytes},
+		Vouch:  voucher.Representation(),
+		Stor:   selector,
 		BCid:   &baseCid,
-		VTyp:   vtype,
-		XferID: uint64(id),
+		VTyp:   v.type,
+		XferID: int64(id),
 	}, nil
 }
 
