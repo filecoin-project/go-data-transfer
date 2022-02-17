@@ -3,6 +3,7 @@ package graphsync
 import (
 	"testing"
 
+	"github.com/ipfs/go-graphsync"
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -11,11 +12,11 @@ import (
 func TestGSKeyToChannelIDMap(t *testing.T) {
 	m := newGSKeyToChannelIDMap()
 	gsk1 := graphsyncKey{
-		requestID: 1,
+		requestID: graphsync.NewRequestID(),
 		p:         "p",
 	}
 	gsk2 := graphsyncKey{
-		requestID: 2,
+		requestID: graphsync.NewRequestID(),
 		p:         "p",
 	}
 	chid := datatransfer.ChannelID{

@@ -164,10 +164,7 @@ func (t *Transport) getRestartExtension(ctx context.Context, p peer.ID, channel 
 // Skip the first N blocks because they were already received
 func getDoNotSendFirstBlocksExtension(channel datatransfer.ChannelState) ([]graphsync.ExtensionData, error) {
 	skipBlockCount := channel.ReceivedCidsTotal()
-	data, err := donotsendfirstblocks.EncodeDoNotSendFirstBlocks(skipBlockCount)
-	if err != nil {
-		return nil, err
-	}
+	data := donotsendfirstblocks.EncodeDoNotSendFirstBlocks(skipBlockCount)
 	return []graphsync.ExtensionData{{
 		Name: graphsync.ExtensionsDoNotSendFirstBlocks,
 		Data: data,
@@ -247,7 +244,7 @@ func (t *Transport) PauseChannel(ctx context.Context, chid datatransfer.ChannelI
 	if err != nil {
 		return err
 	}
-	return ch.pause()
+	return ch.pause(ctx)
 }
 
 // ResumeChannel resumes the given data-transfer channel and sends the message
@@ -261,7 +258,7 @@ func (t *Transport) ResumeChannel(
 	if err != nil {
 		return err
 	}
-	return ch.resume(msg)
+	return ch.resume(ctx, msg)
 }
 
 // CloseChannel closes the given data-transfer channel
@@ -966,7 +963,7 @@ func (c *dtChannel) open(
 	if c.gsKey != nil {
 		// Cancel the existing graphsync request
 		completed := c.completed
-		errch := c.cancelRequest(ctx)
+		errch := c.cancel(ctx)
 
 		// Wait for the complete callback to be called
 		err := waitForCompleteHook(ctx, completed)
@@ -1084,7 +1081,7 @@ func (c *dtChannel) gsDataRequestRcvd(gsKey graphsyncKey, hookActions graphsync.
 	c.isOpen = true
 }
 
-func (c *dtChannel) pause() error {
+func (c *dtChannel) pause(ctx context.Context) error {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
@@ -1094,15 +1091,6 @@ func (c *dtChannel) pause() error {
 		return nil
 	}
 
-	// If it's a graphsync request
-	if c.gsKey.p == c.peerID {
-		// Pause the request
-		log.Debugf("%s: pausing request", c.channelID)
-		return c.gs.PauseRequest(c.gsKey.requestID)
-	}
-
-	// It's a graphsync response
-
 	// If the requester cancelled, bail out
 	if c.requesterCancelled {
 		log.Debugf("%s: requester has cancelled so not pausing response", c.channelID)
@@ -1111,10 +1099,10 @@ func (c *dtChannel) pause() error {
 
 	// Pause the response
 	log.Debugf("%s: pausing response", c.channelID)
-	return c.gs.PauseResponse(c.gsKey.p, c.gsKey.requestID)
+	return c.gs.Pause(ctx, c.gsKey.requestID)
 }
 
-func (c *dtChannel) resume(msg datatransfer.Message) error {
+func (c *dtChannel) resume(ctx context.Context, msg datatransfer.Message) error {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
@@ -1133,14 +1121,6 @@ func (c *dtChannel) resume(msg datatransfer.Message) error {
 		}
 	}
 
-	// If it's a graphsync request
-	if c.gsKey.p == c.peerID {
-		log.Debugf("%s: unpausing request", c.channelID)
-		return c.gs.UnpauseRequest(c.gsKey.requestID, extensions...)
-	}
-
-	// It's a graphsync response
-
 	// If the requester cancelled, bail out
 	if c.requesterCancelled {
 		// If there was an associated message, we still want to send it to the
@@ -1156,7 +1136,7 @@ func (c *dtChannel) resume(msg datatransfer.Message) error {
 	c.xferStarted = true
 
 	log.Debugf("%s: unpausing response", c.channelID)
-	return c.gs.UnpauseResponse(c.gsKey.p, c.gsKey.requestID, extensions...)
+	return c.gs.Unpause(ctx, c.gsKey.requestID, extensions...)
 }
 
 func (c *dtChannel) close(ctx context.Context) error {
@@ -1165,14 +1145,7 @@ func (c *dtChannel) close(ctx context.Context) error {
 	{
 		// Check if the channel was already cancelled
 		if c.gsKey != nil {
-			// Check whether it's a graphsync request or response
-			if c.gsKey.p == c.peerID {
-				// Cancel the request
-				errch = c.cancelRequest(ctx)
-			} else {
-				// Cancel the response
-				errch = c.cancelResponse()
-			}
+			errch = c.cancel(ctx)
 		}
 	}
 	c.lk.Unlock()
@@ -1240,7 +1213,7 @@ func (c *dtChannel) cleanup() {
 func (c *dtChannel) shutdown(ctx context.Context) error {
 	// Cancel the graphsync request
 	c.lk.Lock()
-	errch := c.cancelRequest(ctx)
+	errch := c.cancel(ctx)
 	c.lk.Unlock()
 
 	// Wait for the cancel message to complete
@@ -1254,11 +1227,11 @@ func (c *dtChannel) shutdown(ctx context.Context) error {
 
 // Cancel the graphsync request.
 // Note: must be called under the lock.
-func (c *dtChannel) cancelRequest(ctx context.Context) chan error {
+func (c *dtChannel) cancel(ctx context.Context) chan error {
 	errch := make(chan error, 1)
 
 	// Check that the request has not already been cancelled
-	if c.gsKey == nil {
+	if c.requesterCancelled || c.gsKey == nil {
 		errch <- nil
 		return errch
 	}
@@ -1269,43 +1242,11 @@ func (c *dtChannel) cancelRequest(ctx context.Context) chan error {
 
 	go func() {
 		log.Debugf("%s: cancelling request", c.channelID)
-		err := c.gs.CancelRequest(ctx, gsKey.requestID)
+		err := c.gs.Cancel(ctx, gsKey.requestID)
 
 		// Ignore "request not found" errors
 		if err != nil && !xerrors.Is(graphsync.RequestNotFoundErr{}, err) {
 			errch <- xerrors.Errorf("cancelling graphsync request for channel %s: %w", c.channelID, err)
-		} else {
-			errch <- nil
-		}
-	}()
-
-	return errch
-}
-
-func (c *dtChannel) cancelResponse() chan error {
-	errch := make(chan error, 1)
-
-	// Check if the requester already sent a cancel message,
-	// or the response has already been cancelled
-	if c.requesterCancelled || c.gsKey == nil {
-		errch <- nil
-		return errch
-	}
-
-	// Clear the graphsync key to indicate that the response has been cancelled
-	gsKey := c.gsKey
-	c.gsKey = nil
-
-	// Cancel the response in a go-routine to avoid locking when the channel's
-	// event queue is drained (potentially calling hooks which take the channel
-	// lock)
-	go func() {
-		log.Debugf("%s: cancelling response", c.channelID)
-		err := c.gs.CancelResponse(gsKey.p, gsKey.requestID)
-
-		// Ignore "request not found" errors
-		if err != nil && !xerrors.Is(graphsync.RequestNotFoundErr{}, err) {
-			errch <- xerrors.Errorf("%s: cancelling response: %w", c.channelID, err)
 		} else {
 			errch <- nil
 		}

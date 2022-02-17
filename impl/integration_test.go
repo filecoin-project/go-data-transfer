@@ -26,7 +26,9 @@ import (
 	"github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -1784,7 +1786,7 @@ func (fgsr *fakeGraphSyncReceiver) consumeResponses(ctx context.Context, t *test
 			t.Fail()
 		case gsMessageReceived = <-fgsr.receivedMessages:
 			responses := gsMessageReceived.message.Responses()
-			if (len(responses) > 0) && gsmsg.IsTerminalResponseCode(responses[0].Status()) {
+			if (len(responses) > 0) && responses[0].Status().IsTerminal() {
 				return responses[0].Status()
 			}
 		}
@@ -1839,11 +1841,12 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		require.NoError(t, err)
 		err = response.ToNet(&buf)
 		require.NoError(t, err)
-		extData := buf.Bytes()
-
-		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
+		nb := basicnode.Prototype.Any.NewBuilder()
+		err = dagcbor.Decode(nb, &buf)
+		require.NoError(t, err)
+		request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 			Name: extension.ExtensionDataTransfer1_1,
-			Data: extData,
+			Data: nb.Build(),
 		})
 		builder := gsmsg.NewBuilder()
 		builder.AddRequest(request)
@@ -1852,7 +1855,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		require.NoError(t, gsData.GsNet2.SendMessage(ctx, host1.ID(), gsmessage))
 
 		status := gsr.consumeResponses(ctx, t)
-		require.False(t, gsmsg.IsTerminalFailureCode(status))
+		require.False(t, status.IsFailure())
 	})
 
 	t.Run("when no request is initiated", func(t *testing.T) {
@@ -1861,11 +1864,12 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		require.NoError(t, err)
 		err = response.ToNet(&buf)
 		require.NoError(t, err)
-		extData := buf.Bytes()
-
-		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
+		nb := basicnode.Prototype.Any.NewBuilder()
+		err = dagcbor.Decode(nb, &buf)
+		require.NoError(t, err)
+		request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 			Name: extension.ExtensionDataTransfer1_1,
-			Data: extData,
+			Data: nb.Build(),
 		})
 		builder := gsmsg.NewBuilder()
 		builder.AddRequest(request)
@@ -1874,7 +1878,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		require.NoError(t, gsData.GsNet2.SendMessage(ctx, host1.ID(), gsmessage))
 
 		status := gsr.consumeResponses(ctx, t)
-		require.True(t, gsmsg.IsTerminalFailureCode(status))
+		require.True(t, status.IsFailure())
 	})
 }
 
@@ -1923,7 +1927,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 		case <-r.messageReceived:
 		}
 
-		request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()))
+		request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()))
 		builder := gsmsg.NewBuilder()
 		builder.AddRequest(request)
 		gsmessage, err := builder.Build()
@@ -1931,7 +1935,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 		require.NoError(t, gsData.GsNet2.SendMessage(ctx, host1.ID(), gsmessage))
 
 		status := gsr.consumeResponses(ctx, t)
-		assert.False(t, gsmsg.IsTerminalFailureCode(status))
+		assert.False(t, status.IsFailure())
 	})
 }
 
@@ -1957,11 +1961,12 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				buf := new(bytes.Buffer)
 				err = request.ToNet(buf)
 				require.NoError(t, err)
-				extData := buf.Bytes()
-
-				gsRequest := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
+				nb := basicnode.Prototype.Any.NewBuilder()
+				err = dagcbor.Decode(nb, buf)
+				require.NoError(t, err)
+				gsRequest := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 					Name: extension.ExtensionDataTransfer1_1,
-					Data: extData,
+					Data: nb.Build(),
 				})
 
 				// initiator requests data over graphsync network
@@ -1971,7 +1976,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, gsData.GsNet1.SendMessage(ctx, gsData.Host2.ID(), gsmessage))
 				status := gsr.consumeResponses(ctx, t)
-				require.False(t, gsmsg.IsTerminalFailureCode(status))
+				require.False(t, status.IsFailure())
 			},
 		},
 		"When request is initiated, but fails validation": {
@@ -1989,10 +1994,12 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				buf := new(bytes.Buffer)
 				err = dtRequest.ToNet(buf)
 				require.NoError(t, err)
-				extData := buf.Bytes()
-				request := gsmsg.NewRequest(graphsync.RequestID(rand.Int31()), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
+				nb := basicnode.Prototype.Any.NewBuilder()
+				err = dagcbor.Decode(nb, buf)
+				require.NoError(t, err)
+				request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 					Name: extension.ExtensionDataTransfer1_1,
-					Data: extData,
+					Data: nb.Build(),
 				})
 				builder := gsmsg.NewBuilder()
 				builder.AddRequest(request)
@@ -2003,7 +2010,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				// because there was no previous request
 				require.NoError(t, gsData.GsNet1.SendMessage(ctx, gsData.Host2.ID(), gsmessage))
 				status := gsr.consumeResponses(ctx, t)
-				require.True(t, gsmsg.IsTerminalFailureCode(status))
+				require.True(t, status.IsFailure())
 			},
 		},
 	}

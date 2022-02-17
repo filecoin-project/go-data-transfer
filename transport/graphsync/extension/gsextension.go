@@ -6,6 +6,9 @@ import (
 	"io"
 
 	"github.com/ipfs/go-graphsync"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/ipld/go-ipld-prime/datamodel"
+	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/libp2p/go-libp2p-core/protocol"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -45,9 +48,14 @@ func ToExtensionData(msg datatransfer.Message, supportedExtensions []graphsync.E
 		if err != nil {
 			return nil, err
 		}
+		nb := basicnode.Prototype.Any.NewBuilder()
+		err = dagcbor.Decode(nb, buf)
+		if err != nil {
+			return nil, err
+		}
 		exts = append(exts, graphsync.ExtensionData{
 			Name: supportedExtension,
-			Data: buf.Bytes(),
+			Data: nb.Build(),
 		})
 	}
 	if len(exts) == 0 {
@@ -58,7 +66,7 @@ func ToExtensionData(msg datatransfer.Message, supportedExtensions []graphsync.E
 
 // GsExtended is a small interface used by GetTransferData
 type GsExtended interface {
-	Extension(name graphsync.ExtensionName) ([]byte, bool)
+	Extension(name graphsync.ExtensionName) (datamodel.Node, bool)
 }
 
 // GetTransferData unmarshals extension data.
@@ -70,8 +78,12 @@ func GetTransferData(extendedData GsExtended, extNames []graphsync.ExtensionName
 	for _, name := range extNames {
 		data, ok := extendedData.Extension(name)
 		if ok {
-			reader := bytes.NewReader(data)
-			return decoders[name](reader)
+			buf := new(bytes.Buffer)
+			err := dagcbor.Encode(data, buf)
+			if err != nil {
+				return nil, err
+			}
+			return decoders[name](buf)
 		}
 	}
 	return nil, nil
