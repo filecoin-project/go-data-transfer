@@ -1853,7 +1853,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	})
 
 	t.Run("when no request is initiated", func(t *testing.T) {
-		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint64()), true, false, voucher.Type(), voucher)
+		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint32()), true, false, voucher.Type(), voucher)
 		require.NoError(t, err)
 		nd, err := response.ToIPLD()
 		require.NoError(t, err)
