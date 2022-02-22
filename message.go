@@ -7,7 +7,6 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	cborgen "github.com/whyrusleeping/cbor-gen"
 
 	"github.com/filecoin-project/go-data-transfer/encoding"
 )
@@ -28,8 +27,6 @@ type Message interface {
 	IsPaused() bool
 	IsCancel() bool
 	TransferID() TransferID
-	cborgen.CBORMarshaler
-	cborgen.CBORUnmarshaler
 	ToNet(w io.Writer) error
 	ToIPLD() (datamodel.Node, error)
 	MessageForProtocol(targetProtocol protocol.ID) (newMsg Message, err error)
