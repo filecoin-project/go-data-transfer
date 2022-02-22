@@ -1,14 +1,12 @@
 package message1_1
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	basicnode "github.com/ipld/go-ipld-prime/node/basic"
-	"github.com/ipld/go-ipld-prime/node/bindnode"
+	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	xerrors "golang.org/x/xerrors"
 
@@ -97,9 +95,7 @@ func (trq *TransferRequest1_1) Voucher(decoder encoding.Decoder) (encoding.Encod
 	if trq.VoucherPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
-	buf := new(bytes.Buffer)
-	dagcbor.Encode(*trq.VoucherPtr, buf)
-	return decoder.DecodeFromCbor(buf.Bytes())
+	return decoder.DecodeFromNode(*trq.VoucherPtr)
 }
 
 func (trq *TransferRequest1_1) EmptyVoucher() bool {
@@ -132,28 +128,21 @@ func (trq *TransferRequest1_1) IsPartial() bool {
 	return trq.Partial
 }
 
+func (trsp *TransferRequest1_1) toIPLD() schema.TypedNode {
+	msg := TransferMessage1_1{
+		IsRequest: true,
+		Request:   trsp,
+		Response:  nil,
+	}
+	return msg.toIPLD()
+}
+
 func (trq *TransferRequest1_1) ToIPLD() (datamodel.Node, error) {
-	buf := new(bytes.Buffer)
-	err := trq.ToNet(buf)
-	if err != nil {
-		return nil, err
-	}
-	nb := basicnode.Prototype.Any.NewBuilder()
-	err = dagcbor.Decode(nb, buf)
-	if err != nil {
-		return nil, err
-	}
-	return nb.Build(), nil
+	return trq.toIPLD(), nil
 }
 
 // ToNet serializes a transfer request. It's a wrapper for MarshalCBOR to provide
 // symmetry with FromNet
 func (trq *TransferRequest1_1) ToNet(w io.Writer) error {
-	msg := TransferMessage1_1{
-		IsRequest: true,
-		Request:   trq,
-		Response:  nil,
-	}
-	node := bindnode.Wrap(&msg, Prototype.TransferMessage.Type())
-	return dagcbor.Encode(node.Representation(), w)
+	return dagcbor.Encode(trq.toIPLD().Representation(), w)
 }
