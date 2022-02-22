@@ -51,7 +51,7 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 		typ = uint64(types.NewMessage)
 	}
 
-	return &transferRequest1_1{
+	return &TransferRequest1_1{
 		Type:   typ,
 		Pull:   isPull,
 		Vouch:  &vnode,
@@ -65,13 +65,13 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 // RestartExistingChannelRequest creates a request to ask the other side to restart an existing channel
 func RestartExistingChannelRequest(channelId datatransfer.ChannelID) datatransfer.Request {
 
-	return &transferRequest1_1{Type: uint64(types.RestartExistingChannelRequestMessage),
+	return &TransferRequest1_1{Type: uint64(types.RestartExistingChannelRequestMessage),
 		RestartChannel: channelId}
 }
 
 // CancelRequest request generates a request to cancel an in progress request
 func CancelRequest(id datatransfer.TransferID) datatransfer.Request {
-	return &transferRequest1_1{
+	return &TransferRequest1_1{
 		Type:   uint64(types.CancelMessage),
 		XferID: uint64(id),
 	}
@@ -79,7 +79,7 @@ func CancelRequest(id datatransfer.TransferID) datatransfer.Request {
 
 // UpdateRequest generates a new request update
 func UpdateRequest(id datatransfer.TransferID, isPaused bool) datatransfer.Request {
-	return &transferRequest1_1{
+	return &TransferRequest1_1{
 		Type:   uint64(types.UpdateMessage),
 		Paus:   isPaused,
 		XferID: uint64(id),
@@ -98,7 +98,7 @@ func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifie
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
 	vnode := builder.Build()
-	return &transferRequest1_1{
+	return &TransferRequest1_1{
 		Type:   uint64(types.VoucherMessage),
 		Vouch:  &vnode,
 		VTyp:   vtype,
@@ -118,7 +118,7 @@ func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, v
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
 	vnode := builder.Build()
-	return &transferResponse1_1{
+	return &TransferResponse1_1{
 		Acpt:   accepted,
 		Type:   uint64(types.RestartMessage),
 		Paus:   isPaused,
@@ -140,7 +140,7 @@ func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, vouch
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
 	vnode := builder.Build()
-	return &transferResponse1_1{
+	return &TransferResponse1_1{
 		Acpt:   accepted,
 		Type:   uint64(types.NewMessage),
 		Paus:   isPaused,
@@ -162,7 +162,7 @@ func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused b
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
 	vnode := builder.Build()
-	return &transferResponse1_1{
+	return &TransferResponse1_1{
 		Acpt:   accepted,
 		Type:   uint64(types.VoucherResultMessage),
 		Paus:   isPaused,
@@ -174,7 +174,7 @@ func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused b
 
 // UpdateResponse returns a new update response
 func UpdateResponse(id datatransfer.TransferID, isPaused bool) datatransfer.Response {
-	return &transferResponse1_1{
+	return &TransferResponse1_1{
 		Type:   uint64(types.UpdateMessage),
 		Paus:   isPaused,
 		XferID: uint64(id),
@@ -183,7 +183,7 @@ func UpdateResponse(id datatransfer.TransferID, isPaused bool) datatransfer.Resp
 
 // CancelResponse makes a new cancel response message
 func CancelResponse(id datatransfer.TransferID) datatransfer.Response {
-	return &transferResponse1_1{
+	return &TransferResponse1_1{
 		Type:   uint64(types.CancelMessage),
 		XferID: uint64(id),
 	}
@@ -201,7 +201,7 @@ func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
 	vnode := builder.Build()
-	return &transferResponse1_1{
+	return &TransferResponse1_1{
 		Type:   uint64(types.CompleteMessage),
 		Acpt:   isAccepted,
 		Paus:   isPaused,
@@ -219,7 +219,7 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 		return nil, err
 	}
 	node := builder.Build()
-	tresp := bindnode.Unwrap(node).(*transferMessage1_1)
+	tresp := bindnode.Unwrap(node).(*TransferMessage1_1)
 
 	if (tresp.IsRequest() && tresp.Request == nil) || (!tresp.IsRequest() && tresp.Response == nil) {
 		return nil, xerrors.Errorf("invalid/malformed message")
