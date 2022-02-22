@@ -20,17 +20,16 @@ import (
 // TransferRequest1_1 is a struct for the 1.1 Data Transfer Protocol that fulfills the datatransfer.Request interface.
 // its members are exported to be used by cbor-gen
 type TransferRequest1_1 struct {
-	BCid   *cid.Cid
-	Type   uint64
-	Paus   bool
-	Part   bool
-	Pull   bool
-	Stor   *datamodel.Node
-	Vouch  *datamodel.Node
-	VTyp   datatransfer.TypeIdentifier
-	XferID uint64
-
-	RestartChannel datatransfer.ChannelID
+	BaseCidPtr            *cid.Cid
+	MessageType           uint64
+	Pause                 bool
+	Partial               bool
+	Pull                  bool
+	SelectorPtr           *datamodel.Node
+	VoucherPtr            *datamodel.Node
+	VoucherTypeIdentifier datatransfer.TypeIdentifier
+	TransferId            uint64
+	RestartChannel        datatransfer.ChannelID
 }
 
 func (trq *TransferRequest1_1) MessageForProtocol(targetProtocol protocol.ID) (datatransfer.Message, error) {
@@ -48,11 +47,11 @@ func (trq *TransferRequest1_1) IsRequest() bool {
 }
 
 func (trq *TransferRequest1_1) IsRestart() bool {
-	return trq.Type == uint64(types.RestartMessage)
+	return trq.MessageType == uint64(types.RestartMessage)
 }
 
 func (trq *TransferRequest1_1) IsRestartExistingChannelRequest() bool {
-	return trq.Type == uint64(types.RestartExistingChannelRequestMessage)
+	return trq.MessageType == uint64(types.RestartExistingChannelRequestMessage)
 }
 
 func (trq *TransferRequest1_1) RestartChannelId() (datatransfer.ChannelID, error) {
@@ -63,23 +62,23 @@ func (trq *TransferRequest1_1) RestartChannelId() (datatransfer.ChannelID, error
 }
 
 func (trq *TransferRequest1_1) IsNew() bool {
-	return trq.Type == uint64(types.NewMessage)
+	return trq.MessageType == uint64(types.NewMessage)
 }
 
 func (trq *TransferRequest1_1) IsUpdate() bool {
-	return trq.Type == uint64(types.UpdateMessage)
+	return trq.MessageType == uint64(types.UpdateMessage)
 }
 
 func (trq *TransferRequest1_1) IsVoucher() bool {
-	return trq.Type == uint64(types.VoucherMessage) || trq.Type == uint64(types.NewMessage)
+	return trq.MessageType == uint64(types.VoucherMessage) || trq.MessageType == uint64(types.NewMessage)
 }
 
 func (trq *TransferRequest1_1) IsPaused() bool {
-	return trq.Paus
+	return trq.Pause
 }
 
 func (trq *TransferRequest1_1) TransferID() datatransfer.TransferID {
-	return datatransfer.TransferID(trq.XferID)
+	return datatransfer.TransferID(trq.TransferId)
 }
 
 // ========= datatransfer.Request interface
@@ -90,47 +89,47 @@ func (trq *TransferRequest1_1) IsPull() bool {
 
 // VoucherType returns the Voucher ID
 func (trq *TransferRequest1_1) VoucherType() datatransfer.TypeIdentifier {
-	return trq.VTyp
+	return trq.VoucherTypeIdentifier
 }
 
 // Voucher returns the Voucher bytes
 func (trq *TransferRequest1_1) Voucher(decoder encoding.Decoder) (encoding.Encodable, error) {
-	if trq.Vouch == nil {
+	if trq.VoucherPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
 	buf := new(bytes.Buffer)
-	dagcbor.Encode(*trq.Vouch, buf)
+	dagcbor.Encode(*trq.VoucherPtr, buf)
 	return decoder.DecodeFromCbor(buf.Bytes())
 }
 
 func (trq *TransferRequest1_1) EmptyVoucher() bool {
-	return trq.VTyp == datatransfer.EmptyTypeIdentifier
+	return trq.VoucherTypeIdentifier == datatransfer.EmptyTypeIdentifier
 }
 
 // BaseCid returns the Base CID
 func (trq *TransferRequest1_1) BaseCid() cid.Cid {
-	if trq.BCid == nil {
+	if trq.BaseCidPtr == nil {
 		return cid.Undef
 	}
-	return *trq.BCid
+	return *trq.BaseCidPtr
 }
 
 // Selector returns the message Selector bytes
 func (trq *TransferRequest1_1) Selector() (datamodel.Node, error) {
-	if trq.Stor == nil {
+	if trq.SelectorPtr == nil {
 		return nil, xerrors.New("No selector present to read")
 	}
-	return *trq.Stor, nil
+	return *trq.SelectorPtr, nil
 }
 
 // IsCancel returns true if this is a cancel request
 func (trq *TransferRequest1_1) IsCancel() bool {
-	return trq.Type == uint64(types.CancelMessage)
+	return trq.MessageType == uint64(types.CancelMessage)
 }
 
 // IsPartial returns true if this is a partial request
 func (trq *TransferRequest1_1) IsPartial() bool {
-	return trq.Part
+	return trq.Partial
 }
 
 func (trq *TransferRequest1_1) ToIPLD() (datamodel.Node, error) {
@@ -151,9 +150,9 @@ func (trq *TransferRequest1_1) ToIPLD() (datamodel.Node, error) {
 // symmetry with FromNet
 func (trq *TransferRequest1_1) ToNet(w io.Writer) error {
 	msg := TransferMessage1_1{
-		IsRq:     true,
-		Request:  trq,
-		Response: nil,
+		IsRequest: true,
+		Request:   trq,
+		Response:  nil,
 	}
 	node := bindnode.Wrap(&msg, Prototype.TransferMessage.Type())
 	return dagcbor.Encode(node.Representation(), w)
