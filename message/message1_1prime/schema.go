@@ -23,7 +23,7 @@ func init() {
 		panic(err)
 	}
 
-	Prototype.TransferMessage = bindnode.Prototype((*transferMessage1_1)(nil), ts.TypeByName("TransferMessage"))
-	Prototype.TransferRequest = bindnode.Prototype((*transferRequest1_1)(nil), ts.TypeByName("TransferRequest"))
-	Prototype.TransferResponse = bindnode.Prototype((*transferResponse1_1)(nil), ts.TypeByName("TransferResponse"))
+	Prototype.TransferMessage = bindnode.Prototype((*TransferMessage1_1)(nil), ts.TypeByName("TransferMessage"))
+	Prototype.TransferRequest = bindnode.Prototype((*TransferRequest1_1)(nil), ts.TypeByName("TransferRequest"))
+	Prototype.TransferResponse = bindnode.Prototype((*TransferResponse1_1)(nil), ts.TypeByName("TransferResponse"))
 }

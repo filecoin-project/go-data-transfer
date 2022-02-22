@@ -16,11 +16,9 @@ import (
 	"github.com/filecoin-project/go-data-transfer/message/types"
 )
 
-//go:generate cbor-gen-for --map-encoding transferResponse1_1
-
-// transferResponse1_1 is a private struct that satisfies the datatransfer.Response interface
+// TransferResponse1_1 is a private struct that satisfies the datatransfer.Response interface
 // It is the response message for the Data Transfer 1.1 and 1.2 Protocol.
-type transferResponse1_1 struct {
+type TransferResponse1_1 struct {
 	Type   uint64
 	Acpt   bool
 	Paus   bool
@@ -29,55 +27,55 @@ type transferResponse1_1 struct {
 	VTyp   datatransfer.TypeIdentifier
 }
 
-func (trsp *transferResponse1_1) TransferID() datatransfer.TransferID {
+func (trsp *TransferResponse1_1) TransferID() datatransfer.TransferID {
 	return datatransfer.TransferID(trsp.XferID)
 }
 
 // IsRequest always returns false in this case because this is a transfer response
-func (trsp *transferResponse1_1) IsRequest() bool {
+func (trsp *TransferResponse1_1) IsRequest() bool {
 	return false
 }
 
 // IsNew returns true if this is the first response sent
-func (trsp *transferResponse1_1) IsNew() bool {
+func (trsp *TransferResponse1_1) IsNew() bool {
 	return trsp.Type == uint64(types.NewMessage)
 }
 
 // IsUpdate returns true if this response is an update
-func (trsp *transferResponse1_1) IsUpdate() bool {
+func (trsp *TransferResponse1_1) IsUpdate() bool {
 	return trsp.Type == uint64(types.UpdateMessage)
 }
 
 // IsPaused returns true if the responder is paused
-func (trsp *transferResponse1_1) IsPaused() bool {
+func (trsp *TransferResponse1_1) IsPaused() bool {
 	return trsp.Paus
 }
 
 // IsCancel returns true if the responder has cancelled this response
-func (trsp *transferResponse1_1) IsCancel() bool {
+func (trsp *TransferResponse1_1) IsCancel() bool {
 	return trsp.Type == uint64(types.CancelMessage)
 }
 
 // IsComplete returns true if the responder has completed this response
-func (trsp *transferResponse1_1) IsComplete() bool {
+func (trsp *TransferResponse1_1) IsComplete() bool {
 	return trsp.Type == uint64(types.CompleteMessage)
 }
 
-func (trsp *transferResponse1_1) IsVoucherResult() bool {
+func (trsp *TransferResponse1_1) IsVoucherResult() bool {
 	return trsp.Type == uint64(types.VoucherResultMessage) || trsp.Type == uint64(types.NewMessage) || trsp.Type == uint64(types.CompleteMessage) ||
 		trsp.Type == uint64(types.RestartMessage)
 }
 
 // 	Accepted returns true if the request is accepted in the response
-func (trsp *transferResponse1_1) Accepted() bool {
+func (trsp *TransferResponse1_1) Accepted() bool {
 	return trsp.Acpt
 }
 
-func (trsp *transferResponse1_1) VoucherResultType() datatransfer.TypeIdentifier {
+func (trsp *TransferResponse1_1) VoucherResultType() datatransfer.TypeIdentifier {
 	return trsp.VTyp
 }
 
-func (trsp *transferResponse1_1) VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error) {
+func (trsp *TransferResponse1_1) VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error) {
 	if trsp.VRes == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
@@ -86,15 +84,15 @@ func (trsp *transferResponse1_1) VoucherResult(decoder encoding.Decoder) (encodi
 	return decoder.DecodeFromCbor(buf.Bytes())
 }
 
-func (trq *transferResponse1_1) IsRestart() bool {
+func (trq *TransferResponse1_1) IsRestart() bool {
 	return trq.Type == uint64(types.RestartMessage)
 }
 
-func (trsp *transferResponse1_1) EmptyVoucherResult() bool {
+func (trsp *TransferResponse1_1) EmptyVoucherResult() bool {
 	return trsp.VTyp == datatransfer.EmptyTypeIdentifier
 }
 
-func (trsp *transferResponse1_1) MessageForProtocol(targetProtocol protocol.ID) (datatransfer.Message, error) {
+func (trsp *TransferResponse1_1) MessageForProtocol(targetProtocol protocol.ID) (datatransfer.Message, error) {
 	switch targetProtocol {
 	case datatransfer.ProtocolDataTransfer1_2:
 		return trsp, nil
@@ -103,7 +101,7 @@ func (trsp *transferResponse1_1) MessageForProtocol(targetProtocol protocol.ID) 
 	}
 }
 
-func (trsp *transferResponse1_1) ToIPLD() (datamodel.Node, error) {
+func (trsp *TransferResponse1_1) ToIPLD() (datamodel.Node, error) {
 	buf := new(bytes.Buffer)
 	err := trsp.ToNet(buf)
 	if err != nil {
@@ -119,8 +117,8 @@ func (trsp *transferResponse1_1) ToIPLD() (datamodel.Node, error) {
 
 // ToNet serializes a transfer response. It's a wrapper for MarshalCBOR to provide
 // symmetry with FromNet
-func (trsp *transferResponse1_1) ToNet(w io.Writer) error {
-	msg := transferMessage1_1{
+func (trsp *TransferResponse1_1) ToNet(w io.Writer) error {
+	msg := TransferMessage1_1{
 		IsRq:     false,
 		Request:  nil,
 		Response: trsp,
