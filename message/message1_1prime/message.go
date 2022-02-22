@@ -52,37 +52,39 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 	}
 
 	return &TransferRequest1_1{
-		Type:   typ,
-		Pull:   isPull,
-		Vouch:  &vnode,
-		Stor:   &selnode,
-		BCid:   &baseCid,
-		VTyp:   vtype,
-		XferID: uint64(id),
+		MessageType:           typ,
+		Pull:                  isPull,
+		VoucherPtr:            &vnode,
+		SelectorPtr:           &selnode,
+		BaseCidPtr:            &baseCid,
+		VoucherTypeIdentifier: vtype,
+		TransferId:            uint64(id),
 	}, nil
 }
 
 // RestartExistingChannelRequest creates a request to ask the other side to restart an existing channel
 func RestartExistingChannelRequest(channelId datatransfer.ChannelID) datatransfer.Request {
 
-	return &TransferRequest1_1{Type: uint64(types.RestartExistingChannelRequestMessage),
-		RestartChannel: channelId}
+	return &TransferRequest1_1{
+		MessageType:    uint64(types.RestartExistingChannelRequestMessage),
+		RestartChannel: channelId,
+	}
 }
 
 // CancelRequest request generates a request to cancel an in progress request
 func CancelRequest(id datatransfer.TransferID) datatransfer.Request {
 	return &TransferRequest1_1{
-		Type:   uint64(types.CancelMessage),
-		XferID: uint64(id),
+		MessageType: uint64(types.CancelMessage),
+		TransferId:  uint64(id),
 	}
 }
 
 // UpdateRequest generates a new request update
 func UpdateRequest(id datatransfer.TransferID, isPaused bool) datatransfer.Request {
 	return &TransferRequest1_1{
-		Type:   uint64(types.UpdateMessage),
-		Paus:   isPaused,
-		XferID: uint64(id),
+		MessageType: uint64(types.UpdateMessage),
+		Pause:       isPaused,
+		TransferId:  uint64(id),
 	}
 }
 
@@ -99,10 +101,10 @@ func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifie
 	}
 	vnode := builder.Build()
 	return &TransferRequest1_1{
-		Type:   uint64(types.VoucherMessage),
-		Vouch:  &vnode,
-		VTyp:   vtype,
-		XferID: uint64(id),
+		MessageType:           uint64(types.VoucherMessage),
+		VoucherPtr:            &vnode,
+		VoucherTypeIdentifier: vtype,
+		TransferId:            uint64(id),
 	}, nil
 }
 
@@ -119,12 +121,12 @@ func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, v
 	}
 	vnode := builder.Build()
 	return &TransferResponse1_1{
-		Acpt:   accepted,
-		Type:   uint64(types.RestartMessage),
-		Paus:   isPaused,
-		XferID: uint64(id),
-		VTyp:   voucherResultType,
-		VRes:   &vnode,
+		RequestAccepted:       accepted,
+		MessageType:           uint64(types.RestartMessage),
+		Paused:                isPaused,
+		TransferId:            uint64(id),
+		VoucherTypeIdentifier: voucherResultType,
+		VoucherResultPtr:      &vnode,
 	}, nil
 }
 
@@ -141,12 +143,12 @@ func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, vouch
 	}
 	vnode := builder.Build()
 	return &TransferResponse1_1{
-		Acpt:   accepted,
-		Type:   uint64(types.NewMessage),
-		Paus:   isPaused,
-		XferID: uint64(id),
-		VTyp:   voucherResultType,
-		VRes:   &vnode,
+		RequestAccepted:       accepted,
+		MessageType:           uint64(types.NewMessage),
+		Paused:                isPaused,
+		TransferId:            uint64(id),
+		VoucherTypeIdentifier: voucherResultType,
+		VoucherResultPtr:      &vnode,
 	}, nil
 }
 
@@ -163,29 +165,29 @@ func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused b
 	}
 	vnode := builder.Build()
 	return &TransferResponse1_1{
-		Acpt:   accepted,
-		Type:   uint64(types.VoucherResultMessage),
-		Paus:   isPaused,
-		XferID: uint64(id),
-		VTyp:   voucherResultType,
-		VRes:   &vnode,
+		RequestAccepted:       accepted,
+		MessageType:           uint64(types.VoucherResultMessage),
+		Paused:                isPaused,
+		TransferId:            uint64(id),
+		VoucherTypeIdentifier: voucherResultType,
+		VoucherResultPtr:      &vnode,
 	}, nil
 }
 
 // UpdateResponse returns a new update response
 func UpdateResponse(id datatransfer.TransferID, isPaused bool) datatransfer.Response {
 	return &TransferResponse1_1{
-		Type:   uint64(types.UpdateMessage),
-		Paus:   isPaused,
-		XferID: uint64(id),
+		MessageType: uint64(types.UpdateMessage),
+		Paused:      isPaused,
+		TransferId:  uint64(id),
 	}
 }
 
 // CancelResponse makes a new cancel response message
 func CancelResponse(id datatransfer.TransferID) datatransfer.Response {
 	return &TransferResponse1_1{
-		Type:   uint64(types.CancelMessage),
-		XferID: uint64(id),
+		MessageType: uint64(types.CancelMessage),
+		TransferId:  uint64(id),
 	}
 }
 
@@ -202,12 +204,12 @@ func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool
 	}
 	vnode := builder.Build()
 	return &TransferResponse1_1{
-		Type:   uint64(types.CompleteMessage),
-		Acpt:   isAccepted,
-		Paus:   isPaused,
-		VTyp:   voucherResultType,
-		VRes:   &vnode,
-		XferID: uint64(id),
+		MessageType:           uint64(types.CompleteMessage),
+		RequestAccepted:       isAccepted,
+		Paused:                isPaused,
+		VoucherTypeIdentifier: voucherResultType,
+		VoucherResultPtr:      &vnode,
+		TransferId:            uint64(id),
 	}, nil
 }
 
@@ -221,11 +223,11 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 	node := builder.Build()
 	tresp := bindnode.Unwrap(node).(*TransferMessage1_1)
 
-	if (tresp.IsRequest() && tresp.Request == nil) || (!tresp.IsRequest() && tresp.Response == nil) {
+	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
 		return nil, xerrors.Errorf("invalid/malformed message")
 	}
 
-	if tresp.IsRequest() {
+	if tresp.IsRequest {
 		return tresp.Request, nil
 	}
 	return tresp.Response, nil

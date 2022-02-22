@@ -19,16 +19,16 @@ import (
 // TransferResponse1_1 is a private struct that satisfies the datatransfer.Response interface
 // It is the response message for the Data Transfer 1.1 and 1.2 Protocol.
 type TransferResponse1_1 struct {
-	Type   uint64
-	Acpt   bool
-	Paus   bool
-	XferID uint64
-	VRes   *datamodel.Node
-	VTyp   datatransfer.TypeIdentifier
+	MessageType           uint64
+	RequestAccepted       bool
+	Paused                bool
+	TransferId            uint64
+	VoucherResultPtr      *datamodel.Node
+	VoucherTypeIdentifier datatransfer.TypeIdentifier
 }
 
 func (trsp *TransferResponse1_1) TransferID() datatransfer.TransferID {
-	return datatransfer.TransferID(trsp.XferID)
+	return datatransfer.TransferID(trsp.TransferId)
 }
 
 // IsRequest always returns false in this case because this is a transfer response
@@ -38,58 +38,58 @@ func (trsp *TransferResponse1_1) IsRequest() bool {
 
 // IsNew returns true if this is the first response sent
 func (trsp *TransferResponse1_1) IsNew() bool {
-	return trsp.Type == uint64(types.NewMessage)
+	return trsp.MessageType == uint64(types.NewMessage)
 }
 
 // IsUpdate returns true if this response is an update
 func (trsp *TransferResponse1_1) IsUpdate() bool {
-	return trsp.Type == uint64(types.UpdateMessage)
+	return trsp.MessageType == uint64(types.UpdateMessage)
 }
 
 // IsPaused returns true if the responder is paused
 func (trsp *TransferResponse1_1) IsPaused() bool {
-	return trsp.Paus
+	return trsp.Paused
 }
 
 // IsCancel returns true if the responder has cancelled this response
 func (trsp *TransferResponse1_1) IsCancel() bool {
-	return trsp.Type == uint64(types.CancelMessage)
+	return trsp.MessageType == uint64(types.CancelMessage)
 }
 
 // IsComplete returns true if the responder has completed this response
 func (trsp *TransferResponse1_1) IsComplete() bool {
-	return trsp.Type == uint64(types.CompleteMessage)
+	return trsp.MessageType == uint64(types.CompleteMessage)
 }
 
 func (trsp *TransferResponse1_1) IsVoucherResult() bool {
-	return trsp.Type == uint64(types.VoucherResultMessage) || trsp.Type == uint64(types.NewMessage) || trsp.Type == uint64(types.CompleteMessage) ||
-		trsp.Type == uint64(types.RestartMessage)
+	return trsp.MessageType == uint64(types.VoucherResultMessage) || trsp.MessageType == uint64(types.NewMessage) || trsp.MessageType == uint64(types.CompleteMessage) ||
+		trsp.MessageType == uint64(types.RestartMessage)
 }
 
 // 	Accepted returns true if the request is accepted in the response
 func (trsp *TransferResponse1_1) Accepted() bool {
-	return trsp.Acpt
+	return trsp.RequestAccepted
 }
 
 func (trsp *TransferResponse1_1) VoucherResultType() datatransfer.TypeIdentifier {
-	return trsp.VTyp
+	return trsp.VoucherTypeIdentifier
 }
 
 func (trsp *TransferResponse1_1) VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error) {
-	if trsp.VRes == nil {
+	if trsp.VoucherResultPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
 	buf := new(bytes.Buffer)
-	dagcbor.Encode(*trsp.VRes, buf)
+	dagcbor.Encode(*trsp.VoucherResultPtr, buf)
 	return decoder.DecodeFromCbor(buf.Bytes())
 }
 
 func (trq *TransferResponse1_1) IsRestart() bool {
-	return trq.Type == uint64(types.RestartMessage)
+	return trq.MessageType == uint64(types.RestartMessage)
 }
 
 func (trsp *TransferResponse1_1) EmptyVoucherResult() bool {
-	return trsp.VTyp == datatransfer.EmptyTypeIdentifier
+	return trsp.VoucherTypeIdentifier == datatransfer.EmptyTypeIdentifier
 }
 
 func (trsp *TransferResponse1_1) MessageForProtocol(targetProtocol protocol.ID) (datatransfer.Message, error) {
@@ -119,9 +119,9 @@ func (trsp *TransferResponse1_1) ToIPLD() (datamodel.Node, error) {
 // symmetry with FromNet
 func (trsp *TransferResponse1_1) ToNet(w io.Writer) error {
 	msg := TransferMessage1_1{
-		IsRq:     false,
-		Request:  nil,
-		Response: trsp,
+		IsRequest: false,
+		Request:   nil,
+		Response:  trsp,
 	}
 	node := bindnode.Wrap(&msg, Prototype.TransferMessage.Type())
 	return dagcbor.Encode(node.Representation(), w)

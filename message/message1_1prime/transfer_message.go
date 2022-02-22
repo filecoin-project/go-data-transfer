@@ -13,7 +13,7 @@ import (
 
 // TransferMessage1_1 is the transfer message for the 1.1 Data Transfer Protocol.
 type TransferMessage1_1 struct {
-	IsRq bool
+	IsRequest bool
 
 	Request  *TransferRequest1_1
 	Response *TransferResponse1_1
@@ -21,14 +21,9 @@ type TransferMessage1_1 struct {
 
 // ========= datatransfer.Message interface
 
-// IsRequest returns true if this message is a data request
-func (tm *TransferMessage1_1) IsRequest() bool {
-	return tm.IsRq
-}
-
 // TransferID returns the TransferID of this message
 func (tm *TransferMessage1_1) TransferID() datatransfer.TransferID {
-	if tm.IsRequest() {
+	if tm.IsRequest {
 		return tm.Request.TransferID()
 	}
 	return tm.Response.TransferID()
