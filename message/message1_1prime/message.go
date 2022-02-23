@@ -1,6 +1,7 @@
 package message1_1
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -54,7 +55,6 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 
 // RestartExistingChannelRequest creates a request to ask the other side to restart an existing channel
 func RestartExistingChannelRequest(channelId datatransfer.ChannelID) datatransfer.Request {
-
 	return &TransferRequest1_1{
 		MessageType:    uint64(types.RestartExistingChannelRequestMessage),
 		RestartChannel: channelId,
@@ -198,16 +198,20 @@ func FromIPLD(node datamodel.Node) (datatransfer.Message, error) {
 	if tn, ok := node.(schema.TypedNode); ok { // shouldn't need this if from Graphsync
 		node = tn.Representation()
 	}
+	fmt.Printf("FromIPLD: ")
 	dagjson.Encode(node, os.Stdout)
+	fmt.Println()
 	builder := Prototype.TransferMessage.Representation().NewBuilder()
 	err := builder.AssignNode(node)
 	if err != nil {
+		fmt.Printf("ERR: %v\n", err)
 		return nil, err
 	}
 	tresp := bindnode.Unwrap(builder.Build()).(*TransferMessage1_1)
 	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
 		return nil, xerrors.Errorf("invalid/malformed message")
 	}
+	fmt.Printf("Unwraped: %v\n", *tresp)
 
 	if tresp.IsRequest {
 		return tresp.Request, nil
