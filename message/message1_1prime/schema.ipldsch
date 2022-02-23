@@ -18,7 +18,7 @@ type TransferRequest struct {
 	VoucherPtr            nullable Any            (rename "Vouch")
 	VoucherTypeIdentifier          TypeIdentifier (rename "VTyp")
 	TransferId                     Int            (rename "XferID")
-	RestartChannel                 ChannelID      (rename "RestartChannel")
+	RestartChannel                 ChannelID
 }
 
 type TransferResponse struct {

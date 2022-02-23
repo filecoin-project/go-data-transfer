@@ -502,6 +502,8 @@ github.com/ipld/go-ipld-prime v0.14.4/go.mod h1:QcE4Y9n/ZZr8Ijg5bGPT0GqYWgZ1704n
 github.com/ipld/go-ipld-prime v0.14.5-0.20220204050122-679d74376a0d/go.mod h1:f5ls+uUY8Slf1NN6YUOeEyYe3TA/J02Rn7zw1NQTeSk=
 github.com/ipld/go-ipld-prime v0.14.5-0.20220217204238-adcfa4cb3bad h1:7i3K64+yr6D+DHo7dzB9eV/ZhlXE5d0QjAj3NfVvJQk=
 github.com/ipld/go-ipld-prime v0.14.5-0.20220217204238-adcfa4cb3bad/go.mod h1:axSCuOCBPqrH+gvXr2w9uAOulJqBPhHPT2PjoiiU1qA=
+github.com/ipld/go-ipld-prime v0.14.5-0.20220223004427-e39d20bf18dc h1:Vytc4nP0XU6BCPAbP1oSdI5gYAQi6WPvDPGmy+RIHno=
+github.com/ipld/go-ipld-prime v0.14.5-0.20220223004427-e39d20bf18dc/go.mod h1:axSCuOCBPqrH+gvXr2w9uAOulJqBPhHPT2PjoiiU1qA=
 github.com/ipld/go-ipld-prime/storage/bsadapter v0.0.0-20211210234204-ce2a1c70cd73/go.mod h1:2PJ0JgxyB08t0b2WKrcuqI3di0V+5n6RS/LTUJhkoxY=
 github.com/jackpal/gateway v1.0.5/go.mod h1:lTpwd4ACLXmpyiCTRtfiNyVnUmqT9RivzCDQetPfnjA=
 github.com/jackpal/go-nat-pmp v1.0.1/go.mod h1:QPH045xvCAeXUZOxsnwmrtiCoxIr9eob+4orBN1SBKc=

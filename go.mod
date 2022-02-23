@@ -25,7 +25,7 @@ require (
 	github.com/ipfs/go-log/v2 v2.5.0
 	github.com/ipfs/go-merkledag v0.5.1
 	github.com/ipfs/go-unixfs v0.3.1
-	github.com/ipld/go-ipld-prime v0.14.5-0.20220217204238-adcfa4cb3bad
+	github.com/ipld/go-ipld-prime v0.14.5-0.20220223004427-e39d20bf18dc
 	github.com/jbenet/go-random v0.0.0-20190219211222-123a90aedc0c
 	github.com/jpillora/backoff v1.0.0
 	github.com/libp2p/go-libp2p v0.18.0-rc1
