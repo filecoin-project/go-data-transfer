@@ -1338,21 +1338,31 @@ func assertDecodesToMessage(t *testing.T, data datamodel.Node, expected datatran
 func assertHasOutgoingMessage(t *testing.T, extensions []graphsync.ExtensionData, expected datatransfer.Message) {
 	nd, err := expected.ToIPLD()
 	require.NoError(t, err)
-	expectedExt := graphsync.ExtensionData{
-		Name: extension.ExtensionDataTransfer1_1,
-		Data: nd,
+	found := false
+	for _, e := range extensions {
+		if e.Name == extension.ExtensionDataTransfer1_1 {
+			require.True(t, ipld.DeepEqual(nd, e.Data), "data matches")
+			found = true
+		}
 	}
-	require.Contains(t, extensions, expectedExt)
+	if !found {
+		require.Fail(t, "extension not found")
+	}
 }
 
 func assertHasExtensionMessage(t *testing.T, name graphsync.ExtensionName, extensions []graphsync.ExtensionData, expected datatransfer.Message) {
 	nd, err := expected.ToIPLD()
 	require.NoError(t, err)
-	expectedExt := graphsync.ExtensionData{
-		Name: name,
-		Data: nd,
+	found := false
+	for _, e := range extensions {
+		if e.Name == name {
+			require.True(t, ipld.DeepEqual(nd, e.Data), "data matches")
+			found = true
+		}
 	}
-	require.Contains(t, extensions, expectedExt)
+	if !found {
+		require.Fail(t, "extension not found")
+	}
 }
 
 type mockChannelState struct {
