@@ -92,7 +92,7 @@ func (t *TransferMessage1_1) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > cbg.MaxLength {
-		return fmt.Errorf("transferMessage1_1: map struct too large (%d)", extra)
+		return fmt.Errorf("TransferMessage1_1: map struct too large (%d)", extra)
 	}
 
 	var name string
