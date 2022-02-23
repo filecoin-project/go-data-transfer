@@ -1,13 +1,10 @@
 package message1_1
 
 import (
-	"fmt"
 	"io"
-	"os"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -141,16 +138,10 @@ func (trsp *TransferRequest1_1) toIPLD() schema.TypedNode {
 }
 
 func (trq *TransferRequest1_1) ToIPLD() (datamodel.Node, error) {
-	fmt.Printf("ToIPLD(req) (%v): ", trq.RestartChannel)
-	dagjson.Encode(trq.toIPLD().Representation(), os.Stdout)
-	fmt.Println()
 	return trq.toIPLD().Representation(), nil
 }
 
 // ToNet serializes a transfer request.
 func (trq *TransferRequest1_1) ToNet(w io.Writer) error {
-	fmt.Printf("ToNet(req): ")
-	dagjson.Encode(trq.toIPLD().Representation(), os.Stdout)
-	fmt.Println()
 	return dagcbor.Encode(trq.toIPLD().Representation(), w)
 }
