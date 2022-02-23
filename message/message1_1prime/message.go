@@ -1,14 +1,11 @@
 package message1_1
 
 import (
-	"fmt"
 	"io"
-	"os"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
@@ -198,20 +195,15 @@ func FromIPLD(node datamodel.Node) (datatransfer.Message, error) {
 	if tn, ok := node.(schema.TypedNode); ok { // shouldn't need this if from Graphsync
 		node = tn.Representation()
 	}
-	fmt.Printf("FromIPLD: ")
-	dagjson.Encode(node, os.Stdout)
-	fmt.Println()
 	builder := Prototype.TransferMessage.Representation().NewBuilder()
 	err := builder.AssignNode(node)
 	if err != nil {
-		fmt.Printf("ERR: %v\n", err)
 		return nil, err
 	}
 	tresp := bindnode.Unwrap(builder.Build()).(*TransferMessage1_1)
 	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
 		return nil, xerrors.Errorf("invalid/malformed message")
 	}
-	fmt.Printf("Unwraped: %v\n", *tresp)
 
 	if tresp.IsRequest {
 		return tresp.Request, nil

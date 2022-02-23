@@ -1,12 +1,9 @@
 package message1_1
 
 import (
-	"fmt"
 	"io"
-	"os"
 
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -110,16 +107,10 @@ func (trsp *TransferResponse1_1) toIPLD() schema.TypedNode {
 }
 
 func (trsp *TransferResponse1_1) ToIPLD() (datamodel.Node, error) {
-	fmt.Printf("ToIPLD(resp): ")
-	dagjson.Encode(trsp.toIPLD().Representation(), os.Stdout)
-	fmt.Println()
 	return trsp.toIPLD().Representation(), nil
 }
 
 // ToNet serializes a transfer response.
 func (trsp *TransferResponse1_1) ToNet(w io.Writer) error {
-	fmt.Printf("ToNet(resp): ")
-	dagjson.Encode(trsp.toIPLD().Representation(), os.Stdout)
-	fmt.Println()
 	return dagcbor.Encode(trsp.toIPLD().Representation(), w)
 }
