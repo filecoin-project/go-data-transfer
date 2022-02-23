@@ -7,17 +7,14 @@ import (
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
-	cborgen "github.com/whyrusleeping/cbor-gen"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 )
 
-//go:generate cbor-gen-for --map-encoding transferMessage1_1
+//go:generate cbor-gen-for --map-encoding TransferMessage1_1
 
 // transferMessage1_1 is the transfer message for the 1.1 Data Transfer Protocol.
 type TransferMessage1_1 struct {
-	cborgen.CBORMarshaler
-	cborgen.CBORUnmarshaler
 	IsRq bool
 
 	Request  *TransferRequest1_1
