@@ -1,0 +1,9 @@
+type PeerID string # peer.ID, really should be bytes (this is non-utf8) but is string for backward compat
+type TransferID int
+type TypeIdentifier string
+
+type ChannelID struct {
+	Initiator PeerID
+	Responder PeerID
+	ID        TransferID
+} representation tuple

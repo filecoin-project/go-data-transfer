@@ -2,13 +2,15 @@ package encoding
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"reflect"
 
+	"github.com/filecoin-project/go-data-transfer/ipldbind"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/schema"
 	cborgen "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
@@ -39,19 +41,34 @@ func Encode(value Encodable) ([]byte, error) {
 		}
 		return buf.Bytes(), nil
 	}
+	byts, _ := cbor.DumpObject(value)
+	fmt.Printf("fall-through %v: %v\n", value, hex.EncodeToString(byts))
 	return cbor.DumpObject(value)
 }
 
 func EncodeToNode(encodable Encodable) (datamodel.Node, error) {
-	byts, err := Encode(encodable)
-	if err != nil {
-		return nil, err
+	if encodable == nil {
+		return datamodel.Null, nil
 	}
-	na := basicnode.Prototype.Any.NewBuilder()
-	if err := dagcbor.Decode(na, bytes.NewReader(byts)); err != nil {
-		return nil, err
+	val := reflect.ValueOf(encodable).Type()
+	fmt.Printf("EncodeToNode %T: [%v]\n", encodable, val.Name())
+	node, ok := encodable.(datamodel.Node)
+	if ok {
+		return node, nil
 	}
-	return na.Build(), nil
+	return ipldbind.ToNode(encodable)
+	/*
+
+		byts, err := Encode(encodable)
+		if err != nil {
+			return nil, err
+		}
+		na := basicnode.Prototype.Any.NewBuilder()
+		if err := dagcbor.Decode(na, bytes.NewReader(byts)); err != nil {
+			return nil, err
+		}
+		return na.Build(), nil
+	*/
 }
 
 // Decoder is CBOR decoder for a given encodable type
@@ -82,7 +99,7 @@ func NewDecoder(decodeType Encodable) (Decoder, error) {
 	// can rountrip with oldschool ipld-format
 	encoded, err := cbor.DumpObject(decodeType)
 	if err != nil {
-		return nil, xerrors.New("Object type did not encode")
+		return nil, xerrors.Errorf("Object type did not encode", err)
 	}
 	newDecodable := reflect.New(decodeReflectType.Elem()).Interface()
 	if err := cbor.DecodeInto(encoded, newDecodable); err != nil {

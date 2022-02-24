@@ -5,14 +5,12 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/node/bindnode"
-	"github.com/ipld/go-ipld-prime/schema"
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/encoding"
+	"github.com/filecoin-project/go-data-transfer/ipldbind"
 	"github.com/filecoin-project/go-data-transfer/message/types"
 )
 
@@ -172,14 +170,11 @@ func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
 func FromNet(r io.Reader) (datatransfer.Message, error) {
-	builder := Prototype.TransferMessage.Representation().NewBuilder()
-	err := dagcbor.Decode(builder, r)
+	msg, err := ipldbind.FromBytes(r, TransferMessage1_1{})
 	if err != nil {
 		return nil, err
 	}
-	node := builder.Build()
-	tresp := bindnode.Unwrap(node).(*TransferMessage1_1)
-
+	tresp := msg.(*TransferMessage1_1)
 	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
 		return nil, xerrors.Errorf("invalid/malformed message")
 	}
@@ -192,15 +187,11 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
 func FromIPLD(node datamodel.Node) (datatransfer.Message, error) {
-	if tn, ok := node.(schema.TypedNode); ok { // shouldn't need this if from Graphsync
-		node = tn.Representation()
-	}
-	builder := Prototype.TransferMessage.Representation().NewBuilder()
-	err := builder.AssignNode(node)
+	msg, err := ipldbind.FromNode(node, ipldbind.Prototype.TransferMessage)
 	if err != nil {
 		return nil, err
 	}
-	tresp := bindnode.Unwrap(builder.Build()).(*TransferMessage1_1)
+	tresp := msg.(*TransferMessage1_1)
 	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
 		return nil, xerrors.Errorf("invalid/malformed message")
 	}

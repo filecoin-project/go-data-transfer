@@ -10,14 +10,14 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
-	"github.com/ipld/go-ipld-prime/node/bindnode"
+	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/encoding"
+	"github.com/filecoin-project/go-data-transfer/ipldbind"
 	message1_1 "github.com/filecoin-project/go-data-transfer/message/message1_1prime"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
@@ -36,7 +36,7 @@ func TestNewRequest(t *testing.T) {
 	assert.True(t, request.IsPull())
 	assert.True(t, request.IsRequest())
 	assert.Equal(t, baseCid.String(), request.BaseCid().String())
-	encoding.NewDecoder(request)
+	// encoding.NewDecoder(request)
 	testutil.AssertFakeDTVoucher(t, request, voucher)
 	receivedSelector, err := request.Selector()
 	require.NoError(t, err)
@@ -120,11 +120,13 @@ func TestTransferRequest_MarshalCBOR(t *testing.T) {
 	req, err := NewTestTransferRequest()
 	require.NoError(t, err)
 	wbuf := new(bytes.Buffer)
-	node := bindnode.Wrap(&req, message1_1.Prototype.TransferRequest.Type())
-	err = dagcbor.Encode(node.Representation(), wbuf)
+	node, err := ipldbind.ToNode(&req)
+	require.NoError(t, err)
+	err = dagcbor.Encode(node.(schema.TypedNode).Representation(), wbuf)
 	require.NoError(t, err)
 	assert.Greater(t, wbuf.Len(), 0)
 }
+
 func TestTransferRequest_UnmarshalCBOR(t *testing.T) {
 	t.Run("round-trip", func(t *testing.T) {
 		req, err := NewTestTransferRequest()
@@ -148,8 +150,13 @@ func TestTransferRequest_UnmarshalCBOR(t *testing.T) {
 		testutil.AssertEqualSelector(t, &req, desReq)
 	})
 	t.Run("cbor-gen compat", func(t *testing.T) {
-		req, err := NewTestTransferRequest()
-		require.NoError(t, err)
+		bcid := testutil.GenerateCids(1)[0]
+		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
+		id := datatransfer.TransferID(rand.Int31())
+		voucher := testutil.NewFakeDTType()
+		voucherData, _ := hex.DecodeString("f55ff8f12508b63ef2bfeca7557ae90df6311a5ec1631b4a1fa843310bd9c3a710eaace5a1bdd72ad0bfe049771c11e756338bd93865e645f1adec9b9c99ef407fbd4fc6859e7904c5ad7dc9bd10a5cc16973d5b28ec1a6dd43d9f82f9f18c3d03418e35")
+		voucher.Data = string(voucherData)
+		req, err := message1_1.NewRequest(id, false, false, voucher.Type(), voucher, bcid, selector)
 
 		msg, _ := hex.DecodeString("a36449735271f56752657175657374aa6442436964d82a58230012204bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a6454797065006450617573f46450617274f46450756c6cf46453746f72a1612ea065566f756368817864f55ff8f12508b63ef2bfeca7557ae90df6311a5ec1631b4a1fa843310bd9c3a710eaace5a1bdd72ad0bfe049771c11e756338bd93865e645f1adec9b9c99ef407fbd4fc6859e7904c5ad7dc9bd10a5cc16973d5b28ec1a6dd43d9f82f9f18c3d03418e3564565479706a46616b65445454797065665866657249441a4d6582216e526573746172744368616e6e656c8360600068526573706f6e7365f6")
 		desMsg, err := message1_1.FromNet(bytes.NewReader(msg))
@@ -164,8 +171,8 @@ func TestTransferRequest_UnmarshalCBOR(t *testing.T) {
 		assert.Equal(t, req.IsCancel(), desReq.IsCancel())
 		c, _ := cid.Parse("QmTTA2daxGqo5denp6SwLzzkLJm3fuisYEi9CoWsuHpzfb")
 		assert.Equal(t, c, desReq.BaseCid())
-		testutil.AssertEqualFakeDTVoucher(t, &req, desReq)
-		testutil.AssertEqualSelector(t, &req, desReq)
+		testutil.AssertEqualFakeDTVoucher(t, req, desReq)
+		testutil.AssertEqualSelector(t, req, desReq)
 	})
 }
 
@@ -466,6 +473,8 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		id := datatransfer.TransferID(1298498081)
 		accepted := false
 		voucher := testutil.NewFakeDTType()
+		voucherData, _ := hex.DecodeString("f55ff8f12508b63ef2bfeca7557ae90df6311a5ec1631b4a1fa843310bd9c3a710eaace5a1bdd72ad0bfe049771c11e756338bd93865e645f1adec9b9c99ef407fbd4fc6859e7904c5ad7dc9bd10a5cc16973d5b28ec1a6dd43d9f82f9f18c3d03418e35")
+		voucher.Data = string(voucherData)
 		voucherResult := testutil.NewFakeDTType()
 		request, err := message1_1.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
 		require.NoError(t, err)

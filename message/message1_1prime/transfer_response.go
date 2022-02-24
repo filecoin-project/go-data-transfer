@@ -10,7 +10,7 @@ import (
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/encoding"
+	"github.com/filecoin-project/go-data-transfer/ipldbind"
 	"github.com/filecoin-project/go-data-transfer/message/types"
 )
 
@@ -73,11 +73,11 @@ func (trsp *TransferResponse1_1) VoucherResultType() datatransfer.TypeIdentifier
 	return trsp.VoucherTypeIdentifier
 }
 
-func (trsp *TransferResponse1_1) VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error) {
+func (trsp *TransferResponse1_1) VoucherResult(ptrType interface{}) (interface{}, error) {
 	if trsp.VoucherResultPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
-	return decoder.DecodeFromNode(*trsp.VoucherResultPtr)
+	return ipldbind.FromNode(*trsp.VoucherResultPtr, ptrType)
 }
 
 func (trq *TransferResponse1_1) IsRestart() bool {
