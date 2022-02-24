@@ -16,42 +16,7 @@ import (
 	"github.com/ipld/go-ipld-prime/schema"
 )
 
-// TODO: it would be nice to not have to have the schema files all located here,
-// especially for something like testing.ipldsch, that could come with a
-// Register() call
-
-//go:embed types.ipldsch
-var typesSchema []byte
-
-//go:embed message.ipldsch
-var messageSchema []byte
-
-//go:embed testing.ipldsch
-var testingSchema []byte
-
-var Prototype struct {
-	TransferMessage  schema.TypedPrototype
-	TransferRequest  schema.TypedPrototype
-	TransferResponse schema.TypedPrototype
-
-	// for testing
-	FakeDTType schema.TypedPrototype
-}
 var prototype map[string]schema.TypedPrototype = make(map[string]schema.TypedPrototype)
-
-var typeSystem *schema.TypeSystem
-
-func init() {
-	var err error
-	typeSystem, err = ipld.LoadSchemaBytes(bytes.Join([][]byte{
-		typesSchema,
-		messageSchema,
-		testingSchema,
-	}, []byte{}))
-	if err != nil {
-		panic(err)
-	}
-}
 
 func typeName(ptrValue interface{}) string {
 	val := reflect.ValueOf(ptrValue).Type()
@@ -61,13 +26,17 @@ func typeName(ptrValue interface{}) string {
 	return val.Name()
 }
 
-func RegisterType(ptrType interface{}) {
+func RegisterType(schema string, ptrType interface{}) error {
 	name := typeName(ptrType)
 	if _, ok := prototype[name]; ok {
-		panic(fmt.Sprintf("tried to register existing type %v", name))
+		return fmt.Errorf("tried to register existing type %v", name)
 	}
-	fmt.Printf("bindnode(%v, %v)\n", ptrType, name)
+	typeSystem, err := ipld.LoadSchemaBytes([]byte(schema))
+	if err != nil {
+		return err
+	}
 	prototype[name] = bindnode.Prototype(ptrType, typeSystem.TypeByName(name))
+	return nil
 }
 
 func ToNode(ptrValue interface{}) (datamodel.Node, error) {
@@ -122,7 +91,7 @@ func FromNode(node datamodel.Node, ptrValue interface{}) (interface{}, error) {
 	return bindnode.Unwrap(builder.Build()), nil
 }
 
-func FromBytes(r io.Reader, ptrValue interface{}) (interface{}, error) {
+func FromEncoded(r io.Reader, ptrValue interface{}) (interface{}, error) {
 	name := typeName(ptrValue)
 	proto, ok := prototype[name]
 	if !ok {

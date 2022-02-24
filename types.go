@@ -1,6 +1,7 @@
 package datatransfer
 
 import (
+	_ "embed"
 	"fmt"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 )
 
 //go:generate cbor-gen-for ChannelID ChannelStages ChannelStage Log
+
+//go:embed types.ipldsch
+var TypesSchema []byte
 
 // TypeIdentifier is a unique string identifier for a type of encodable object in a
 // registry

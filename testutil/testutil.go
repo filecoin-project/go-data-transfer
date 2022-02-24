@@ -3,6 +3,7 @@ package testutil
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"fmt"
 	"testing"
 
@@ -19,6 +20,9 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 )
+
+//go:embed testing.ipldsch
+var testingSchema []byte
 
 var blockGenerator = blocksutil.NewBlockGenerator()
 

@@ -20,7 +20,7 @@ func (ft FakeDTType) Type() datatransfer.TypeIdentifier {
 }
 
 func init() {
-	ipldbind.RegisterType((*FakeDTType)(nil))
+	ipldbind.RegisterType(string(testingSchema), (*FakeDTType)(nil))
 }
 
 // AssertFakeDTVoucher asserts that a data transfer requests contains the expected fake data transfer voucher type

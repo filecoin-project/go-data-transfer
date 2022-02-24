@@ -1,9 +1,20 @@
 package message1_1
 
-import "github.com/filecoin-project/go-data-transfer/ipldbind"
+import (
+	_ "embed"
+	"strings"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/ipldbind"
+)
+
+//go:embed message.ipldsch
+var messageSchema []byte
 
 func init() {
-	ipldbind.RegisterType((*TransferMessage1_1)(nil))
-	ipldbind.RegisterType((*TransferRequest1_1)(nil))
-	ipldbind.RegisterType((*TransferResponse1_1)(nil))
+	schema := strings.Join([]string{string(datatransfer.TypesSchema), string(messageSchema)}, "")
+
+	ipldbind.RegisterType(schema, (*TransferMessage1_1)(nil))
+	ipldbind.RegisterType(schema, (*TransferRequest1_1)(nil))
+	ipldbind.RegisterType(schema, (*TransferResponse1_1)(nil))
 }

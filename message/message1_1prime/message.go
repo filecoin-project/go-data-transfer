@@ -170,7 +170,7 @@ func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
 func FromNet(r io.Reader) (datatransfer.Message, error) {
-	msg, err := ipldbind.FromBytes(r, TransferMessage1_1{})
+	msg, err := ipldbind.FromEncoded(r, TransferMessage1_1{})
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
 func FromIPLD(node datamodel.Node) (datatransfer.Message, error) {
-	msg, err := ipldbind.FromNode(node, ipldbind.Prototype.TransferMessage)
+	msg, err := ipldbind.FromNode(node, (*TransferMessage1_1)(nil))
 	if err != nil {
 		return nil, err
 	}
