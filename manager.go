@@ -5,6 +5,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
@@ -26,7 +27,7 @@ type RequestValidator interface {
 		receiver peer.ID,
 		voucher Voucher,
 		baseCid cid.Cid,
-		selector ipld.Node) (VoucherResult, error)
+		selector datamodel.Node) (VoucherResult, error)
 }
 
 // Revalidator is a request validator revalidates in progress requests
@@ -83,33 +84,34 @@ type Manager interface {
 	// RegisterVoucherType registers a validator for the given voucher type
 	// will error if voucher type does not implement voucher
 	// or if there is a voucher type registered with an identical identifier
-	RegisterVoucherType(voucherType Voucher, validator RequestValidator) error
+	RegisterVoucherType(voucherType TypeIdentifier, validator RequestValidator) error
 
 	// RegisterRevalidator registers a revalidator for the given voucher type
 	// Note: this is the voucher type used to revalidate. It can share a name
 	// with the initial validator type and CAN be the same type, or a different type.
 	// The revalidator can simply be the sampe as the original request validator,
 	// or a different validator that satisfies the revalidator interface.
-	RegisterRevalidator(voucherType Voucher, revalidator Revalidator) error
+	RegisterRevalidator(voucherType TypeIdentifier, revalidator Revalidator) error
 
+	// TODO: remove this?
 	// RegisterVoucherResultType allows deserialization of a voucher result,
 	// so that a listener can read the metadata
-	RegisterVoucherResultType(resultType VoucherResult) error
+	RegisterVoucherResultType(resultType TypeIdentifier) error
 
 	// RegisterTransportConfigurer registers the given transport configurer to be run on requests with the given voucher
 	// type
-	RegisterTransportConfigurer(voucherType Voucher, configurer TransportConfigurer) error
+	RegisterTransportConfigurer(voucherType TypeIdentifier, configurer TransportConfigurer) error
 
 	// open a data transfer that will send data to the recipient peer and
 	// transfer parts of the piece that match the selector
-	OpenPushDataChannel(ctx context.Context, to peer.ID, voucher Voucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
+	OpenPushDataChannel(ctx context.Context, to peer.ID, voucherType TypeIdentifier, voucher Voucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
 
 	// open a data transfer that will request data from the sending peer and
 	// transfer parts of the piece that match the selector
-	OpenPullDataChannel(ctx context.Context, to peer.ID, voucher Voucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
+	OpenPullDataChannel(ctx context.Context, to peer.ID, voucherType TypeIdentifier, voucher Voucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
 
 	// send an intermediate voucher as needed when the receiver sends a request for revalidation
-	SendVoucher(ctx context.Context, chid ChannelID, voucher Voucher) error
+	SendVoucher(ctx context.Context, chid ChannelID, voucherType TypeIdentifier, voucher Voucher) error
 
 	// close an open channel (effectively a cancel)
 	CloseDataTransferChannel(ctx context.Context, chid ChannelID) error

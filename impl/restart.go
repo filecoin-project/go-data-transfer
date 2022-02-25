@@ -1,16 +1,16 @@
 package impl
 
 import (
-	"bytes"
 	"context"
 
+	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"
-	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/message"
 )
 
@@ -66,7 +66,7 @@ func (m *manager) validateRestartVoucher(channel datatransfer.ChannelState, isPu
 	chid := channel.ChannelID()
 
 	// recreate the request that would have led to this pull channel being created for validation
-	req, err := message.NewRequest(chid.ID, false, isPull, channel.Voucher().Type(), channel.Voucher(),
+	req, err := message.NewRequest(chid.ID, false, isPull, channel.VoucherType(), channel.Voucher(),
 		channel.BaseCID(), channel.Selector())
 	if err != nil {
 		return err
@@ -87,12 +87,12 @@ func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransf
 	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
 
-	req, err := message.NewRequest(chid.ID, true, false, voucher.Type(), voucher, baseCid, selector)
+	req, err := message.NewRequest(chid.ID, true, false, channel.VoucherType(), voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}
 
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	processor, has := m.transportConfigurers.Processor(channel.VoucherType())
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -122,12 +122,12 @@ func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransf
 	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
 
-	req, err := message.NewRequest(chid.ID, true, true, voucher.Type(), voucher, baseCid, selector)
+	req, err := message.NewRequest(chid.ID, true, true, channel.VoucherType(), voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}
 
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	processor, has := m.transportConfigurers.Processor(channel.VoucherType())
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -172,25 +172,25 @@ func (m *manager) validateRestartRequest(ctx context.Context, otherPeer peer.ID,
 		return xerrors.New("base cid does not match")
 	}
 
-	// vouchers should match
-	reqVoucher, err := m.decodeVoucher(req, m.validatedTypes)
+	reqVoucher, err := req.Voucher()
+	// TODO: used to decodeVoucher() here and error if we didn't know the type, should we check?
 	if err != nil {
-		return xerrors.Errorf("failed to decode request voucher: %w", err)
+		return err
 	}
-	if reqVoucher.Type() != channel.Voucher().Type() {
+	if tn, ok := reqVoucher.(schema.TypedNode); ok {
+		reqVoucher = tn.Representation()
+	}
+
+	// voucher types should match
+	if req.VoucherType() != channel.VoucherType() {
 		return xerrors.New("channel and request voucher types do not match")
 	}
 
-	reqBz, err := encoding.Encode(reqVoucher)
-	if err != nil {
-		return xerrors.New("failed to encode request voucher")
+	vouch := channel.Voucher()
+	if tn, ok := vouch.(schema.TypedNode); ok {
+		vouch = tn.Representation()
 	}
-	channelBz, err := encoding.Encode(channel.Voucher())
-	if err != nil {
-		return xerrors.New("failed to encode channel voucher")
-	}
-
-	if !bytes.Equal(reqBz, channelBz) {
+	if !ipld.DeepEqual(reqVoucher, channel.Voucher()) {
 		return xerrors.New("channel and request vouchers do not match")
 	}
 

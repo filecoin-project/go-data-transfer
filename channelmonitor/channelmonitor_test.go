@@ -562,6 +562,10 @@ func (m *mockChannelState) Voucher() datatransfer.Voucher {
 	panic("implement me")
 }
 
+func (m *mockChannelState) VoucherType() datatransfer.TypeIdentifier {
+	panic("implement me")
+}
+
 func (m *mockChannelState) Sender() peer.ID {
 	panic("implement me")
 }

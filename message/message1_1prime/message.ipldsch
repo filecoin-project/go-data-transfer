@@ -1,5 +1,5 @@
 type TransferRequest1_1 struct {
-	BaseCidPtr nullable            Link           (rename "BCid")
+	BaseCidPtr            nullable Link           (rename "BCid")
 	MessageType                    Int            (rename "Type")
 	Pause                          Bool           (rename "Paus")
 	Partial                        Bool           (rename "Part")

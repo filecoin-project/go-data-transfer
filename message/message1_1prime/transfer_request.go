@@ -11,7 +11,7 @@ import (
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/ipldbind"
+	"github.com/filecoin-project/go-data-transfer/ipldutil"
 	"github.com/filecoin-project/go-data-transfer/message/types"
 )
 
@@ -95,11 +95,11 @@ func (trq *TransferRequest1_1) VoucherInto(ptrType interface{}) (interface{}, er
 	if trq.VoucherPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
-	return ipldbind.FromNode(*trq.VoucherPtr, ptrType)
+	return ipldutil.FromNode(*trq.VoucherPtr, ptrType)
 }
 
 // Voucher returns the plain Node form of the voucher
-func (trq *TransferRequest1_1) Voucher() (datamodel.Node, error) {
+func (trq *TransferRequest1_1) Voucher() (datatransfer.Voucher, error) {
 	if trq.VoucherPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
@@ -151,5 +151,10 @@ func (trq *TransferRequest1_1) ToIPLD() (datamodel.Node, error) {
 
 // ToNet serializes a transfer request.
 func (trq *TransferRequest1_1) ToNet(w io.Writer) error {
+	/*
+		fmt.Printf("ToNet TransferRequest1_1:")
+		dagjson.Encode(trq.toIPLD().Representation(), os.Stdout)
+		fmt.Println()
+	*/
 	return dagcbor.Encode(trq.toIPLD().Representation(), w)
 }

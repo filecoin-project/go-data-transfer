@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/ipldutil"
 	message1_1 "github.com/filecoin-project/go-data-transfer/message/message1_1prime"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
@@ -18,10 +19,12 @@ func TestRequestMessageForProtocol(t *testing.T) {
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	isPull := true
 	id := datatransfer.TransferID(rand.Int31())
-	voucher := testutil.NewFakeDTType()
+	node, err := ipldutil.ToNode(testutil.NewFakeDTType())
+	require.NoError(t, err)
+	voucher := datatransfer.Voucher(node)
 
 	// for the new protocols
-	request, err := message1_1.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+	request, err := message1_1.NewRequest(id, false, isPull, testutil.FakeDTVoucherType, voucher, baseCid, selector)
 	require.NoError(t, err)
 
 	out12, err := request.MessageForProtocol(datatransfer.ProtocolDataTransfer1_2)
@@ -37,5 +40,5 @@ func TestRequestMessageForProtocol(t *testing.T) {
 	n, err := req.Selector()
 	require.NoError(t, err)
 	require.Equal(t, selector, n)
-	require.Equal(t, voucher.Type(), req.VoucherType())
+	require.Equal(t, testutil.FakeDTVoucherType, req.VoucherType())
 }

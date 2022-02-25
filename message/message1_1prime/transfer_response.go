@@ -10,7 +10,7 @@ import (
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/ipldbind"
+	"github.com/filecoin-project/go-data-transfer/ipldutil"
 	"github.com/filecoin-project/go-data-transfer/message/types"
 )
 
@@ -78,11 +78,11 @@ func (trsp *TransferResponse1_1) VoucherResultInto(ptrType interface{}) (interfa
 	if trsp.VoucherResultPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
-	return ipldbind.FromNode(*trsp.VoucherResultPtr, ptrType)
+	return ipldutil.FromNode(*trsp.VoucherResultPtr, ptrType)
 }
 
 // VoucherResult returns the plain Node form of the voucher result
-func (trsp *TransferResponse1_1) VoucherResult() (datamodel.Node, error) {
+func (trsp *TransferResponse1_1) VoucherResult() (datatransfer.VoucherResult, error) {
 	if trsp.VoucherResultPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
@@ -121,5 +121,10 @@ func (trsp *TransferResponse1_1) ToIPLD() (datamodel.Node, error) {
 
 // ToNet serializes a transfer response.
 func (trsp *TransferResponse1_1) ToNet(w io.Writer) error {
+	/*
+		fmt.Printf("ToNet TransferResponse1_1:")
+		dagjson.Encode(trsp.toIPLD().Representation(), os.Stdout)
+		fmt.Println()
+	*/
 	return dagcbor.Encode(trsp.toIPLD().Representation(), w)
 }

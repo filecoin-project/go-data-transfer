@@ -6,6 +6,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"go.opentelemetry.io/otel"
@@ -14,7 +15,6 @@ import (
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/registry"
 )
 
@@ -43,7 +43,7 @@ func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
 // message over the transport.
 func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-	ctx, span := otel.Tracer("data-transfer").Start(ctx, "dataReceived", trace.WithAttributes(
+	_, span := otel.Tracer("data-transfer").Start(ctx, "dataReceived", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 		attribute.String("link", link.String()),
 		attribute.Int64("index", index),
@@ -69,9 +69,11 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 
 	// Check each revalidator to see if they want to pause / resume, or send
 	// a message over the transport
+	var resultVoucherType datatransfer.TypeIdentifier
 	var result datatransfer.VoucherResult
 	var handled bool
-	_ = m.revalidators.Each(func(_ datatransfer.TypeIdentifier, _ encoding.Decoder, processor registry.Processor) error {
+	_ = m.revalidators.Each(func(voucherType datatransfer.TypeIdentifier, processor registry.Processor) error {
+		resultVoucherType = voucherType
 		revalidator := processor.(datatransfer.Revalidator)
 		handled, result, err = revalidator.OnPushDataReceived(chid, size)
 		if handled {
@@ -80,7 +82,7 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 		return nil
 	})
 	if err != nil || result != nil {
-		msg, err := m.processRevalidationResult(chid, result, err)
+		msg, err := m.processRevalidationResult(chid, resultVoucherType, result, err)
 		if msg != nil {
 			ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
 			if err := m.dataTransferNetwork.SendMessage(ctx, chid.Initiator, msg); err != nil {
@@ -103,7 +105,7 @@ func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size
 	// machine.
 
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-	ctx, span := otel.Tracer("data-transfer").Start(ctx, "dataQueued", trace.WithAttributes(
+	_, span := otel.Tracer("data-transfer").Start(ctx, "dataQueued", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 		attribute.String("link", link.String()),
 		attribute.Int64("size", int64(size)),
@@ -130,9 +132,11 @@ func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size
 	// a message over the transport.
 	// For example if the data-sender is waiting for the receiver to pay for
 	// data they may pause the data-transfer.
+	var resultVoucherType datatransfer.TypeIdentifier
 	var result datatransfer.VoucherResult
 	var handled bool
-	_ = m.revalidators.Each(func(_ datatransfer.TypeIdentifier, _ encoding.Decoder, processor registry.Processor) error {
+	_ = m.revalidators.Each(func(voucherType datatransfer.TypeIdentifier, processor registry.Processor) error {
+		resultVoucherType = voucherType
 		revalidator := processor.(datatransfer.Revalidator)
 		handled, result, err = revalidator.OnPullDataSent(chid, size)
 		if handled {
@@ -141,7 +145,7 @@ func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size
 		return nil
 	})
 	if err != nil || result != nil {
-		return m.processRevalidationResult(chid, result, err)
+		return m.processRevalidationResult(chid, resultVoucherType, result, err)
 	}
 
 	return nil, nil
@@ -150,7 +154,7 @@ func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size
 func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
 
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-	ctx, span := otel.Tracer("data-transfer").Start(ctx, "dataSent", trace.WithAttributes(
+	_, span := otel.Tracer("data-transfer").Start(ctx, "dataSent", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 		attribute.String("link", link.String()),
 		attribute.Int64("size", int64(size)),
@@ -211,11 +215,12 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 	}
 	if response.IsVoucherResult() {
 		if !response.EmptyVoucherResult() {
-			vresult, err := m.decodeVoucherResult(response)
+			voucherResult, err := response.VoucherResult()
+			// TODO: used to decodeVoucherResult() here and error if we didn't know the type, should we check?
 			if err != nil {
 				return err
 			}
-			err = m.channels.NewVoucherResult(chid, vresult)
+			err = m.channels.NewVoucherResult(chid, response.VoucherResultType(), voucherResult)
 			if err != nil {
 				return err
 			}
@@ -341,7 +346,7 @@ func (m *manager) receiveRestartRequest(chid datatransfer.ChannelID, incoming da
 	log.Infof("channel %s: received restart request", chid)
 
 	result, err := m.restartRequest(chid, incoming)
-	msg, msgErr := m.response(true, false, err, incoming.TransferID(), result)
+	msg, msgErr := m.response(true, false, err, incoming.TransferID(), incoming.VoucherType(), result)
 	if msgErr != nil {
 		return nil, msgErr
 	}
@@ -352,7 +357,7 @@ func (m *manager) receiveNewRequest(chid datatransfer.ChannelID, incoming datatr
 	log.Infof("channel %s: received new channel request from %s", chid, chid.Initiator)
 
 	result, err := m.acceptRequest(chid, incoming)
-	msg, msgErr := m.response(false, true, err, incoming.TransferID(), result)
+	msg, msgErr := m.response(false, true, err, incoming.TransferID(), incoming.VoucherType(), result)
 	if msgErr != nil {
 		return nil, msgErr
 	}
@@ -383,7 +388,7 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 	voucherErr := err
 
 	if result != nil {
-		err := m.channels.NewVoucherResult(chid, result)
+		err := m.channels.NewVoucherResult(chid, incoming.VoucherType(), result)
 		if err != nil {
 			return result, err
 		}
@@ -391,7 +396,7 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 	if err := m.channels.Restart(chid); err != nil {
 		return result, xerrors.Errorf("failed to restart channel %s: %w", chid, err)
 	}
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	processor, has := m.transportConfigurers.Processor(incoming.VoucherType())
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -429,14 +434,14 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 	}
 
 	log.Infow("data-transfer request validated, will create & start tracking channel", "channelID", chid, "payloadCid", incoming.BaseCid())
-	_, err = m.channels.CreateNew(m.peerID, incoming.TransferID(), incoming.BaseCid(), stor, voucher, chid.Initiator, dataSender, dataReceiver)
+	_, err = m.channels.CreateNew(m.peerID, incoming.TransferID(), incoming.BaseCid(), stor, incoming.VoucherType(), voucher, chid.Initiator, dataSender, dataReceiver)
 	if err != nil {
 		log.Errorw("failed to create and start tracking channel", "channelID", chid, "err", err)
 		return result, err
 	}
 	log.Debugw("successfully created and started tracking channel", "channelID", chid)
 	if result != nil {
-		err := m.channels.NewVoucherResult(chid, result)
+		err := m.channels.NewVoucherResult(chid, incoming.VoucherType(), result)
 		if err != nil {
 			return result, err
 		}
@@ -444,7 +449,7 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 	if err := m.channels.Accept(chid); err != nil {
 		return result, err
 	}
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	processor, has := m.transportConfigurers.Processor(incoming.VoucherType())
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -474,12 +479,16 @@ func (m *manager) validateVoucher(
 	baseCid cid.Cid,
 	stor ipld.Node,
 ) (datatransfer.Voucher, datatransfer.VoucherResult, error) {
-	vouch, err := m.decodeVoucher(incoming, m.validatedTypes)
+
+	var validatorFunc func(bool, datatransfer.ChannelID, peer.ID, datatransfer.Voucher, cid.Cid, datamodel.Node) (datatransfer.VoucherResult, error)
+	vouch, err := incoming.Voucher()
 	if err != nil {
 		return nil, nil, err
 	}
-	var validatorFunc func(bool, datatransfer.ChannelID, peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.VoucherResult, error)
-	processor, _ := m.validatedTypes.Processor(vouch.Type())
+	processor, has := m.validatedTypes.Processor(incoming.VoucherType())
+	if !has {
+		return nil, nil, xerrors.Errorf("unknown voucher type: %s", incoming.VoucherType())
+	}
 	validator := processor.(datatransfer.RequestValidator)
 	if isPull {
 		validatorFunc = validator.ValidatePull
@@ -499,11 +508,12 @@ func (m *manager) validateVoucher(
 //   * validation fails
 func (m *manager) revalidateVoucher(chid datatransfer.ChannelID,
 	incoming datatransfer.Request) (datatransfer.Voucher, datatransfer.VoucherResult, error) {
-	vouch, err := m.decodeVoucher(incoming, m.revalidators)
+	vouch, err := incoming.Voucher()
+	// TODO: used to decodeVoucher() here and error if we didn't know the type, should we check?
 	if err != nil {
 		return nil, nil, err
 	}
-	processor, _ := m.revalidators.Processor(vouch.Type())
+	processor, _ := m.revalidators.Processor(incoming.VoucherType())
 	validator := processor.(datatransfer.Revalidator)
 
 	result, err := validator.Revalidate(chid, vouch)
@@ -513,33 +523,33 @@ func (m *manager) revalidateVoucher(chid datatransfer.ChannelID,
 func (m *manager) processUpdateVoucher(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
 	vouch, result, voucherErr := m.revalidateVoucher(chid, request)
 	if vouch != nil {
-		err := m.channels.NewVoucher(chid, vouch)
+		err := m.channels.NewVoucher(chid, request.VoucherType(), vouch)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return m.processRevalidationResult(chid, result, voucherErr)
+	return m.processRevalidationResult(chid, request.VoucherType(), result, voucherErr)
 }
 
-func (m *manager) revalidationResponse(chid datatransfer.ChannelID, result datatransfer.VoucherResult, resultErr error) (datatransfer.Response, error) {
+func (m *manager) revalidationResponse(chid datatransfer.ChannelID, voucherType datatransfer.TypeIdentifier, result datatransfer.VoucherResult, resultErr error) (datatransfer.Response, error) {
 	chst, err := m.channels.GetByID(context.TODO(), chid)
 	if err != nil {
 		return nil, err
 	}
 	if chst.Status() == datatransfer.Finalizing {
-		return m.completeResponse(resultErr, chid.ID, result)
+		return m.completeResponse(resultErr, chid.ID, voucherType, result)
 	}
-	return m.response(false, false, resultErr, chid.ID, result)
+	return m.response(false, false, resultErr, chid.ID, voucherType, result)
 }
 
-func (m *manager) processRevalidationResult(chid datatransfer.ChannelID, result datatransfer.VoucherResult, resultErr error) (datatransfer.Response, error) {
-	vresMessage, err := m.revalidationResponse(chid, result, resultErr)
+func (m *manager) processRevalidationResult(chid datatransfer.ChannelID, voucherType datatransfer.TypeIdentifier, result datatransfer.VoucherResult, resultErr error) (datatransfer.Response, error) {
+	vresMessage, err := m.revalidationResponse(chid, voucherType, result, resultErr)
 
 	if err != nil {
 		return nil, err
 	}
 	if result != nil {
-		err := m.channels.NewVoucherResult(chid, result)
+		err := m.channels.NewVoucherResult(chid, voucherType, result)
 		if err != nil {
 			return nil, err
 		}
@@ -568,10 +578,12 @@ func (m *manager) processRevalidationResult(chid datatransfer.ChannelID, result 
 }
 
 func (m *manager) completeMessage(chid datatransfer.ChannelID) (datatransfer.Response, error) {
+	var resultVoucherType datatransfer.TypeIdentifier
 	var result datatransfer.VoucherResult
 	var resultErr error
 	var handled bool
-	_ = m.revalidators.Each(func(_ datatransfer.TypeIdentifier, _ encoding.Decoder, processor registry.Processor) error {
+	_ = m.revalidators.Each(func(voucherType datatransfer.TypeIdentifier, processor registry.Processor) error {
+		resultVoucherType = voucherType
 		revalidator := processor.(datatransfer.Revalidator)
 		handled, result, resultErr = revalidator.OnComplete(chid)
 		if handled {
@@ -580,11 +592,11 @@ func (m *manager) completeMessage(chid datatransfer.ChannelID) (datatransfer.Res
 		return nil
 	})
 	if result != nil {
-		err := m.channels.NewVoucherResult(chid, result)
+		err := m.channels.NewVoucherResult(chid, resultVoucherType, result)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return m.completeResponse(resultErr, chid.ID, result)
+	return m.completeResponse(resultErr, chid.ID, resultVoucherType, result)
 }

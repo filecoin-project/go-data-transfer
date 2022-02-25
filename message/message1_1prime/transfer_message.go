@@ -8,7 +8,7 @@ import (
 	"github.com/ipld/go-ipld-prime/schema"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/ipldbind"
+	"github.com/filecoin-project/go-data-transfer/ipldutil"
 )
 
 // TransferMessage1_1 is the transfer message for the 1.1 Data Transfer Protocol.
@@ -30,7 +30,7 @@ func (tm *TransferMessage1_1) TransferID() datatransfer.TransferID {
 }
 
 func (tm *TransferMessage1_1) toIPLD() schema.TypedNode {
-	tn, _ := ipldbind.ToNode(&tm) // should never error for this
+	tn, _ := ipldutil.ToNode(&tm) // should never error for this
 	return tn.(schema.TypedNode)
 }
 
@@ -41,5 +41,10 @@ func (tm *TransferMessage1_1) ToIPLD() (datamodel.Node, error) {
 
 // ToNet serializes a transfer message type.
 func (tm *TransferMessage1_1) ToNet(w io.Writer) error {
+	/*
+		fmt.Printf("ToNet TransferMessage1_1:")
+		dagjson.Encode(tm.toIPLD().Representation(), os.Stdout)
+		fmt.Println()
+	*/
 	return dagcbor.Encode(tm.toIPLD().Representation(), w)
 }

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/ipfs/go-datastore"
-	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/delayed"
 	"github.com/ipfs/go-datastore/namespace"
 	ds_sync "github.com/ipfs/go-datastore/sync"
@@ -153,7 +152,7 @@ func NewInstance(ctx context.Context, net tn.Network, tempDir string, diskBasedD
 			return Instance{}, err
 		}
 	} else {
-		dstore = ds_sync.MutexWrap(delayed.New(ds.NewMapDatastore(), bsdelay))
+		dstore = ds_sync.MutexWrap(delayed.New(datastore.NewMapDatastore(), bsdelay))
 	}
 	bstore, err := blockstore.CachedBlockstore(ctx,
 		blockstore.NewBlockstore(namespace.Wrap(dstore, datastore.NewKey("blockstore"))),
@@ -188,8 +187,8 @@ func NewInstance(ctx context.Context, net tn.Network, tempDir string, diskBasedD
 	sv := testutil.NewStubbedValidator()
 	sv.StubSuccessPull()
 	sv.StubSuccessPush()
-	dt.RegisterVoucherType(testutil.NewFakeDTType(), sv)
-	dt.RegisterVoucherResultType(testutil.NewFakeDTType())
+	dt.RegisterVoucherType(testutil.FakeDTVoucherType, sv)
+	dt.RegisterVoucherResultType(testutil.FakeDTVoucherType)
 	return Instance{
 		Adapter:         dtNet,
 		Peer:            p,

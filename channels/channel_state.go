@@ -5,13 +5,12 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels/internal"
+	"github.com/filecoin-project/go-data-transfer/ipldutil"
 )
 
 // channelState is immutable channel data plus mutable state
@@ -54,9 +53,7 @@ type channelState struct {
 	// additional vouchers
 	vouchers []internal.EncodedVoucher
 	// additional voucherResults
-	voucherResults       []internal.EncodedVoucherResult
-	voucherResultDecoder DecoderByTypeFunc
-	voucherDecoder       DecoderByTypeFunc
+	voucherResults []internal.EncodedVoucherResult
 
 	// stages tracks the timeline of events related to a data transfer, for
 	// traceability purposes.
@@ -87,13 +84,11 @@ func (c channelState) BaseCID() cid.Cid { return c.baseCid }
 // Selector returns the IPLD selector for this data transfer (represented as
 // an IPLD node)
 func (c channelState) Selector() ipld.Node {
-	builder := basicnode.Prototype.Any.NewBuilder()
-	reader := bytes.NewReader(c.selector.Raw)
-	err := dagcbor.Decode(builder, reader)
+	node, err := ipldutil.FromDagCbor(bytes.NewReader(c.selector.Raw))
 	if err != nil {
 		log.Error(err)
 	}
-	return builder.Build()
+	return node
 }
 
 // Voucher returns the voucher for this data transfer
@@ -101,9 +96,16 @@ func (c channelState) Voucher() datatransfer.Voucher {
 	if len(c.vouchers) == 0 {
 		return nil
 	}
-	decoder, _ := c.voucherDecoder(c.vouchers[0].Type)
-	encodable, _ := decoder.DecodeFromCbor(c.vouchers[0].Voucher.Raw)
-	return encodable.(datatransfer.Voucher)
+	voucher, _ := ipldutil.FromDagCbor(bytes.NewReader(c.vouchers[0].Voucher.Raw))
+	return voucher
+}
+
+// Voucher returns the voucher for this data transfer
+func (c channelState) VoucherType() datatransfer.TypeIdentifier {
+	if len(c.vouchers) == 0 {
+		return ""
+	}
+	return c.vouchers[0].Type
 }
 
 // ReceivedCidsTotal returns the number of (non-unique) cids received so far
@@ -152,31 +154,27 @@ func (c channelState) Message() string {
 func (c channelState) Vouchers() []datatransfer.Voucher {
 	vouchers := make([]datatransfer.Voucher, 0, len(c.vouchers))
 	for _, encoded := range c.vouchers {
-		decoder, _ := c.voucherDecoder(encoded.Type)
-		encodable, _ := decoder.DecodeFromCbor(encoded.Voucher.Raw)
-		vouchers = append(vouchers, encodable.(datatransfer.Voucher))
+		voucher, _ := ipldutil.FromDagCbor(bytes.NewReader(encoded.Voucher.Raw))
+		vouchers = append(vouchers, voucher)
 	}
 	return vouchers
 }
 
 func (c channelState) LastVoucher() datatransfer.Voucher {
-	decoder, _ := c.voucherDecoder(c.vouchers[len(c.vouchers)-1].Type)
-	encodable, _ := decoder.DecodeFromCbor(c.vouchers[len(c.vouchers)-1].Voucher.Raw)
-	return encodable.(datatransfer.Voucher)
+	voucher, _ := ipldutil.FromDagCbor(bytes.NewReader(c.vouchers[len(c.vouchers)-1].Voucher.Raw))
+	return voucher
 }
 
 func (c channelState) LastVoucherResult() datatransfer.VoucherResult {
-	decoder, _ := c.voucherResultDecoder(c.voucherResults[len(c.voucherResults)-1].Type)
-	encodable, _ := decoder.DecodeFromCbor(c.voucherResults[len(c.voucherResults)-1].VoucherResult.Raw)
-	return encodable.(datatransfer.VoucherResult)
+	voucher, _ := ipldutil.FromDagCbor(bytes.NewReader(c.voucherResults[len(c.voucherResults)-1].VoucherResult.Raw))
+	return voucher
 }
 
 func (c channelState) VoucherResults() []datatransfer.VoucherResult {
 	voucherResults := make([]datatransfer.VoucherResult, 0, len(c.voucherResults))
 	for _, encoded := range c.voucherResults {
-		decoder, _ := c.voucherResultDecoder(encoded.Type)
-		encodable, _ := decoder.DecodeFromCbor(encoded.VoucherResult.Raw)
-		voucherResults = append(voucherResults, encodable.(datatransfer.VoucherResult))
+		voucherResult, _ := ipldutil.FromDagCbor(bytes.NewReader(encoded.VoucherResult.Raw))
+		voucherResults = append(voucherResults, voucherResult)
 	}
 	return voucherResults
 }
@@ -207,29 +205,27 @@ func (c channelState) Stages() *datatransfer.ChannelStages {
 	return c.stages
 }
 
-func fromInternalChannelState(c internal.ChannelState, voucherDecoder DecoderByTypeFunc, voucherResultDecoder DecoderByTypeFunc) datatransfer.ChannelState {
+func fromInternalChannelState(c internal.ChannelState) datatransfer.ChannelState {
 	return channelState{
-		selfPeer:             c.SelfPeer,
-		isPull:               c.Initiator == c.Recipient,
-		transferID:           c.TransferID,
-		baseCid:              c.BaseCid,
-		selector:             c.Selector,
-		sender:               c.Sender,
-		recipient:            c.Recipient,
-		totalSize:            c.TotalSize,
-		status:               c.Status,
-		queued:               c.Queued,
-		sent:                 c.Sent,
-		received:             c.Received,
-		receivedBlocksTotal:  c.ReceivedBlocksTotal,
-		queuedBlocksTotal:    c.QueuedBlocksTotal,
-		sentBlocksTotal:      c.SentBlocksTotal,
-		message:              c.Message,
-		vouchers:             c.Vouchers,
-		voucherResults:       c.VoucherResults,
-		voucherResultDecoder: voucherResultDecoder,
-		voucherDecoder:       voucherDecoder,
-		stages:               c.Stages,
+		selfPeer:            c.SelfPeer,
+		isPull:              c.Initiator == c.Recipient,
+		transferID:          c.TransferID,
+		baseCid:             c.BaseCid,
+		selector:            c.Selector,
+		sender:              c.Sender,
+		recipient:           c.Recipient,
+		totalSize:           c.TotalSize,
+		status:              c.Status,
+		queued:              c.Queued,
+		sent:                c.Sent,
+		received:            c.Received,
+		receivedBlocksTotal: c.ReceivedBlocksTotal,
+		queuedBlocksTotal:   c.QueuedBlocksTotal,
+		sentBlocksTotal:     c.SentBlocksTotal,
+		message:             c.Message,
+		vouchers:            c.Vouchers,
+		voucherResults:      c.VoucherResults,
+		stages:              c.Stages,
 	}
 }
 

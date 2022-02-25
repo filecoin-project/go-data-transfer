@@ -8,7 +8,9 @@ import (
 
 	"github.com/ipfs/go-datastore"
 	dss "github.com/ipfs/go-datastore/sync"
+	"github.com/ipld/go-ipld-prime"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
+	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
@@ -16,7 +18,6 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channels"
-	"github.com/filecoin-project/go-data-transfer/encoding"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
 
@@ -32,31 +33,31 @@ func TestChannels(t *testing.T) {
 
 	tid1 := datatransfer.TransferID(0)
 	tid2 := datatransfer.TransferID(1)
-	fv1 := &testutil.FakeDTType{}
-	fv2 := &testutil.FakeDTType{}
+	fv1 := testutil.NewFakeDTTypeNodeWithData("")
+	fv2 := testutil.NewFakeDTTypeNodeWithData("")
 	cids := testutil.GenerateCids(2)
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	peers := testutil.GeneratePeers(4)
 
-	channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+	channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
 	require.NoError(t, err)
 
 	err = channelList.Start(ctx)
 	require.NoError(t, err)
 	t.Run("adding channels", func(t *testing.T) {
-		chid, err := channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
+		chid, err := channelList.CreateNew(peers[0], tid1, cids[0], selector, testutil.FakeDTVoucherType, fv1, peers[0], peers[0], peers[1])
 		require.NoError(t, err)
 		require.Equal(t, peers[0], chid.Initiator)
 		require.Equal(t, tid1, chid.ID)
 
 		// cannot add twice for same channel id
-		_, err = channelList.CreateNew(peers[0], tid1, cids[1], selector, fv2, peers[0], peers[1], peers[0])
+		_, err = channelList.CreateNew(peers[0], tid1, cids[1], selector, testutil.FakeDTVoucherType, fv2, peers[0], peers[1], peers[0])
 		require.Error(t, err)
 		state := checkEvent(ctx, t, received, datatransfer.Open)
 		require.Equal(t, datatransfer.Requested, state.Status())
 
 		// can add for different id
-		chid, err = channelList.CreateNew(peers[2], tid2, cids[1], selector, fv2, peers[3], peers[2], peers[3])
+		chid, err = channelList.CreateNew(peers[2], tid2, cids[1], selector, testutil.FakeDTVoucherType, fv2, peers[3], peers[2], peers[3])
 		require.NoError(t, err)
 		require.Equal(t, peers[3], chid.Initiator)
 		require.Equal(t, tid2, chid.ID)
@@ -80,7 +81,7 @@ func TestChannels(t *testing.T) {
 		require.NotEqual(t, channels.EmptyChannelState, state)
 		require.Equal(t, cids[0], state.BaseCID())
 		require.Equal(t, selector, state.Selector())
-		require.Equal(t, fv1, state.Voucher())
+		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.Voucher()))
 		require.Equal(t, peers[0], state.Sender())
 		require.Equal(t, peers[1], state.Recipient())
 
@@ -124,12 +125,12 @@ func TestChannels(t *testing.T) {
 	t.Run("datasent/queued when transfer is already finished", func(t *testing.T) {
 		ds := dss.MutexWrap(datastore.NewMapDatastore())
 
-		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+		channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
 		require.NoError(t, err)
 		err = channelList.Start(ctx)
 		require.NoError(t, err)
 
-		chid, err := channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
+		chid, err := channelList.CreateNew(peers[0], tid1, cids[0], selector, testutil.FakeDTVoucherType, fv1, peers[0], peers[0], peers[1])
 		require.NoError(t, err)
 		checkEvent(ctx, t, received, datatransfer.Open)
 		require.NoError(t, channelList.Accept(chid))
@@ -156,12 +157,12 @@ func TestChannels(t *testing.T) {
 	t.Run("updating send/receive values", func(t *testing.T) {
 		ds := dss.MutexWrap(datastore.NewMapDatastore())
 
-		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+		channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
 		require.NoError(t, err)
 		err = channelList.Start(ctx)
 		require.NoError(t, err)
 
-		_, err = channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
+		_, err = channelList.CreateNew(peers[0], tid1, cids[0], selector, testutil.FakeDTVoucherType, fv1, peers[0], peers[0], peers[1])
 		require.NoError(t, err)
 		state := checkEvent(ctx, t, received, datatransfer.Open)
 		require.Equal(t, datatransfer.Requested, state.Status())
@@ -250,31 +251,35 @@ func TestChannels(t *testing.T) {
 	})
 
 	t.Run("new vouchers & voucherResults", func(t *testing.T) {
-		fv3 := testutil.NewFakeDTType()
-		fvr1 := testutil.NewFakeDTType()
+		fv3 := testutil.NewFakeDTTypeNode()
+		fvr1 := testutil.NewFakeDTTypeNode()
 
 		state, err := channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
-		require.Equal(t, []datatransfer.Voucher{fv1}, state.Vouchers())
-		require.Equal(t, fv1, state.Voucher())
-		require.Equal(t, fv1, state.LastVoucher())
+		require.Len(t, state.Vouchers(), 1)
+		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.Vouchers()[0]))
+		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.Voucher()))
+		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.LastVoucher()))
 
-		err = channelList.NewVoucher(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, fv3)
+		err = channelList.NewVoucher(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, testutil.FakeDTVoucherType, fv3)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.NewVoucher)
-		require.Equal(t, []datatransfer.Voucher{fv1, fv3}, state.Vouchers())
-		require.Equal(t, fv1, state.Voucher())
-		require.Equal(t, fv3, state.LastVoucher())
+		require.Len(t, state.Vouchers(), 2)
+		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.Vouchers()[0]))
+		require.True(t, ipld.DeepEqual(fv3.(schema.TypedNode).Representation(), state.Vouchers()[1]))
+		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.Voucher()))
+		require.True(t, ipld.DeepEqual(fv3.(schema.TypedNode).Representation(), state.LastVoucher()))
 
 		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
 		require.Equal(t, []datatransfer.VoucherResult{}, state.VoucherResults())
 
-		err = channelList.NewVoucherResult(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, fvr1)
+		err = channelList.NewVoucherResult(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, testutil.FakeDTVoucherType, fvr1)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.NewVoucherResult)
-		require.Equal(t, []datatransfer.VoucherResult{fvr1}, state.VoucherResults())
-		require.Equal(t, fvr1, state.LastVoucherResult())
+		require.Len(t, state.VoucherResults(), 1)
+		require.True(t, ipld.DeepEqual(fvr1.(schema.TypedNode).Representation(), state.VoucherResults()[0]))
+		require.True(t, ipld.DeepEqual(fvr1.(schema.TypedNode).Representation(), state.LastVoucherResult()))
 	})
 
 	t.Run("test finality", func(t *testing.T) {
@@ -301,7 +306,7 @@ func TestChannels(t *testing.T) {
 		state = checkEvent(ctx, t, received, datatransfer.CleanupComplete)
 		require.Equal(t, datatransfer.Failed, state.Status())
 
-		chid, err := channelList.CreateNew(peers[0], tid2, cids[1], selector, fv2, peers[2], peers[1], peers[2])
+		chid, err := channelList.CreateNew(peers[0], tid2, cids[1], selector, testutil.FakeDTVoucherType, fv2, peers[2], peers[1], peers[2])
 		require.NoError(t, err)
 		require.Equal(t, peers[2], chid.Initiator)
 		require.Equal(t, tid2, chid.ID)
@@ -318,7 +323,7 @@ func TestChannels(t *testing.T) {
 
 	t.Run("test self peer and other peer", func(t *testing.T) {
 		// sender is self peer
-		chid, err := channelList.CreateNew(peers[1], tid1, cids[0], selector, fv1, peers[1], peers[1], peers[2])
+		chid, err := channelList.CreateNew(peers[1], tid1, cids[0], selector, testutil.FakeDTVoucherType, fv1, peers[1], peers[1], peers[2])
 		require.NoError(t, err)
 		ch, err := channelList.GetByID(context.Background(), chid)
 		require.NoError(t, err)
@@ -326,7 +331,7 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, peers[2], ch.OtherPeer())
 
 		// recipient is self peer
-		chid, err = channelList.CreateNew(peers[2], datatransfer.TransferID(1001), cids[0], selector, fv1, peers[1], peers[2], peers[1])
+		chid, err = channelList.CreateNew(peers[2], datatransfer.TransferID(1001), cids[0], selector, testutil.FakeDTVoucherType, fv1, peers[1], peers[2], peers[1])
 		require.NoError(t, err)
 		ch, err = channelList.GetByID(context.Background(), chid)
 		require.NoError(t, err)
@@ -340,12 +345,12 @@ func TestChannels(t *testing.T) {
 		notifier := func(evt datatransfer.Event, chst datatransfer.ChannelState) {
 			received <- event{evt, chst}
 		}
-		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+		channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
 		require.NoError(t, err)
 		err = channelList.Start(ctx)
 		require.NoError(t, err)
 
-		chid, err := channelList.CreateNew(peers[3], tid1, cids[0], selector, fv1, peers[3], peers[0], peers[3])
+		chid, err := channelList.CreateNew(peers[3], tid1, cids[0], selector, testutil.FakeDTVoucherType, fv1, peers[3], peers[0], peers[3])
 		require.NoError(t, err)
 		state := checkEvent(ctx, t, received, datatransfer.Open)
 		require.Equal(t, datatransfer.Requested, state.Status())
@@ -360,7 +365,7 @@ func TestChannels(t *testing.T) {
 	t.Run("test self peer and other peer", func(t *testing.T) {
 		peers := testutil.GeneratePeers(3)
 		// sender is self peer
-		chid, err := channelList.CreateNew(peers[1], tid1, cids[0], selector, fv1, peers[1], peers[1], peers[2])
+		chid, err := channelList.CreateNew(peers[1], tid1, cids[0], selector, testutil.FakeDTVoucherType, fv1, peers[1], peers[1], peers[2])
 		require.NoError(t, err)
 		ch, err := channelList.GetByID(context.Background(), chid)
 		require.NoError(t, err)
@@ -368,7 +373,7 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, peers[2], ch.OtherPeer())
 
 		// recipient is self peer
-		chid, err = channelList.CreateNew(peers[2], datatransfer.TransferID(1001), cids[0], selector, fv1, peers[1], peers[2], peers[1])
+		chid, err = channelList.CreateNew(peers[2], datatransfer.TransferID(1001), cids[0], selector, testutil.FakeDTVoucherType, fv1, peers[1], peers[2], peers[1])
 		require.NoError(t, err)
 		ch, err = channelList.GetByID(context.Background(), chid)
 		require.NoError(t, err)
@@ -421,15 +426,4 @@ func (fe *fakeEnv) ID() peer.ID {
 }
 
 func (fe *fakeEnv) CleanupChannel(chid datatransfer.ChannelID) {
-}
-
-func decoderByType(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool) {
-	if identifier == testutil.NewFakeDTType().Type() {
-		decoder, err := encoding.NewDecoder(testutil.NewFakeDTType())
-		if err != nil {
-			return nil, false
-		}
-		return decoder, true
-	}
-	return nil, false
 }

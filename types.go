@@ -7,10 +7,9 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
-
-	"github.com/filecoin-project/go-data-transfer/encoding"
 )
 
 //go:generate cbor-gen-for ChannelID ChannelStages ChannelStage Log
@@ -25,23 +24,15 @@ type TypeIdentifier string
 // EmptyTypeIdentifier means there is no voucher present
 const EmptyTypeIdentifier = TypeIdentifier("")
 
-// Registerable is a type of object in a registry. It must be encodable and must
-// have a single method that uniquely identifies its type
-type Registerable interface {
-	encoding.Encodable
-	// Type is a unique string identifier for this voucher type
-	Type() TypeIdentifier
-}
-
 // Voucher is used to validate
 // a data transfer request against the underlying storage or retrieval deal
 // that precipitated it. The only requirement is a voucher can read and write
 // from bytes, and has a string identifier type
-type Voucher Registerable
+type Voucher datamodel.Node
 
 // VoucherResult is used to provide option additional information about a
 // voucher being rejected or accepted
-type VoucherResult Registerable
+type VoucherResult datamodel.Node
 
 // TransferID is an identifier for a data transfer, shared between
 // request/responder and unique to the requester
@@ -79,6 +70,9 @@ type Channel interface {
 	// Selector returns the IPLD selector for this data transfer (represented as
 	// an IPLD node)
 	Selector() ipld.Node
+
+	// VoucherType returns the type of voucher for this data transfer
+	VoucherType() TypeIdentifier
 
 	// Voucher returns the voucher for this data transfer
 	Voucher() Voucher

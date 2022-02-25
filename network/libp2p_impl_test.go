@@ -19,6 +19,7 @@ import (
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-data-transfer/ipldutil"
 	"github.com/filecoin-project/go-data-transfer/message"
 	"github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-data-transfer/testutil"
@@ -101,8 +102,10 @@ func TestMessageSendAndReceive(t *testing.T) {
 		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
-		voucher := testutil.NewFakeDTType()
-		request, err := message.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+		node, err := ipldutil.ToNode(testutil.NewFakeDTType())
+		require.NoError(t, err)
+		voucher := datatransfer.Voucher(node)
+		request, err := message.NewRequest(id, false, isPull, testutil.FakeDTVoucherType, voucher, baseCid, selector)
 		require.NoError(t, err)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 
@@ -130,8 +133,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 	t.Run("Send Response", func(t *testing.T) {
 		accepted := false
 		id := datatransfer.TransferID(rand.Int31())
-		voucherResult := testutil.NewFakeDTType()
-		response, err := message.NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
+		voucherResult := testutil.NewFakeDTTypeNode()
+		response, err := message.NewResponse(id, accepted, false, testutil.FakeDTVoucherType, voucherResult)
 		require.NoError(t, err)
 		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), response))
 
@@ -272,8 +275,10 @@ func TestSendMessageRetry(t *testing.T) {
 			selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 			isPull := false
 			id := datatransfer.TransferID(rand.Int31())
-			voucher := testutil.NewFakeDTType()
-			request, err := message.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+			node, err := ipldutil.ToNode(testutil.NewFakeDTType())
+			require.NoError(t, err)
+			voucher := datatransfer.Voucher(node)
+			request, err := message.NewRequest(id, false, isPull, testutil.FakeDTVoucherType, voucher, baseCid, selector)
 			require.NoError(t, err)
 
 			err = dtnet1.SendMessage(ctx, host2.ID(), request)

@@ -37,7 +37,7 @@ func TestDataTransferResponding(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -70,7 +70,7 @@ func TestDataTransferResponding(t *testing.T) {
 		"new push request errors": {
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectErrorPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -91,7 +91,7 @@ func TestDataTransferResponding(t *testing.T) {
 		"new push request pauses": {
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectPausePush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -177,16 +177,16 @@ func TestDataTransferResponding(t *testing.T) {
 		"send vouchers from responder fails, push request": {
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
-				newVoucher := testutil.NewFakeDTType()
-				err := h.dt.SendVoucher(h.ctx, channelID(h.id, h.peers), newVoucher)
+				newVoucher := testutil.NewFakeDTTypeNode()
+				err := h.dt.SendVoucher(h.ctx, channelID(h.id, h.peers), h.voucherType, newVoucher)
 				require.EqualError(t, err, "cannot send voucher for request we did not initiate")
 			},
 		},
 		"send vouchers from responder fails, pull request": {
 			verify: func(t *testing.T, h *receiverHarness) {
 				_, _ = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
-				newVoucher := testutil.NewFakeDTType()
-				err := h.dt.SendVoucher(h.ctx, channelID(h.id, h.peers), newVoucher)
+				newVoucher := testutil.NewFakeDTTypeNode()
+				err := h.dt.SendVoucher(h.ctx, channelID(h.id, h.peers), h.voucherType, newVoucher)
 				require.EqualError(t, err, "cannot send voucher for request we did not initiate")
 			},
 		},
@@ -194,7 +194,7 @@ func TestDataTransferResponding(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept, datatransfer.NewVoucher, datatransfer.ResumeResponder},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			configureRevalidator: func(sv *testutil.StubbedRevalidator) {
 				sv.ExpectSuccessErrResume()
@@ -215,7 +215,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.ResumeInitiator},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -235,7 +235,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.ResumeInitiator},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -251,7 +251,7 @@ func TestDataTransferResponding(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept, datatransfer.Cancel, datatransfer.CleanupComplete},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -276,13 +276,13 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
 				srv.ExpectPausePushCheck()
-				srv.StubRevalidationResult(testutil.NewFakeDTType())
+				srv.StubRevalidationResult(testutil.NewFakeDTTypeNode())
 				srv.ExpectSuccessErrResume()
-				srv.StubCheckResult(testutil.NewFakeDTType())
+				srv.StubCheckResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -320,11 +320,11 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
 				srv.ExpectErrorPushCheck()
-				srv.StubRevalidationResult(testutil.NewFakeDTType())
+				srv.StubRevalidationResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -356,13 +356,13 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
 				srv.ExpectPausePushCheck()
-				srv.StubRevalidationResult(testutil.NewFakeDTType())
+				srv.StubRevalidationResult(testutil.NewFakeDTTypeNode())
 				srv.ExpectErrorRevalidation()
-				srv.StubCheckResult(testutil.NewFakeDTType())
+				srv.StubCheckResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -404,13 +404,13 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
 				srv.ExpectPausePullCheck()
-				srv.StubRevalidationResult(testutil.NewFakeDTType())
+				srv.StubRevalidationResult(testutil.NewFakeDTTypeNode())
 				srv.ExpectSuccessErrResume()
-				srv.StubCheckResult(testutil.NewFakeDTType())
+				srv.StubCheckResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
@@ -453,11 +453,11 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
 				srv.ExpectPauseComplete()
-				srv.StubRevalidationResult(testutil.NewFakeDTType())
+				srv.StubRevalidationResult(testutil.NewFakeDTTypeNode())
 				srv.ExpectSuccessErrResume()
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
@@ -492,7 +492,7 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			configureRevalidator: func(srv *testutil.StubbedRevalidator) {
 			},
@@ -507,10 +507,10 @@ func TestDataTransferResponding(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
-				err := h.dt.RegisterTransportConfigurer(h.voucher, func(channelID datatransfer.ChannelID, voucher datatransfer.Voucher, transport datatransfer.Transport) {
+				err := h.dt.RegisterTransportConfigurer(h.voucherType, func(channelID datatransfer.ChannelID, voucher datatransfer.Voucher, transport datatransfer.Transport) {
 					ft, ok := transport.(*testutil.FakeTransport)
 					if !ok {
 						return
@@ -531,7 +531,7 @@ func TestDataTransferResponding(t *testing.T) {
 				sv.ExpectSuccessPull()
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
-				err := h.dt.RegisterTransportConfigurer(h.voucher, func(channelID datatransfer.ChannelID, voucher datatransfer.Voucher, transport datatransfer.Transport) {
+				err := h.dt.RegisterTransportConfigurer(h.voucherType, func(channelID datatransfer.ChannelID, voucher datatransfer.Voucher, transport datatransfer.Transport) {
 					ft, ok := transport.(*testutil.FakeTransport)
 					if !ok {
 						return
@@ -568,31 +568,32 @@ func TestDataTransferResponding(t *testing.T) {
 			}
 			ev.setup(t, dt)
 			h.stor = testutil.AllSelector()
-			h.voucher = testutil.NewFakeDTType()
+			h.voucher = testutil.NewFakeDTTypeNode()
+			h.voucherType = testutil.FakeDTVoucherType
 			h.baseCid = testutil.GenerateCids(1)[0]
 			h.id = datatransfer.TransferID(rand.Int31())
-			h.pullRequest, err = message.NewRequest(h.id, false, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pullRequest, err = message.NewRequest(h.id, false, true, h.voucherType, h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
-			h.pushRequest, err = message.NewRequest(h.id, false, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pushRequest, err = message.NewRequest(h.id, false, false, h.voucherType, h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
 			h.pauseUpdate = message.UpdateRequest(h.id, true)
 			require.NoError(t, err)
 			h.resumeUpdate = message.UpdateRequest(h.id, false)
 			require.NoError(t, err)
-			updateVoucher := testutil.NewFakeDTType()
-			h.voucherUpdate, err = message.VoucherRequest(h.id, updateVoucher.Type(), updateVoucher)
+			updateVoucher := testutil.NewFakeDTTypeNode()
+			h.voucherUpdate, err = message.VoucherRequest(h.id, h.voucherType, updateVoucher)
 			h.cancelUpdate = message.CancelRequest(h.id)
 			require.NoError(t, err)
 			h.sv = testutil.NewStubbedValidator()
 			if verify.configureValidator != nil {
 				verify.configureValidator(h.sv)
 			}
-			require.NoError(t, h.dt.RegisterVoucherType(h.voucher, h.sv))
+			require.NoError(t, h.dt.RegisterVoucherType(h.voucherType, h.sv))
 			h.srv = testutil.NewStubbedRevalidator()
 			if verify.configureRevalidator != nil {
 				verify.configureRevalidator(h.srv)
 			}
-			err = h.dt.RegisterRevalidator(updateVoucher, h.srv)
+			err = h.dt.RegisterRevalidator(h.voucherType, h.srv)
 			require.NoError(t, err)
 			verify.verify(t, h)
 			h.sv.VerifyExpectations(t)
@@ -614,7 +615,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 		"receiving a pull restart response": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Restart, datatransfer.ResumeResponder},
 			verify: func(t *testing.T, h *receiverHarness) {
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucherType, h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 
@@ -630,7 +631,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.NewVoucherResult, datatransfer.Restart},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming push
@@ -648,7 +649,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NoError(t, ev.OnDataReceived(chid, cidlink.Link{Cid: testCids[1]}, 12345, 2, true))
 
 				// receive restart push request
-				req, err := message.NewRequest(h.pushRequest.TransferID(), true, false, h.voucher.Type(), h.voucher,
+				req, err := message.NewRequest(h.pushRequest.TransferID(), true, false, h.voucherType, h.voucher,
 					h.baseCid, h.stor)
 				require.NoError(t, err)
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], req)
@@ -689,7 +690,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.NewVoucherResult, datatransfer.Restart},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
@@ -700,7 +701,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 0)
 
 				// receive restart pull request
-				restartReq, err := message.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+				restartReq, err := message.NewRequest(h.id, true, true, h.voucherType, h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				response, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), restartReq)
 				require.NoError(t, err)
@@ -731,7 +732,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
@@ -742,7 +743,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 0)
 
 				// receive restart pull request
-				restartReq, err := message.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+				restartReq, err := message.NewRequest(h.id, true, true, h.voucherType, h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				p := testutil.GeneratePeers(1)[0]
 				chid := datatransfer.ChannelID{ID: h.pullRequest.TransferID(), Initiator: p, Responder: h.peers[0]}
@@ -755,7 +756,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
 				h.sv.ExpectSuccessPull()
-				h.sv.StubResult(testutil.NewFakeDTType())
+				h.sv.StubResult(testutil.NewFakeDTTypeNode())
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
 				require.NoError(t, err)
 				require.Len(t, h.sv.ValidationsReceived, 1)
@@ -764,7 +765,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 
 				// receive restart pull request
 				h.sv.ExpectErrorPull()
-				restartReq, err := message.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+				restartReq, err := message.NewRequest(h.id, true, true, h.voucherType, h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), restartReq)
 				require.EqualError(t, err, "failed to validate voucher: something went wrong")
@@ -774,7 +775,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
@@ -787,7 +788,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 
 				// receive restart pull request
 				randCid := testutil.GenerateCids(1)[0]
-				restartReq, err := message.NewRequest(h.id, true, true, h.voucher.Type(), h.voucher, randCid, h.stor)
+				restartReq, err := message.NewRequest(h.id, true, true, h.voucherType, h.voucher, randCid, h.stor)
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(chid, restartReq)
 				require.EqualError(t, err, fmt.Sprintf("restart request for channel %s failed validation: base cid does not match", chid))
@@ -797,7 +798,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
@@ -813,14 +814,16 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				restartReq, err := message.NewRequest(h.id, true, true, "rand", h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(chid, restartReq)
-				require.EqualError(t, err, fmt.Sprintf("restart request for channel %s failed validation: failed to decode request voucher: unknown voucher type: rand", chid))
+				// TODO: change this back when we have the right type?
+				// require.EqualError(t, err, fmt.Sprintf("restart request for channel %s failed validation: failed to decode request voucher: unknown voucher type: rand", chid))
+				require.EqualError(t, err, fmt.Sprintf("restart request for channel %s failed validation: channel and request voucher types do not match", chid))
 			},
 		},
 		"restart request fails if voucher does not match": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
-				sv.StubResult(testutil.NewFakeDTType())
+				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// receive an incoming pull
@@ -832,9 +835,8 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 0)
 
 				// receive restart pull request
-				v := testutil.NewFakeDTType()
-				v.Data = "rand"
-				restartReq, err := message.NewRequest(h.id, true, true, h.voucher.Type(), v, h.baseCid, h.stor)
+				v := testutil.NewFakeDTTypeNodeWithData("rand")
+				restartReq, err := message.NewRequest(h.id, true, true, h.voucherType, v, h.baseCid, h.stor)
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(chid, restartReq)
 				require.EqualError(t, err, fmt.Sprintf("restart request for channel %s failed validation: channel and request vouchers do not match", chid))
@@ -846,7 +848,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// create an outgoing pull channel first
-				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucherType, h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 
@@ -897,7 +899,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// create an outgoing push request first
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucherType, h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 
@@ -955,7 +957,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			verify: func(t *testing.T, h *receiverHarness) {
 				// create an outgoing push request first
 				p := testutil.GeneratePeers(1)[0]
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, p, h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, p, h.voucherType, h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 
@@ -988,19 +990,20 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			}
 			ev.setup(t, dt)
 			h.stor = testutil.AllSelector()
-			h.voucher = testutil.NewFakeDTType()
+			h.voucher = testutil.NewFakeDTTypeNode()
+			h.voucherType = testutil.FakeDTVoucherType
 			h.baseCid = testutil.GenerateCids(1)[0]
 			h.id = datatransfer.TransferID(rand.Int31())
-			h.pullRequest, err = message.NewRequest(h.id, false, true, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pullRequest, err = message.NewRequest(h.id, false, true, h.voucherType, h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
-			h.pushRequest, err = message.NewRequest(h.id, false, false, h.voucher.Type(), h.voucher, h.baseCid, h.stor)
+			h.pushRequest, err = message.NewRequest(h.id, false, false, h.voucherType, h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
 
 			h.sv = testutil.NewStubbedValidator()
 			if verify.configureValidator != nil {
 				verify.configureValidator(h.sv)
 			}
-			require.NoError(t, h.dt.RegisterVoucherType(h.voucher, h.sv))
+			require.NoError(t, h.dt.RegisterVoucherType(h.voucherType, h.sv))
 
 			verify.verify(t, h)
 			h.sv.VerifyExpectations(t)
@@ -1026,7 +1029,8 @@ type receiverHarness struct {
 	ds            datastore.Batching
 	dt            datatransfer.Manager
 	stor          ipld.Node
-	voucher       *testutil.FakeDTType
+	voucher       datatransfer.Voucher
+	voucherType   datatransfer.TypeIdentifier
 	baseCid       cid.Cid
 }
 

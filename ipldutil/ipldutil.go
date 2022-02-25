@@ -1,17 +1,16 @@
-package ipldbind
+package ipldutil
 
 import (
 	"bytes"
 	_ "embed"
 	"fmt"
 	"io"
-	"os"
 	"reflect"
 
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/datamodel"
+	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
 )
@@ -43,8 +42,8 @@ func ToNode(ptrValue interface{}) (datamodel.Node, error) {
 	if ptrValue == nil {
 		return datamodel.Null, nil
 	}
-	val := reflect.ValueOf(ptrValue).Type()
-	fmt.Printf("EncodeToNode %T: [%v]\n", ptrValue, val.Name())
+	// val := reflect.ValueOf(ptrValue).Type()
+	// fmt.Printf("EncodeToNode %T: [%v]\n", ptrValue, val.Name())
 	node, ok := ptrValue.(datamodel.Node)
 	if ok {
 		return node, nil
@@ -55,15 +54,25 @@ func ToNode(ptrValue interface{}) (datamodel.Node, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid TypedPrototype: %v", name)
 	}
+	// fmt.Printf("Wrapping %v\n", name)
 	return bindnode.Wrap(ptrValue, proto.Type()), nil
 }
 
-func ToEncoded(ptrValue interface{}) ([]byte, error) {
-	node, _ := ToNode(ptrValue)
-	buf := &bytes.Buffer{}
+func ToDagCbor(ptrValue interface{}) ([]byte, error) {
+	node, ok := ptrValue.(datamodel.Node)
+	if !ok {
+		// not a Node, something else we know perhaps?
+		var err error
+		node, err = ToNode(ptrValue)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if tn, ok := node.(schema.TypedNode); ok {
 		node = tn.Representation()
 	}
+
+	buf := &bytes.Buffer{}
 	err := dagcbor.Encode(node, buf)
 	if err != nil {
 		return nil, err
@@ -80,9 +89,15 @@ func FromNode(node datamodel.Node, ptrValue interface{}) (interface{}, error) {
 	if tn, ok := node.(schema.TypedNode); ok {
 		node = tn.Representation()
 	}
-	fmt.Printf("Unwrapping %v\n", name)
-	dagjson.Encode(node, os.Stdout)
-	fmt.Println()
+	/*
+		if node != nil {
+			fmt.Printf("Unwrapping %v [%v]\n", name, node)
+			dagjson.Encode(node, os.Stdout)
+			fmt.Println()
+		} else {
+			fmt.Println("nil")
+		}
+	*/
 	builder := proto.Representation().NewBuilder()
 	err := builder.AssignNode(node)
 	if err != nil {
@@ -97,6 +112,16 @@ func FromEncoded(r io.Reader, ptrValue interface{}) (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid TypedPrototype: %v", name)
 	}
+	/*
+		byt, err := io.ReadAll(r)
+		if err != nil {
+			fmt.Printf("Read error %v\n", err)
+			return nil, err
+		}
+		fmt.Printf("Msg: %v\n", hex.EncodeToString(byt))
+		builder := proto.Representation().NewBuilder()
+		err = dagcbor.Decode(builder, bytes.NewReader(byt))
+	*/
 	builder := proto.Representation().NewBuilder()
 	err := dagcbor.Decode(builder, r)
 	if err != nil {
@@ -104,4 +129,13 @@ func FromEncoded(r io.Reader, ptrValue interface{}) (interface{}, error) {
 	}
 	node := builder.Build()
 	return bindnode.Unwrap(node), nil
+}
+
+func FromDagCbor(r io.Reader) (datamodel.Node, error) {
+	na := basicnode.Prototype.Any.NewBuilder()
+	err := dagcbor.Decode(na, r)
+	if err != nil {
+		return nil, err
+	}
+	return na.Build(), nil
 }
