@@ -240,8 +240,8 @@ func TestTransferResponse_UnmarshalCBOR(t *testing.T) {
 	})
 	t.Run("cbor-gen compat", func(t *testing.T) {
 		voucherResult := testutil.NewFakeDTType()
-		voucherResult.Data = "\xf5_\xf8\xf1%\b\xb6>\xf2\xbf\xec\xa7Uz\xe9\r\xf61\x1a^\xc1c\x1bJ\x1f\xa8C1\v\xd9ç\x10\xea\xac塽\xd7*п\xe0Iw\x1c\x11\xe7V3\x8b\xd98e\xe6E\xf1\xad웜\x99\xef@\u007f\xbdOƅ\x9ey\x04ŭ}ɽ\x10\xa5\xcc\x16\x97=[(\xec\x1am\xd4=\x9f\x82\xf9\xf1\x8c=\x03A\x8e5"
-
+		voucherResultData, _ := hex.DecodeString("f55ff8f12508b63ef2bfeca7557ae90df6311a5ec1631b4a1fa843310bd9c3a710eaace5a1bdd72ad0bfe049771c11e756338bd93865e645f1adec9b9c99ef407fbd4fc6859e7904c5ad7dc9bd10a5cc16973d5b28ec1a6dd43d9f82f9f18c3d03418e35")
+		voucherResult.Data = string(voucherResultData)
 		msg, _ := hex.DecodeString("a36449735271f46752657175657374f668526573706f6e7365a66454797065006441637074f56450617573f4665866657249441a4d6582216456526573817864f55ff8f12508b63ef2bfeca7557ae90df6311a5ec1631b4a1fa843310bd9c3a710eaace5a1bdd72ad0bfe049771c11e756338bd93865e645f1adec9b9c99ef407fbd4fc6859e7904c5ad7dc9bd10a5cc16973d5b28ec1a6dd43d9f82f9f18c3d03418e3564565479706a46616b65445454797065")
 		desMsg, err := message1_1.FromNet(bytes.NewReader(msg))
 		require.NoError(t, err)
@@ -416,6 +416,8 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		accepted := false
 		voucher := testutil.NewFakeDTType()
 		voucherResult := testutil.NewFakeDTType()
+		voucherResultData, _ := hex.DecodeString("4204cb9a1e34c5f08e9b20aa76090e70020bb56c0ca3d3af7296cd1058a5112890fed218488f084d8df9e4835fb54ad045ffd936e3bf7261b0426c51352a097816ed74482bb9084b4a7ed8adc517f3371e0e0434b511625cd1a41792243dccdcfe88094b")
+		voucherResult.Data = string(voucherResultData)
 		request, err := message1_1.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
 		require.NoError(t, err)
 		buf := new(bytes.Buffer)
@@ -476,6 +478,8 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		voucherData, _ := hex.DecodeString("f55ff8f12508b63ef2bfeca7557ae90df6311a5ec1631b4a1fa843310bd9c3a710eaace5a1bdd72ad0bfe049771c11e756338bd93865e645f1adec9b9c99ef407fbd4fc6859e7904c5ad7dc9bd10a5cc16973d5b28ec1a6dd43d9f82f9f18c3d03418e35")
 		voucher.Data = string(voucherData)
 		voucherResult := testutil.NewFakeDTType()
+		voucherResultData, _ := hex.DecodeString("4204cb9a1e34c5f08e9b20aa76090e70020bb56c0ca3d3af7296cd1058a5112890fed218488f084d8df9e4835fb54ad045ffd936e3bf7261b0426c51352a097816ed74482bb9084b4a7ed8adc517f3371e0e0434b511625cd1a41792243dccdcfe88094b")
+		voucherResult.Data = string(voucherResultData)
 		request, err := message1_1.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
 		require.NoError(t, err)
 		buf := new(bytes.Buffer)

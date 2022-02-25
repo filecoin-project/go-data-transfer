@@ -73,11 +73,20 @@ func (trsp *TransferResponse1_1) VoucherResultType() datatransfer.TypeIdentifier
 	return trsp.VoucherTypeIdentifier
 }
 
-func (trsp *TransferResponse1_1) VoucherResult(ptrType interface{}) (interface{}, error) {
+// VoucherResultInto returns the Voucher result unwrapped into the type provided as ptrType
+func (trsp *TransferResponse1_1) VoucherResultInto(ptrType interface{}) (interface{}, error) {
 	if trsp.VoucherResultPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
 	return ipldbind.FromNode(*trsp.VoucherResultPtr, ptrType)
+}
+
+// VoucherResult returns the plain Node form of the voucher result
+func (trsp *TransferResponse1_1) VoucherResult() (datamodel.Node, error) {
+	if trsp.VoucherResultPtr == nil {
+		return nil, xerrors.New("No voucher present to read")
+	}
+	return *trsp.VoucherResultPtr, nil
 }
 
 func (trq *TransferResponse1_1) IsRestart() bool {

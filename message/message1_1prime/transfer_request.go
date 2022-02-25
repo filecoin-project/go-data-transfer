@@ -90,12 +90,20 @@ func (trq *TransferRequest1_1) VoucherType() datatransfer.TypeIdentifier {
 	return trq.VoucherTypeIdentifier
 }
 
-// Voucher returns the Voucher bytes
-func (trq *TransferRequest1_1) Voucher(ptrType interface{}) (interface{}, error) {
+// VoucherInto returns the Voucher unwrapped into the type provided as ptrType
+func (trq *TransferRequest1_1) VoucherInto(ptrType interface{}) (interface{}, error) {
 	if trq.VoucherPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
 	return ipldbind.FromNode(*trq.VoucherPtr, ptrType)
+}
+
+// Voucher returns the plain Node form of the voucher
+func (trq *TransferRequest1_1) Voucher() (datamodel.Node, error) {
+	if trq.VoucherPtr == nil {
+		return nil, xerrors.New("No voucher present to read")
+	}
+	return *trq.VoucherPtr, nil
 }
 
 func (trq *TransferRequest1_1) EmptyVoucher() bool {

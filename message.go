@@ -36,7 +36,8 @@ type Request interface {
 	IsPull() bool
 	IsVoucher() bool
 	VoucherType() TypeIdentifier
-	Voucher(interface{}) (interface{}, error)
+	// VoucherInto(interface{}) (interface{}, error)
+	Voucher() (datamodel.Node, error)
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
 	IsRestartExistingChannelRequest() bool
@@ -50,6 +51,7 @@ type Response interface {
 	IsComplete() bool
 	Accepted() bool
 	VoucherResultType() TypeIdentifier
-	VoucherResult(interface{}) (interface{}, error)
+	// VoucherResultInto(interface{}) (interface{}, error)
+	VoucherResult() (datamodel.Node, error)
 	EmptyVoucherResult() bool
 }

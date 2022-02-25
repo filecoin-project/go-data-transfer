@@ -26,7 +26,9 @@ func init() {
 // AssertFakeDTVoucher asserts that a data transfer requests contains the expected fake data transfer voucher type
 func AssertFakeDTVoucher(t *testing.T, request datatransfer.Request, expected *FakeDTType) {
 	require.Equal(t, datatransfer.TypeIdentifier("FakeDTType"), request.VoucherType())
-	decoded, err := request.Voucher(&FakeDTType{})
+	node, err := request.Voucher()
+	require.NoError(t, err)
+	decoded, err := ipldbind.FromNode(node, &FakeDTType{})
 	require.NoError(t, err)
 	require.Equal(t, expected, decoded)
 }
@@ -34,9 +36,13 @@ func AssertFakeDTVoucher(t *testing.T, request datatransfer.Request, expected *F
 // AssertEqualFakeDTVoucher asserts that two requests have the same fake data transfer voucher
 func AssertEqualFakeDTVoucher(t *testing.T, expectedRequest datatransfer.Request, request datatransfer.Request) {
 	require.Equal(t, expectedRequest.VoucherType(), request.VoucherType())
-	expectedDecoded, err := expectedRequest.Voucher(&FakeDTType{})
+	expectedNode, err := expectedRequest.Voucher()
 	require.NoError(t, err)
-	decoded, err := request.Voucher(&FakeDTType{})
+	expectedDecoded, err := ipldbind.FromNode(expectedNode, &FakeDTType{})
+	require.NoError(t, err)
+	node, err := request.Voucher()
+	require.NoError(t, err)
+	decoded, err := ipldbind.FromNode(node, &FakeDTType{})
 	require.NoError(t, err)
 	require.Equal(t, expectedDecoded, decoded)
 }
@@ -44,7 +50,9 @@ func AssertEqualFakeDTVoucher(t *testing.T, expectedRequest datatransfer.Request
 // AssertFakeDTVoucherResult asserts that a data transfer response contains the expected fake data transfer voucher result type
 func AssertFakeDTVoucherResult(t *testing.T, response datatransfer.Response, expected *FakeDTType) {
 	require.Equal(t, datatransfer.TypeIdentifier("FakeDTType"), response.VoucherResultType())
-	decoded, err := response.VoucherResult(&FakeDTType{})
+	node, err := response.VoucherResult()
+	require.NoError(t, err)
+	decoded, err := ipldbind.FromNode(node, &FakeDTType{})
 	require.NoError(t, err)
 	require.Equal(t, expected, decoded)
 }
@@ -52,9 +60,13 @@ func AssertFakeDTVoucherResult(t *testing.T, response datatransfer.Response, exp
 // AssertEqualFakeDTVoucherResult asserts that two responses have the same fake data transfer voucher result
 func AssertEqualFakeDTVoucherResult(t *testing.T, expectedResponse datatransfer.Response, response datatransfer.Response) {
 	require.Equal(t, expectedResponse.VoucherResultType(), response.VoucherResultType())
-	expectedDecoded, err := response.VoucherResult(&FakeDTType{})
+	expectedNode, err := expectedResponse.VoucherResult()
 	require.NoError(t, err)
-	decoded, err := response.VoucherResult(&FakeDTType{})
+	expectedDecoded, err := ipldbind.FromNode(expectedNode, &FakeDTType{})
+	require.NoError(t, err)
+	node, err := response.VoucherResult()
+	require.NoError(t, err)
+	decoded, err := ipldbind.FromNode(node, &FakeDTType{})
 	require.NoError(t, err)
 	require.Equal(t, expectedDecoded, decoded)
 }
