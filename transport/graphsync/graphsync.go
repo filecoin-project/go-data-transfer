@@ -27,11 +27,6 @@ var log = logging.Logger("dt_graphsync")
 // cancelled.
 const maxGSCancelWait = time.Second
 
-type graphsyncKey struct {
-	requestID graphsync.RequestID
-	p         peer.ID
-}
-
 var defaultSupportedExtensions = []graphsync.ExtensionName{
 	extension.ExtensionDataTransfer1_1,
 }
@@ -88,17 +83,17 @@ type Transport struct {
 
 	// Used in graphsync callbacks to map from graphsync request to the
 	// associated data-transfer channel ID.
-	gsKeyToChannelID *gsKeyToChannelIDMap
+	requestIDToChannelID *requestIDToChannelIDMap
 }
 
 // NewTransport makes a new hooks manager with the given hook events interface
 func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, options ...Option) *Transport {
 	t := &Transport{
-		gs:                  gs,
-		peerID:              peerID,
-		supportedExtensions: defaultSupportedExtensions,
-		dtChannels:          make(map[datatransfer.ChannelID]*dtChannel),
-		gsKeyToChannelID:    newGSKeyToChannelIDMap(),
+		gs:                   gs,
+		peerID:               peerID,
+		supportedExtensions:  defaultSupportedExtensions,
+		dtChannels:           make(map[datatransfer.ChannelID]*dtChannel),
+		requestIDToChannelID: newRequestIDToChannelIDMap(),
 	}
 	for _, option := range options {
 		option(t)
@@ -379,24 +374,24 @@ func (t *Transport) ChannelsForPeer(p peer.ID) ChannelsForPeer {
 	sending := make(map[datatransfer.ChannelID]ChannelGraphsyncRequests)
 	receiving := make(map[datatransfer.ChannelID]ChannelGraphsyncRequests)
 	// loop through every graphsync request key we're currently tracking
-	t.gsKeyToChannelID.forEach(func(k graphsyncKey, chid datatransfer.ChannelID) {
+	t.requestIDToChannelID.forEach(func(requestID graphsync.RequestID, isSending bool, chid datatransfer.ChannelID) {
 		// if the associated channel ID includes the requested peer
 		if chid.Initiator == p || chid.Responder == p {
 			// determine whether the requested peer is one at least one end of the channel
 			// and whether we're receving from that peer or sending to it
 			collection := sending
-			if k.p == t.peerID {
+			if !isSending {
 				collection = receiving
 			}
 			channelGraphsyncRequests := collection[chid]
 			// finally, determine if the request key matches the current GraphSync key we're tracking for
 			// this channel, indicating it's the current graphsync request
-			if t.dtChannels[chid] != nil && t.dtChannels[chid].gsKey != nil && (*t.dtChannels[chid].gsKey) == k {
-				channelGraphsyncRequests.Current = k.requestID
+			if t.dtChannels[chid] != nil && t.dtChannels[chid].requestID != nil && (*t.dtChannels[chid].requestID) == requestID {
+				channelGraphsyncRequests.Current = requestID
 			} else {
 				// otherwise this id was a previous graphsync request on a channel that was restarted
 				// and it has not been cleaned up yet
-				channelGraphsyncRequests.Previous = append(channelGraphsyncRequests.Previous, k.requestID)
+				channelGraphsyncRequests.Previous = append(channelGraphsyncRequests.Previous, requestID)
 			}
 			collection[chid] = channelGraphsyncRequests
 		}
@@ -449,13 +444,12 @@ func (t *Transport) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestDa
 	ch := t.trackDTChannel(chid)
 
 	// Signal that the channel has been opened
-	gsKey := graphsyncKey{request.ID(), t.peerID}
-	ch.gsReqOpened(gsKey, hookActions)
+	ch.gsReqOpened(request.ID(), hookActions)
 }
 
 // gsIncomingBlockHook is called when a block is received
 func (t *Transport) gsIncomingBlockHook(p peer.ID, response graphsync.ResponseData, block graphsync.BlockData, hookActions graphsync.IncomingBlockHookActions) {
-	chid, ok := t.gsKeyToChannelID.load(graphsyncKey{response.RequestID(), t.peerID})
+	chid, ok := t.requestIDToChannelID.load(response.RequestID())
 	if !ok {
 		return
 	}
@@ -481,7 +475,7 @@ func (t *Transport) gsBlockSentHook(p peer.ID, request graphsync.RequestData, bl
 		return
 	}
 
-	chid, ok := t.gsKeyToChannelID.load(graphsyncKey{request.ID(), p})
+	chid, ok := t.requestIDToChannelID.load(request.ID())
 	if !ok {
 		return
 	}
@@ -501,7 +495,7 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 		return
 	}
 
-	chid, ok := t.gsKeyToChannelID.load(graphsyncKey{request.ID(), p})
+	chid, ok := t.requestIDToChannelID.load(request.ID())
 	if !ok {
 		return
 	}
@@ -675,8 +669,7 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		ch.xferStarted = true
 	}
 
-	gsKey := graphsyncKey{request.ID(), p}
-	ch.gsDataRequestRcvd(gsKey, hookActions)
+	ch.gsDataRequestRcvd(request.ID(), hookActions)
 
 	hookActions.ValidateRequest()
 }
@@ -684,7 +677,7 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 // gsCompletedResponseListener is a graphsync.OnCompletedResponseListener. We use it learn when the data transfer is complete
 // for the side that is responding to a graphsync request
 func (t *Transport) gsCompletedResponseListener(p peer.ID, request graphsync.RequestData, status graphsync.ResponseStatusCode) {
-	chid, ok := t.gsKeyToChannelID.load(graphsyncKey{request.ID(), p})
+	chid, ok := t.requestIDToChannelID.load(request.ID())
 	if !ok {
 		return
 	}
@@ -737,7 +730,7 @@ func gsResponseStatusCodeString(code graphsync.ResponseStatusCode) string {
 }
 
 func (t *Transport) gsRequestUpdatedHook(p peer.ID, request graphsync.RequestData, update graphsync.RequestData, hookActions graphsync.RequestUpdatedHookActions) {
-	chid, ok := t.gsKeyToChannelID.load(graphsyncKey{request.ID(), p})
+	chid, ok := t.requestIDToChannelID.load(request.ID())
 	if !ok {
 		return
 	}
@@ -763,7 +756,7 @@ func (t *Transport) gsRequestUpdatedHook(p peer.ID, request graphsync.RequestDat
 
 // gsIncomingResponseHook is a graphsync.OnIncomingResponseHook. We use it to pass on responses
 func (t *Transport) gsIncomingResponseHook(p peer.ID, response graphsync.ResponseData, hookActions graphsync.IncomingResponseHookActions) {
-	chid, ok := t.gsKeyToChannelID.load(graphsyncKey{response.RequestID(), t.peerID})
+	chid, ok := t.requestIDToChannelID.load(response.RequestID())
 	if !ok {
 		return
 	}
@@ -828,7 +821,7 @@ func (t *Transport) processExtension(chid datatransfer.ChannelID, gsMsg extensio
 }
 
 func (t *Transport) gsRequestorCancelledListener(p peer.ID, request graphsync.RequestData) {
-	chid, ok := t.gsKeyToChannelID.load(graphsyncKey{request.ID(), p})
+	chid, ok := t.requestIDToChannelID.load(request.ID())
 	if !ok {
 		return
 	}
@@ -848,9 +841,7 @@ func (t *Transport) gsRequestorCancelledListener(p peer.ID, request graphsync.Re
 // Called when there is a graphsync error sending data
 func (t *Transport) gsNetworkSendErrorListener(p peer.ID, request graphsync.RequestData, gserr error) {
 	// Fire an error if the graphsync request was made by this node or the remote peer
-	chid, ok := t.gsKeyToChannelID.any(
-		graphsyncKey{request.ID(), p},
-		graphsyncKey{request.ID(), t.peerID})
+	chid, ok := t.requestIDToChannelID.load(request.ID())
 	if !ok {
 		return
 	}
@@ -865,7 +856,7 @@ func (t *Transport) gsNetworkSendErrorListener(p peer.ID, request graphsync.Requ
 func (t *Transport) gsNetworkReceiveErrorListener(p peer.ID, gserr error) {
 	// Fire a receive data error on all ongoing graphsync transfers with that
 	// peer
-	t.gsKeyToChannelID.forEach(func(k graphsyncKey, chid datatransfer.ChannelID) {
+	t.requestIDToChannelID.forEach(func(k graphsync.RequestID, sending bool, chid datatransfer.ChannelID) {
 		if chid.Initiator != p && chid.Responder != p {
 			return
 		}
@@ -879,12 +870,9 @@ func (t *Transport) gsNetworkReceiveErrorListener(p peer.ID, gserr error) {
 
 func (t *Transport) newDTChannel(chid datatransfer.ChannelID) *dtChannel {
 	return &dtChannel{
-		peerID:              t.peerID,
-		channelID:           chid,
-		gs:                  t.gs,
-		supportedExtensions: t.supportedExtensions,
-		gsKeyToChannelID:    t.gsKeyToChannelID,
-		opened:              make(chan graphsyncKey, 1),
+		t:         t,
+		channelID: chid,
+		opened:    make(chan graphsync.RequestID, 1),
 	}
 }
 
@@ -918,21 +906,18 @@ func (t *Transport) getDTChannel(chid datatransfer.ChannelID) (*dtChannel, error
 
 // Info needed to keep track of a data transfer channel
 type dtChannel struct {
-	peerID              peer.ID
-	channelID           datatransfer.ChannelID
-	gs                  graphsync.GraphExchange
-	supportedExtensions []graphsync.ExtensionName
-	gsKeyToChannelID    *gsKeyToChannelIDMap
+	channelID datatransfer.ChannelID
+	t         *Transport
 
 	lk                 sync.RWMutex
 	isOpen             bool
-	gsKey              *graphsyncKey
+	requestID          *graphsync.RequestID
 	completed          chan struct{}
 	requesterCancelled bool
 	xferStarted        bool
 	pendingExtensions  []graphsync.ExtensionData
 
-	opened chan graphsyncKey
+	opened chan graphsync.RequestID
 
 	storeLk         sync.RWMutex
 	storeRegistered bool
@@ -960,7 +945,7 @@ func (c *dtChannel) open(
 	defer c.lk.Unlock()
 
 	// If there is an existing graphsync request for this channelID
-	if c.gsKey != nil {
+	if c.requestID != nil {
 		// Cancel the existing graphsync request
 		completed := c.completed
 		errch := c.cancel(ctx)
@@ -1001,16 +986,16 @@ func (c *dtChannel) open(
 		msg += fmt.Sprintf(" with %d Blocks already received", channel.ReceivedCidsTotal())
 	}
 	log.Info(msg)
-	responseChan, errChan := c.gs.Request(ctx, dataSender, root, stor, exts...)
+	responseChan, errChan := c.t.gs.Request(ctx, dataSender, root, stor, exts...)
 
 	// Wait for graphsync "request opened" callback
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case gsKey := <-c.opened:
+	case requestID := <-c.opened:
 		// Mark the channel as open and save the Graphsync request key
 		c.isOpen = true
-		c.gsKey = &gsKey
+		c.requestID = &requestID
 	}
 
 	return &gsReq{
@@ -1036,24 +1021,24 @@ func waitForCompleteHook(ctx context.Context, completed chan struct{}) error {
 }
 
 // gsReqOpened is called when graphsync makes a request to the remote peer to ask for data
-func (c *dtChannel) gsReqOpened(gsKey graphsyncKey, hookActions graphsync.OutgoingRequestHookActions) {
+func (c *dtChannel) gsReqOpened(requestID graphsync.RequestID, hookActions graphsync.OutgoingRequestHookActions) {
 	// Tell graphsync to store the received blocks in the registered store
 	if c.hasStore() {
 		hookActions.UsePersistenceOption("data-transfer-" + c.channelID.String())
 	}
-	log.Infow("outgoing graphsync request", "peer", gsKey.p, "graphsync request id", gsKey.requestID, "data transfer channel id", c.channelID)
+	log.Infow("outgoing graphsync request", "peer", c.channelID.OtherParty(c.t.peerID), "graphsync request id", requestID, "data transfer channel id", c.channelID)
 	// Save a mapping from the graphsync key to the channel ID so that
 	// subsequent graphsync callbacks are associated with this channel
-	c.gsKeyToChannelID.set(gsKey, c.channelID)
+	c.t.requestIDToChannelID.set(requestID, false, c.channelID)
 
-	c.opened <- gsKey
+	c.opened <- requestID
 }
 
 // gsDataRequestRcvd is called when the transport receives an incoming request
 // for data.
 // Note: Must be called under the lock.
-func (c *dtChannel) gsDataRequestRcvd(gsKey graphsyncKey, hookActions graphsync.IncomingRequestHookActions) {
-	log.Debugf("%s: received request for data, req_id=%d", c.channelID, gsKey.requestID)
+func (c *dtChannel) gsDataRequestRcvd(requestID graphsync.RequestID, hookActions graphsync.IncomingRequestHookActions) {
+	log.Debugf("%s: received request for data, req_id=%d", c.channelID, requestID)
 
 	// If the requester had previously cancelled their request, send any
 	// message that was queued since the cancel
@@ -1074,9 +1059,9 @@ func (c *dtChannel) gsDataRequestRcvd(gsKey graphsyncKey, hookActions graphsync.
 
 	// Save a mapping from the graphsync key to the channel ID so that
 	// subsequent graphsync callbacks are associated with this channel
-	c.gsKey = &gsKey
-	log.Infow("incoming graphsync request", "peer", gsKey.p, "graphsync request id", gsKey.requestID, "data transfer channel id", c.channelID)
-	c.gsKeyToChannelID.set(gsKey, c.channelID)
+	c.requestID = &requestID
+	log.Infow("incoming graphsync request", "peer", c.channelID.OtherParty(c.t.peerID), "graphsync request id", requestID, "data transfer channel id", c.channelID)
+	c.t.requestIDToChannelID.set(requestID, true, c.channelID)
 
 	c.isOpen = true
 }
@@ -1086,7 +1071,7 @@ func (c *dtChannel) pause(ctx context.Context) error {
 	defer c.lk.Unlock()
 
 	// Check if the channel was already cancelled
-	if c.gsKey == nil {
+	if c.requestID == nil {
 		log.Debugf("%s: channel was cancelled so not pausing channel", c.channelID)
 		return nil
 	}
@@ -1099,7 +1084,7 @@ func (c *dtChannel) pause(ctx context.Context) error {
 
 	// Pause the response
 	log.Debugf("%s: pausing response", c.channelID)
-	return c.gs.Pause(ctx, c.gsKey.requestID)
+	return c.t.gs.Pause(ctx, *c.requestID)
 }
 
 func (c *dtChannel) resume(ctx context.Context, msg datatransfer.Message) error {
@@ -1107,7 +1092,7 @@ func (c *dtChannel) resume(ctx context.Context, msg datatransfer.Message) error 
 	defer c.lk.Unlock()
 
 	// Check if the channel was already cancelled
-	if c.gsKey == nil {
+	if c.requestID == nil {
 		log.Debugf("%s: channel was cancelled so not resuming channel", c.channelID)
 		return nil
 	}
@@ -1115,7 +1100,7 @@ func (c *dtChannel) resume(ctx context.Context, msg datatransfer.Message) error 
 	var extensions []graphsync.ExtensionData
 	if msg != nil {
 		var err error
-		extensions, err = extension.ToExtensionData(msg, c.supportedExtensions)
+		extensions, err = extension.ToExtensionData(msg, c.t.supportedExtensions)
 		if err != nil {
 			return err
 		}
@@ -1136,7 +1121,7 @@ func (c *dtChannel) resume(ctx context.Context, msg datatransfer.Message) error 
 	c.xferStarted = true
 
 	log.Debugf("%s: unpausing response", c.channelID)
-	return c.gs.Unpause(ctx, c.gsKey.requestID, extensions...)
+	return c.t.gs.Unpause(ctx, *c.requestID, extensions...)
 }
 
 func (c *dtChannel) close(ctx context.Context) error {
@@ -1144,7 +1129,7 @@ func (c *dtChannel) close(ctx context.Context) error {
 	c.lk.Lock()
 	{
 		// Check if the channel was already cancelled
-		if c.gsKey != nil {
+		if c.requestID != nil {
 			errch = c.cancel(ctx)
 		}
 	}
@@ -1181,7 +1166,7 @@ func (c *dtChannel) useStore(lsys ipld.LinkSystem) error {
 	defer c.storeLk.Unlock()
 
 	// Register the channel's store with graphsync
-	err := c.gs.RegisterPersistenceOption("data-transfer-"+c.channelID.String(), lsys)
+	err := c.t.gs.RegisterPersistenceOption("data-transfer-"+c.channelID.String(), lsys)
 	if err != nil {
 		return err
 	}
@@ -1200,14 +1185,14 @@ func (c *dtChannel) cleanup() {
 	if c.hasStore() {
 		// Unregister the channel's store from graphsync
 		opt := "data-transfer-" + c.channelID.String()
-		err := c.gs.UnregisterPersistenceOption(opt)
+		err := c.t.gs.UnregisterPersistenceOption(opt)
 		if err != nil {
 			log.Errorf("failed to unregister persistence option %s: %s", opt, err)
 		}
 	}
 
 	// Clean up mapping from gs key to channel ID
-	c.gsKeyToChannelID.deleteRefs(c.channelID)
+	c.t.requestIDToChannelID.deleteRefs(c.channelID)
 }
 
 func (c *dtChannel) shutdown(ctx context.Context) error {
@@ -1231,18 +1216,18 @@ func (c *dtChannel) cancel(ctx context.Context) chan error {
 	errch := make(chan error, 1)
 
 	// Check that the request has not already been cancelled
-	if c.requesterCancelled || c.gsKey == nil {
+	if c.requesterCancelled || c.requestID == nil {
 		errch <- nil
 		return errch
 	}
 
 	// Clear the graphsync key to indicate that the request has been cancelled
-	gsKey := c.gsKey
-	c.gsKey = nil
+	requestID := c.requestID
+	c.requestID = nil
 
 	go func() {
 		log.Debugf("%s: cancelling request", c.channelID)
-		err := c.gs.Cancel(ctx, gsKey.requestID)
+		err := c.t.gs.Cancel(ctx, *requestID)
 
 		// Ignore "request not found" errors
 		if err != nil && !xerrors.Is(graphsync.RequestNotFoundErr{}, err) {
@@ -1255,67 +1240,72 @@ func (c *dtChannel) cancel(ctx context.Context) chan error {
 	return errch
 }
 
-// Used in graphsync callbacks to map from graphsync request to the
-// associated data-transfer channel ID.
-type gsKeyToChannelIDMap struct {
-	lk sync.RWMutex
-	m  map[graphsyncKey]datatransfer.ChannelID
+type channelInfo struct {
+	sending   bool
+	channelID datatransfer.ChannelID
 }
 
-func newGSKeyToChannelIDMap() *gsKeyToChannelIDMap {
-	return &gsKeyToChannelIDMap{
-		m: make(map[graphsyncKey]datatransfer.ChannelID),
+// Used in graphsync callbacks to map from graphsync request to the
+// associated data-transfer channel ID.
+type requestIDToChannelIDMap struct {
+	lk sync.RWMutex
+	m  map[graphsync.RequestID]channelInfo
+}
+
+func newRequestIDToChannelIDMap() *requestIDToChannelIDMap {
+	return &requestIDToChannelIDMap{
+		m: make(map[graphsync.RequestID]channelInfo),
 	}
 }
 
 // get the value for a key
-func (m *gsKeyToChannelIDMap) load(key graphsyncKey) (datatransfer.ChannelID, bool) {
+func (m *requestIDToChannelIDMap) load(key graphsync.RequestID) (datatransfer.ChannelID, bool) {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
 	val, ok := m.m[key]
-	return val, ok
+	return val.channelID, ok
 }
 
 // get the value if any of the keys exists in the map
-func (m *gsKeyToChannelIDMap) any(ks ...graphsyncKey) (datatransfer.ChannelID, bool) {
+func (m *requestIDToChannelIDMap) any(ks ...graphsync.RequestID) (datatransfer.ChannelID, bool) {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
 	for _, k := range ks {
 		val, ok := m.m[k]
 		if ok {
-			return val, ok
+			return val.channelID, ok
 		}
 	}
 	return datatransfer.ChannelID{}, false
 }
 
 // set the value for a key
-func (m *gsKeyToChannelIDMap) set(key graphsyncKey, val datatransfer.ChannelID) {
+func (m *requestIDToChannelIDMap) set(key graphsync.RequestID, sending bool, chid datatransfer.ChannelID) {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 
-	m.m[key] = val
+	m.m[key] = channelInfo{sending, chid}
 }
 
 // call f for each key / value in the map
-func (m *gsKeyToChannelIDMap) forEach(f func(k graphsyncKey, chid datatransfer.ChannelID)) {
+func (m *requestIDToChannelIDMap) forEach(f func(k graphsync.RequestID, isSending bool, chid datatransfer.ChannelID)) {
 	m.lk.RLock()
 	defer m.lk.RUnlock()
 
 	for k, ch := range m.m {
-		f(k, ch)
+		f(k, ch.sending, ch.channelID)
 	}
 }
 
 // delete any keys that reference this value
-func (m *gsKeyToChannelIDMap) deleteRefs(id datatransfer.ChannelID) {
+func (m *requestIDToChannelIDMap) deleteRefs(id datatransfer.ChannelID) {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 
 	for k, ch := range m.m {
-		if ch == id {
+		if ch.channelID == id {
 			delete(m.m, k)
 		}
 	}
