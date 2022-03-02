@@ -5,11 +5,12 @@ import (
 	"io"
 	"testing"
 
-	"github.com/filecoin-project/go-data-transfer/ipldutil"
-	"github.com/filecoin-project/go-data-transfer/testutil"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-data-transfer/ipldutil"
+	"github.com/filecoin-project/go-data-transfer/testutil"
 )
 
 func TestConversion(t *testing.T) {

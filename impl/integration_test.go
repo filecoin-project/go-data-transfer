@@ -2190,15 +2190,6 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	gsData.VerifyFileTransferred(t, root, true)
 }
 
-// completeRevalidator does not pause when sending the last voucher to confirm the deal is completed
-type completeRevalidator struct {
-	*retrievalRevalidator
-}
-
-func (r *completeRevalidator) OnComplete(chid datatransfer.ChannelID) (bool, datatransfer.VoucherResult, error) {
-	return true, r.finalVoucher, nil
-}
-
 func TestMultipleParallelTransfers(t *testing.T) {
 
 	// Add more sizes here to trigger more transfers.
