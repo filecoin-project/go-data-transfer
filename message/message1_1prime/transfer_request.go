@@ -4,8 +4,8 @@ import (
 	"io"
 
 	"github.com/ipfs/go-cid"
+	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	xerrors "golang.org/x/xerrors"
@@ -23,8 +23,8 @@ type TransferRequest1_1 struct {
 	Pause                 bool
 	Partial               bool
 	Pull                  bool
-	SelectorPtr           *datamodel.Node
-	VoucherPtr            *datamodel.Node
+	SelectorPtr           *ipld.Node
+	VoucherPtr            *ipld.Node
 	VoucherTypeIdentifier datatransfer.TypeIdentifier
 	TransferId            uint64
 	RestartChannel        datatransfer.ChannelID
@@ -119,7 +119,7 @@ func (trq *TransferRequest1_1) BaseCid() cid.Cid {
 }
 
 // Selector returns the message Selector bytes
-func (trq *TransferRequest1_1) Selector() (datamodel.Node, error) {
+func (trq *TransferRequest1_1) Selector() (ipld.Node, error) {
 	if trq.SelectorPtr == nil {
 		return nil, xerrors.New("No selector present to read")
 	}
@@ -145,16 +145,12 @@ func (trsp *TransferRequest1_1) toIPLD() schema.TypedNode {
 	return msg.toIPLD()
 }
 
-func (trq *TransferRequest1_1) ToIPLD() (datamodel.Node, error) {
+// ToIPLD converts a TransferRequest into a Node
+func (trq *TransferRequest1_1) ToIPLD() (ipld.Node, error) {
 	return trq.toIPLD().Representation(), nil
 }
 
 // ToNet serializes a transfer request.
 func (trq *TransferRequest1_1) ToNet(w io.Writer) error {
-	/*
-		fmt.Printf("ToNet TransferRequest1_1:")
-		dagjson.Encode(trq.toIPLD().Representation(), os.Stdout)
-		fmt.Println()
-	*/
 	return dagcbor.Encode(trq.toIPLD().Representation(), w)
 }

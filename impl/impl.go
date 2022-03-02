@@ -34,7 +34,6 @@ var cancelSendTimeout = 30 * time.Second
 type manager struct {
 	dataTransferNetwork  network.DataTransferNetwork
 	validatedTypes       *registry.Registry
-	resultTypes          *registry.Registry
 	revalidators         *registry.Registry
 	transportConfigurers *registry.Registry
 	pubSub               *pubsub.PubSub
@@ -95,7 +94,6 @@ func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTran
 	m := &manager{
 		dataTransferNetwork:  dataTransferNetwork,
 		validatedTypes:       registry.NewRegistry(),
-		resultTypes:          registry.NewRegistry(),
 		revalidators:         registry.NewRegistry(),
 		transportConfigurers: registry.NewRegistry(),
 		pubSub:               pubsub.New(dispatcher),
@@ -196,7 +194,7 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 	processor, has := m.transportConfigurers.Processor(voucherType)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
-		transportConfigurer(chid, voucher, m.transport)
+		transportConfigurer(chid, voucherType, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	monitoredChan := m.channelMonitor.AddPushChannel(chid)
@@ -237,7 +235,7 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 	processor, has := m.transportConfigurers.Processor(voucherType)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
-		transportConfigurer(chid, voucher, m.transport)
+		transportConfigurer(chid, voucherType, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	monitoredChan := m.channelMonitor.AddPullChannel(chid)
@@ -461,16 +459,6 @@ func (m *manager) RegisterRevalidator(voucherType datatransfer.TypeIdentifier, r
 	err := m.revalidators.Register(voucherType, revalidator)
 	if err != nil {
 		return xerrors.Errorf("error registering revalidator type: %w", err)
-	}
-	return nil
-}
-
-// RegisterVoucherResultType allows deserialization of a voucher result,
-// so that a listener can read the metadata
-func (m *manager) RegisterVoucherResultType(resultType datatransfer.TypeIdentifier) error {
-	err := m.resultTypes.Register(resultType, nil)
-	if err != nil {
-		return xerrors.Errorf("error registering voucher type: %w", err)
 	}
 	return nil
 }

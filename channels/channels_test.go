@@ -81,6 +81,7 @@ func TestChannels(t *testing.T) {
 		require.NotEqual(t, channels.EmptyChannelState, state)
 		require.Equal(t, cids[0], state.BaseCID())
 		require.Equal(t, selector, state.Selector())
+		require.Equal(t, testutil.FakeDTVoucherType, state.VoucherType())
 		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.Voucher()))
 		require.Equal(t, peers[0], state.Sender())
 		require.Equal(t, peers[1], state.Recipient())
@@ -258,7 +259,9 @@ func TestChannels(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, state.Vouchers(), 1)
 		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.Vouchers()[0]))
+		require.Equal(t, testutil.FakeDTVoucherType, state.VoucherType())
 		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.Voucher()))
+		require.Equal(t, testutil.FakeDTVoucherType, state.LastVoucherType())
 		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.LastVoucher()))
 
 		err = channelList.NewVoucher(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, testutil.FakeDTVoucherType, fv3)
@@ -267,7 +270,9 @@ func TestChannels(t *testing.T) {
 		require.Len(t, state.Vouchers(), 2)
 		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.Vouchers()[0]))
 		require.True(t, ipld.DeepEqual(fv3.(schema.TypedNode).Representation(), state.Vouchers()[1]))
+		require.Equal(t, testutil.FakeDTVoucherType, state.VoucherType())
 		require.True(t, ipld.DeepEqual(fv1.(schema.TypedNode).Representation(), state.Voucher()))
+		require.Equal(t, testutil.FakeDTVoucherType, state.LastVoucherType())
 		require.True(t, ipld.DeepEqual(fv3.(schema.TypedNode).Representation(), state.LastVoucher()))
 
 		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})

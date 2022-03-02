@@ -3,8 +3,8 @@ package message1_1
 import (
 	"io"
 
+	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -34,17 +34,12 @@ func (tm *TransferMessage1_1) toIPLD() schema.TypedNode {
 	return tn.(schema.TypedNode)
 }
 
-// ToNet serializes a transfer message type.
-func (tm *TransferMessage1_1) ToIPLD() (datamodel.Node, error) {
+// ToIPLD converts a TransferMessage into a Node
+func (tm *TransferMessage1_1) ToIPLD() (ipld.Node, error) {
 	return tm.toIPLD().Representation(), nil
 }
 
 // ToNet serializes a transfer message type.
 func (tm *TransferMessage1_1) ToNet(w io.Writer) error {
-	/*
-		fmt.Printf("ToNet TransferMessage1_1:")
-		dagjson.Encode(tm.toIPLD().Representation(), os.Stdout)
-		fmt.Println()
-	*/
 	return dagcbor.Encode(tm.toIPLD().Representation(), w)
 }

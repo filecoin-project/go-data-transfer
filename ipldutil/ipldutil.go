@@ -38,13 +38,13 @@ func RegisterType(schema string, ptrType interface{}) error {
 	return nil
 }
 
-func ToNode(ptrValue interface{}) (datamodel.Node, error) {
+func ToNode(ptrValue interface{}) (ipld.Node, error) {
 	if ptrValue == nil {
 		return datamodel.Null, nil
 	}
 	// val := reflect.ValueOf(ptrValue).Type()
 	// fmt.Printf("EncodeToNode %T: [%v]\n", ptrValue, val.Name())
-	node, ok := ptrValue.(datamodel.Node)
+	node, ok := ptrValue.(ipld.Node)
 	if ok {
 		return node, nil
 	}
@@ -59,7 +59,7 @@ func ToNode(ptrValue interface{}) (datamodel.Node, error) {
 }
 
 func ToDagCbor(ptrValue interface{}) ([]byte, error) {
-	node, ok := ptrValue.(datamodel.Node)
+	node, ok := ptrValue.(ipld.Node)
 	if !ok {
 		// not a Node, something else we know perhaps?
 		var err error
@@ -80,7 +80,7 @@ func ToDagCbor(ptrValue interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func FromNode(node datamodel.Node, ptrValue interface{}) (interface{}, error) {
+func FromNode(node ipld.Node, ptrValue interface{}) (interface{}, error) {
 	name := typeName(ptrValue)
 	proto, ok := prototype[name]
 	if !ok {
@@ -89,15 +89,6 @@ func FromNode(node datamodel.Node, ptrValue interface{}) (interface{}, error) {
 	if tn, ok := node.(schema.TypedNode); ok {
 		node = tn.Representation()
 	}
-	/*
-		if node != nil {
-			fmt.Printf("Unwrapping %v [%v]\n", name, node)
-			dagjson.Encode(node, os.Stdout)
-			fmt.Println()
-		} else {
-			fmt.Println("nil")
-		}
-	*/
 	builder := proto.Representation().NewBuilder()
 	err := builder.AssignNode(node)
 	if err != nil {
@@ -106,22 +97,12 @@ func FromNode(node datamodel.Node, ptrValue interface{}) (interface{}, error) {
 	return bindnode.Unwrap(builder.Build()), nil
 }
 
-func FromEncoded(r io.Reader, ptrValue interface{}) (interface{}, error) {
+func FromDagCbor(r io.Reader, ptrValue interface{}) (interface{}, error) {
 	name := typeName(ptrValue)
 	proto, ok := prototype[name]
 	if !ok {
 		return nil, fmt.Errorf("invalid TypedPrototype: %v", name)
 	}
-	/*
-		byt, err := io.ReadAll(r)
-		if err != nil {
-			fmt.Printf("Read error %v\n", err)
-			return nil, err
-		}
-		fmt.Printf("Msg: %v\n", hex.EncodeToString(byt))
-		builder := proto.Representation().NewBuilder()
-		err = dagcbor.Decode(builder, bytes.NewReader(byt))
-	*/
 	builder := proto.Representation().NewBuilder()
 	err := dagcbor.Decode(builder, r)
 	if err != nil {
@@ -131,7 +112,7 @@ func FromEncoded(r io.Reader, ptrValue interface{}) (interface{}, error) {
 	return bindnode.Unwrap(node), nil
 }
 
-func FromDagCbor(r io.Reader) (datamodel.Node, error) {
+func NodeFromDagCbor(r io.Reader) (ipld.Node, error) {
 	na := basicnode.Prototype.Any.NewBuilder()
 	err := dagcbor.Decode(na, r)
 	if err != nil {

@@ -95,7 +95,7 @@ func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransf
 	processor, has := m.transportConfigurers.Processor(channel.VoucherType())
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
-		transportConfigurer(chid, voucher, m.transport)
+		transportConfigurer(chid, channel.VoucherType(), voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 
@@ -130,7 +130,7 @@ func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransf
 	processor, has := m.transportConfigurers.Processor(channel.VoucherType())
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
-		transportConfigurer(chid, voucher, m.transport)
+		transportConfigurer(chid, channel.VoucherType(), voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 
@@ -173,7 +173,6 @@ func (m *manager) validateRestartRequest(ctx context.Context, otherPeer peer.ID,
 	}
 
 	reqVoucher, err := req.Voucher()
-	// TODO: used to decodeVoucher() here and error if we didn't know the type, should we check?
 	if err != nil {
 		return err
 	}

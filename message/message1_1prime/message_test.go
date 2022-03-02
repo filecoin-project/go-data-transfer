@@ -372,6 +372,83 @@ func TestUpdateResponse(t *testing.T) {
 	assert.Equal(t, response.TransferID(), msg.TransferID())
 }
 
+func TestVoucherResultResponse(t *testing.T) {
+	id := datatransfer.TransferID(rand.Int31())
+	voucherResult := testutil.NewFakeDTTypeNode()
+	response, err := message1_1.VoucherResultResponse(id, false, true, testutil.FakeDTVoucherType, voucherResult)
+	assert.NoError(t, err)
+	assert.Equal(t, response.TransferID(), id)
+	assert.False(t, response.Accepted())
+	assert.False(t, response.IsNew())
+	assert.False(t, response.IsUpdate())
+	assert.True(t, response.IsPaused())
+	assert.False(t, response.IsRequest())
+
+	testutil.AssertFakeDTVoucherResult(t, response, voucherResult)
+
+	// Sanity check to make sure we can cast to datatransfer.Message
+	msg, ok := response.(datatransfer.Message)
+	require.True(t, ok)
+
+	assert.False(t, msg.IsRequest())
+	assert.False(t, msg.IsNew())
+	assert.False(t, msg.IsUpdate())
+	assert.True(t, msg.IsPaused())
+	assert.Equal(t, response.TransferID(), msg.TransferID())
+}
+
+func TestVoucherRestartResponse(t *testing.T) {
+	id := datatransfer.TransferID(rand.Int31())
+	voucherResult := testutil.NewFakeDTTypeNode()
+	response, err := message1_1.RestartResponse(id, false, true, testutil.FakeDTVoucherType, voucherResult)
+	assert.NoError(t, err)
+	assert.Equal(t, response.TransferID(), id)
+	assert.False(t, response.Accepted())
+	assert.False(t, response.IsNew())
+	assert.False(t, response.IsUpdate())
+	assert.True(t, response.IsPaused())
+	assert.True(t, response.IsRestart())
+	assert.False(t, response.IsRequest())
+
+	testutil.AssertFakeDTVoucherResult(t, response, voucherResult)
+
+	// Sanity check to make sure we can cast to datatransfer.Message
+	msg, ok := response.(datatransfer.Message)
+	require.True(t, ok)
+
+	assert.False(t, msg.IsRequest())
+	assert.False(t, msg.IsNew())
+	assert.False(t, msg.IsUpdate())
+	assert.True(t, msg.IsPaused())
+	assert.Equal(t, response.TransferID(), msg.TransferID())
+}
+
+func TestVoucherRequest(t *testing.T) {
+	id := datatransfer.TransferID(rand.Int31())
+	voucherResult := testutil.NewFakeDTTypeNode()
+	request, err := message1_1.VoucherRequest(id, testutil.FakeDTVoucherType, voucherResult)
+	assert.NoError(t, err)
+	assert.Equal(t, request.TransferID(), id)
+	assert.False(t, request.IsNew())
+	assert.False(t, request.IsUpdate())
+	assert.False(t, request.IsPaused())
+	assert.False(t, request.IsPull())
+	assert.False(t, request.IsRestart())
+	assert.True(t, request.IsRequest())
+
+	testutil.AssertFakeDTVoucher(t, request, voucherResult)
+
+	// Sanity check to make sure we can cast to datatransfer.Message
+	msg, ok := request.(datatransfer.Message)
+	require.True(t, ok)
+
+	assert.True(t, msg.IsRequest())
+	assert.False(t, msg.IsNew())
+	assert.False(t, msg.IsUpdate())
+	assert.False(t, msg.IsPaused())
+	assert.Equal(t, request.TransferID(), msg.TransferID())
+}
+
 func TestCancelResponse(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	response := message1_1.CancelResponse(id)
@@ -412,6 +489,32 @@ func TestCompleteResponse(t *testing.T) {
 	assert.False(t, msg.IsUpdate())
 	assert.Equal(t, response.TransferID(), msg.TransferID())
 }
+
+func TestCompleteResponseWithVoucher(t *testing.T) {
+	id := datatransfer.TransferID(rand.Int31())
+	voucherResult := testutil.NewFakeDTTypeNode()
+	response, err := message1_1.CompleteResponse(id, true, true, testutil.FakeDTVoucherType, voucherResult)
+	require.NoError(t, err)
+	assert.Equal(t, response.TransferID(), id)
+	assert.False(t, response.IsNew())
+	assert.False(t, response.IsUpdate())
+	assert.True(t, response.IsPaused())
+	assert.True(t, response.IsVoucherResult())
+	assert.False(t, response.EmptyVoucherResult())
+	assert.True(t, response.IsComplete())
+	assert.False(t, response.IsRequest())
+	// Sanity check to make sure we can cast to datatransfer.Message
+	msg, ok := response.(datatransfer.Message)
+	require.True(t, ok)
+
+	testutil.AssertFakeDTVoucherResult(t, response, voucherResult)
+
+	assert.False(t, msg.IsRequest())
+	assert.False(t, msg.IsNew())
+	assert.False(t, msg.IsUpdate())
+	assert.Equal(t, response.TransferID(), msg.TransferID())
+}
+
 func TestToNetFromNetEquivalency(t *testing.T) {
 	t.Run("round-trip", func(t *testing.T) {
 		baseCid := testutil.GenerateCids(1)[0]

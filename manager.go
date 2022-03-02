@@ -5,7 +5,6 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
@@ -17,6 +16,7 @@ type RequestValidator interface {
 		isRestart bool,
 		chid ChannelID,
 		sender peer.ID,
+		voucherType TypeIdentifier,
 		voucher Voucher,
 		baseCid cid.Cid,
 		selector ipld.Node) (VoucherResult, error)
@@ -25,16 +25,17 @@ type RequestValidator interface {
 		isRestart bool,
 		chid ChannelID,
 		receiver peer.ID,
+		voucherType TypeIdentifier,
 		voucher Voucher,
 		baseCid cid.Cid,
-		selector datamodel.Node) (VoucherResult, error)
+		selector ipld.Node) (VoucherResult, error)
 }
 
 // Revalidator is a request validator revalidates in progress requests
 // by requesting request additional vouchers, and resuming when it receives them
 type Revalidator interface {
 	// Revalidate revalidates a request with a new voucher
-	Revalidate(channelID ChannelID, voucher Voucher) (VoucherResult, error)
+	Revalidate(channelID ChannelID, voucherType TypeIdentifier, voucher Voucher) (VoucherResult, error)
 	// OnPullDataSent is called on the responder side when more bytes are sent
 	// for a given pull request. The first value indicates whether the request was
 	// recognized by this revalidator and should be considered 'handled'. If true,
@@ -63,7 +64,7 @@ type Revalidator interface {
 }
 
 // TransportConfigurer provides a mechanism to provide transport specific configuration for a given voucher type
-type TransportConfigurer func(chid ChannelID, voucher Voucher, transport Transport)
+type TransportConfigurer func(chid ChannelID, voucherType TypeIdentifier, voucher Voucher, transport Transport)
 
 // ReadyFunc is function that gets called once when the data transfer module is ready
 type ReadyFunc func(error)
@@ -92,11 +93,6 @@ type Manager interface {
 	// The revalidator can simply be the sampe as the original request validator,
 	// or a different validator that satisfies the revalidator interface.
 	RegisterRevalidator(voucherType TypeIdentifier, revalidator Revalidator) error
-
-	// TODO: remove this?
-	// RegisterVoucherResultType allows deserialization of a voucher result,
-	// so that a listener can read the metadata
-	RegisterVoucherResultType(resultType TypeIdentifier) error
 
 	// RegisterTransportConfigurer registers the given transport configurer to be run on requests with the given voucher
 	// type

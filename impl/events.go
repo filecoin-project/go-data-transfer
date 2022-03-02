@@ -6,7 +6,6 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"go.opentelemetry.io/otel"
@@ -216,7 +215,6 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 	if response.IsVoucherResult() {
 		if !response.EmptyVoucherResult() {
 			voucherResult, err := response.VoucherResult()
-			// TODO: used to decodeVoucherResult() here and error if we didn't know the type, should we check?
 			if err != nil {
 				return err
 			}
@@ -399,7 +397,7 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 	processor, has := m.transportConfigurers.Processor(incoming.VoucherType())
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
-		transportConfigurer(chid, voucher, m.transport)
+		transportConfigurer(chid, incoming.VoucherType(), voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(initiator, chid.String())
 	if voucherErr == datatransfer.ErrPause {
@@ -452,7 +450,7 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 	processor, has := m.transportConfigurers.Processor(incoming.VoucherType())
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
-		transportConfigurer(chid, voucher, m.transport)
+		transportConfigurer(chid, incoming.VoucherType(), voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(chid.Initiator, chid.String())
 	if voucherErr == datatransfer.ErrPause {
@@ -480,7 +478,7 @@ func (m *manager) validateVoucher(
 	stor ipld.Node,
 ) (datatransfer.Voucher, datatransfer.VoucherResult, error) {
 
-	var validatorFunc func(bool, datatransfer.ChannelID, peer.ID, datatransfer.Voucher, cid.Cid, datamodel.Node) (datatransfer.VoucherResult, error)
+	var validatorFunc func(bool, datatransfer.ChannelID, peer.ID, datatransfer.TypeIdentifier, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.VoucherResult, error)
 	vouch, err := incoming.Voucher()
 	if err != nil {
 		return nil, nil, err
@@ -496,7 +494,7 @@ func (m *manager) validateVoucher(
 		validatorFunc = validator.ValidatePush
 	}
 
-	result, err := validatorFunc(isRestart, chid, sender, vouch, baseCid, stor)
+	result, err := validatorFunc(isRestart, chid, sender, incoming.VoucherType(), vouch, baseCid, stor)
 	return vouch, result, err
 }
 
@@ -509,14 +507,13 @@ func (m *manager) validateVoucher(
 func (m *manager) revalidateVoucher(chid datatransfer.ChannelID,
 	incoming datatransfer.Request) (datatransfer.Voucher, datatransfer.VoucherResult, error) {
 	vouch, err := incoming.Voucher()
-	// TODO: used to decodeVoucher() here and error if we didn't know the type, should we check?
 	if err != nil {
 		return nil, nil, err
 	}
 	processor, _ := m.revalidators.Processor(incoming.VoucherType())
 	validator := processor.(datatransfer.Revalidator)
 
-	result, err := validator.Revalidate(chid, vouch)
+	result, err := validator.Revalidate(chid, incoming.VoucherType(), vouch)
 	return vouch, result, err
 }
 

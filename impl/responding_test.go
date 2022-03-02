@@ -510,18 +510,19 @@ func TestDataTransferResponding(t *testing.T) {
 				sv.StubResult(testutil.NewFakeDTTypeNode())
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
-				err := h.dt.RegisterTransportConfigurer(h.voucherType, func(channelID datatransfer.ChannelID, voucher datatransfer.Voucher, transport datatransfer.Transport) {
+				err := h.dt.RegisterTransportConfigurer(h.voucherType, func(channelID datatransfer.ChannelID, voucherType datatransfer.TypeIdentifier, voucher datatransfer.Voucher, transport datatransfer.Transport) {
 					ft, ok := transport.(*testutil.FakeTransport)
 					if !ok {
 						return
 					}
-					ft.RecordCustomizedTransfer(channelID, voucher)
+					ft.RecordCustomizedTransfer(channelID, voucherType, voucher)
 				})
 				require.NoError(t, err)
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
 				require.Len(t, h.transport.CustomizedTransfers, 1)
 				customizedTransfer := h.transport.CustomizedTransfers[0]
 				require.Equal(t, channelID(h.id, h.peers), customizedTransfer.ChannelID)
+				require.Equal(t, h.voucherType, customizedTransfer.VoucherType)
 				require.Equal(t, h.voucher, customizedTransfer.Voucher)
 			},
 		},
@@ -531,12 +532,12 @@ func TestDataTransferResponding(t *testing.T) {
 				sv.ExpectSuccessPull()
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
-				err := h.dt.RegisterTransportConfigurer(h.voucherType, func(channelID datatransfer.ChannelID, voucher datatransfer.Voucher, transport datatransfer.Transport) {
+				err := h.dt.RegisterTransportConfigurer(h.voucherType, func(channelID datatransfer.ChannelID, voucherType datatransfer.TypeIdentifier, voucher datatransfer.Voucher, transport datatransfer.Transport) {
 					ft, ok := transport.(*testutil.FakeTransport)
 					if !ok {
 						return
 					}
-					ft.RecordCustomizedTransfer(channelID, voucher)
+					ft.RecordCustomizedTransfer(channelID, voucherType, voucher)
 				})
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
@@ -544,6 +545,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.Len(t, h.transport.CustomizedTransfers, 1)
 				customizedTransfer := h.transport.CustomizedTransfers[0]
 				require.Equal(t, channelID(h.id, h.peers), customizedTransfer.ChannelID)
+				require.Equal(t, h.voucherType, customizedTransfer.VoucherType)
 				require.Equal(t, h.voucher, customizedTransfer.Voucher)
 			},
 		},
@@ -814,8 +816,6 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				restartReq, err := message.NewRequest(h.id, true, true, "rand", h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(chid, restartReq)
-				// TODO: change this back when we have the right type?
-				// require.EqualError(t, err, fmt.Sprintf("restart request for channel %s failed validation: failed to decode request voucher: unknown voucher type: rand", chid))
 				require.EqualError(t, err, fmt.Sprintf("restart request for channel %s failed validation: channel and request voucher types do not match", chid))
 			},
 		},

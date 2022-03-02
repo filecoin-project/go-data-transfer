@@ -5,7 +5,6 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -33,7 +32,7 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 		TransferId:            uint64(id),
 	}
 	if voucher != nil {
-		vnode := datamodel.Node(voucher)
+		vnode := ipld.Node(voucher)
 		tr.VoucherPtr = &vnode
 	}
 	if selector != nil {
@@ -78,7 +77,7 @@ func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifie
 		TransferId:            uint64(id),
 	}
 	if voucher != nil {
-		vnode := datamodel.Node(voucher)
+		vnode := ipld.Node(voucher)
 		tr.VoucherPtr = &vnode
 	}
 	return tr, nil
@@ -94,7 +93,7 @@ func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, v
 		VoucherTypeIdentifier: voucherResultType,
 	}
 	if voucherResult != nil {
-		vnode := datamodel.Node(voucherResult)
+		vnode := ipld.Node(voucherResult)
 		tr.VoucherResultPtr = &vnode
 	}
 	return &tr, nil
@@ -110,7 +109,7 @@ func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, vouch
 		VoucherTypeIdentifier: voucherResultType,
 	}
 	if voucherResult != nil {
-		vnode := datamodel.Node(voucherResult)
+		vnode := ipld.Node(voucherResult)
 		tr.VoucherResultPtr = &vnode
 	}
 	return &tr, nil
@@ -126,7 +125,7 @@ func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused b
 		VoucherTypeIdentifier: voucherResultType,
 	}
 	if voucherResult != nil {
-		vnode := datamodel.Node(voucherResult)
+		vnode := ipld.Node(voucherResult)
 		tr.VoucherResultPtr = &vnode
 	}
 	return &tr, nil
@@ -159,18 +158,17 @@ func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool
 		TransferId:            uint64(id),
 	}
 	if voucherResult != nil {
-		vnode := datamodel.Node(voucherResult)
+		vnode := ipld.Node(voucherResult)
 		tr.VoucherResultPtr = &vnode
 	}
 	return &tr, nil
 }
 
-// FromNet can read a network stream to deserialize a GraphSyncMessage
-func FromNet(r io.Reader) (datatransfer.Message, error) {
-	msg, err := ipldutil.FromEncoded(r, TransferMessage1_1{})
+func fromMsg(msg interface{}, err error) (datatransfer.Message, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	tresp := msg.(*TransferMessage1_1)
 	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
 		return nil, xerrors.Errorf("invalid/malformed message")
@@ -182,19 +180,12 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 	return tresp.Response, nil
 }
 
-// FromNet can read a network stream to deserialize a GraphSyncMessage
-func FromIPLD(node datamodel.Node) (datatransfer.Message, error) {
-	msg, err := ipldutil.FromNode(node, (*TransferMessage1_1)(nil))
-	if err != nil {
-		return nil, err
-	}
-	tresp := msg.(*TransferMessage1_1)
-	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
-		return nil, xerrors.Errorf("invalid/malformed message")
-	}
+// FromNet can read a network stream to deserialize a datatransfer Message
+func FromNet(r io.Reader) (datatransfer.Message, error) {
+	return fromMsg(ipldutil.FromDagCbor(r, TransferMessage1_1{}))
+}
 
-	if tresp.IsRequest {
-		return tresp.Request, nil
-	}
-	return tresp.Response, nil
+// FromIPLD can decode a Node into a datatransfer Message
+func FromIPLD(node ipld.Node) (datatransfer.Message, error) {
+	return fromMsg(ipldutil.FromNode(node, (*TransferMessage1_1)(nil)))
 }

@@ -276,12 +276,12 @@ func TestDataTransferInitiating(t *testing.T) {
 		"customizing push transfer": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open},
 			verify: func(t *testing.T, h *harness) {
-				err := h.dt.RegisterTransportConfigurer(h.voucherType, func(channelID datatransfer.ChannelID, voucher datatransfer.Voucher, transport datatransfer.Transport) {
+				err := h.dt.RegisterTransportConfigurer(h.voucherType, func(channelID datatransfer.ChannelID, voucherType datatransfer.TypeIdentifier, voucher datatransfer.Voucher, transport datatransfer.Transport) {
 					ft, ok := transport.(*testutil.FakeTransport)
 					if !ok {
 						return
 					}
-					ft.RecordCustomizedTransfer(channelID, voucher)
+					ft.RecordCustomizedTransfer(channelID, voucherType, voucher)
 				})
 				require.NoError(t, err)
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucherType, h.voucher, h.baseCid, h.stor)
@@ -290,18 +290,19 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Len(t, h.transport.CustomizedTransfers, 1)
 				customizedTransfer := h.transport.CustomizedTransfers[0]
 				require.Equal(t, channelID, customizedTransfer.ChannelID)
+				require.Equal(t, h.voucherType, customizedTransfer.VoucherType)
 				require.Equal(t, h.voucher, customizedTransfer.Voucher)
 			},
 		},
 		"customizing pull transfer": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open},
 			verify: func(t *testing.T, h *harness) {
-				err := h.dt.RegisterTransportConfigurer(h.voucherType, func(channelID datatransfer.ChannelID, voucher datatransfer.Voucher, transport datatransfer.Transport) {
+				err := h.dt.RegisterTransportConfigurer(h.voucherType, func(channelID datatransfer.ChannelID, voucherType datatransfer.TypeIdentifier, voucher datatransfer.Voucher, transport datatransfer.Transport) {
 					ft, ok := transport.(*testutil.FakeTransport)
 					if !ok {
 						return
 					}
-					ft.RecordCustomizedTransfer(channelID, voucher)
+					ft.RecordCustomizedTransfer(channelID, voucherType, voucher)
 				})
 				require.NoError(t, err)
 				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucherType, h.voucher, h.baseCid, h.stor)
@@ -310,6 +311,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Len(t, h.transport.CustomizedTransfers, 1)
 				customizedTransfer := h.transport.CustomizedTransfers[0]
 				require.Equal(t, channelID, customizedTransfer.ChannelID)
+				require.Equal(t, h.voucherType, customizedTransfer.VoucherType)
 				require.Equal(t, h.voucher, customizedTransfer.Voucher)
 			},
 		},
@@ -340,7 +342,6 @@ func TestDataTransferInitiating(t *testing.T) {
 			h.voucherType = testutil.FakeDTVoucherType
 			h.voucherResult = testutil.NewFakeDTTypeNode()
 			h.voucherResultType = testutil.FakeDTVoucherType
-			err = h.dt.RegisterVoucherResultType(h.voucherResultType)
 			require.NoError(t, err)
 			h.baseCid = testutil.GenerateCids(1)[0]
 			verify.verify(t, h)
@@ -596,8 +597,6 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			require.NoError(t, err)
 			h.voucherResult = datatransfer.VoucherResult(node)
 			h.voucherResultType = testutil.FakeDTVoucherType
-			err = h.dt.RegisterVoucherResultType(h.voucherResultType)
-			require.NoError(t, err)
 			h.baseCid = testutil.GenerateCids(1)[0]
 
 			h.id = datatransfer.TransferID(rand.Int31())

@@ -27,8 +27,9 @@ type ResumedChannel struct {
 
 // CustomizedTransfer is just a way to record calls made to transport configurer
 type CustomizedTransfer struct {
-	ChannelID datatransfer.ChannelID
-	Voucher   datatransfer.Voucher
+	ChannelID   datatransfer.ChannelID
+	VoucherType datatransfer.TypeIdentifier
+	Voucher     datatransfer.Voucher
 }
 
 // FakeTransport is a fake transport with mocked results
@@ -95,6 +96,6 @@ func (ft *FakeTransport) CleanupChannel(chid datatransfer.ChannelID) {
 	ft.CleanedUpChannels = append(ft.CleanedUpChannels, chid)
 }
 
-func (ft *FakeTransport) RecordCustomizedTransfer(chid datatransfer.ChannelID, voucher datatransfer.Voucher) {
-	ft.CustomizedTransfers = append(ft.CustomizedTransfers, CustomizedTransfer{chid, voucher})
+func (ft *FakeTransport) RecordCustomizedTransfer(chid datatransfer.ChannelID, voucherType datatransfer.TypeIdentifier, voucher datatransfer.Voucher) {
+	ft.CustomizedTransfers = append(ft.CustomizedTransfers, CustomizedTransfer{chid, voucherType, voucher})
 }

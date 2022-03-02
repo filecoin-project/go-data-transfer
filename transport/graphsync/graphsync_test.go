@@ -12,7 +12,6 @@ import (
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipfs/go-graphsync/donotsendfirstblocks"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -886,7 +885,7 @@ func TestManager(t *testing.T) {
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				requestReceived := gsData.fgs.AssertRequestReceived(gsData.ctx, t)
-				extensions := make(map[graphsync.ExtensionName]datamodel.Node)
+				extensions := make(map[graphsync.ExtensionName]ipld.Node)
 				for _, ext := range requestReceived.Extensions {
 					extensions[ext.Name] = ext.Data
 				}
@@ -987,7 +986,7 @@ func TestManager(t *testing.T) {
 					close(completed)
 				}()
 				time.Sleep(100 * time.Millisecond)
-				extensions := make(map[graphsync.ExtensionName]datamodel.Node)
+				extensions := make(map[graphsync.ExtensionName]ipld.Node)
 				for _, ext := range requestReceived.Extensions {
 					extensions[ext.Name] = ext.Data
 				}
@@ -1276,8 +1275,8 @@ type dtConfig struct {
 	dtExtensionMalformed bool
 }
 
-func (dtc *dtConfig) extensions(t *testing.T, transferID datatransfer.TransferID, extName graphsync.ExtensionName) map[graphsync.ExtensionName]datamodel.Node {
-	extensions := make(map[graphsync.ExtensionName]datamodel.Node)
+func (dtc *dtConfig) extensions(t *testing.T, transferID datatransfer.TransferID, extName graphsync.ExtensionName) map[graphsync.ExtensionName]ipld.Node {
+	extensions := make(map[graphsync.ExtensionName]ipld.Node)
 	if !dtc.dtExtensionMissing {
 		if dtc.dtExtensionMalformed {
 			extensions[extName] = basicnode.NewInt(10)
@@ -1329,7 +1328,7 @@ func (grc *gsResponseConfig) makeResponse(t *testing.T, transferID datatransfer.
 	return testutil.NewFakeResponse(requestID, extensions, grc.status)
 }
 
-func assertDecodesToMessage(t *testing.T, data datamodel.Node, expected datatransfer.Message) {
+func assertDecodesToMessage(t *testing.T, data ipld.Node, expected datatransfer.Message) {
 	actual, err := message.FromIPLD(data)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
@@ -1468,6 +1467,10 @@ func (m *mockChannelState) VoucherResults() []datatransfer.VoucherResult {
 }
 
 func (m *mockChannelState) LastVoucher() datatransfer.Voucher {
+	panic("implement me")
+}
+
+func (m *mockChannelState) LastVoucherType() datatransfer.TypeIdentifier {
 	panic("implement me")
 }
 

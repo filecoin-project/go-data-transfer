@@ -84,7 +84,7 @@ func (c channelState) BaseCID() cid.Cid { return c.baseCid }
 // Selector returns the IPLD selector for this data transfer (represented as
 // an IPLD node)
 func (c channelState) Selector() ipld.Node {
-	node, err := ipldutil.FromDagCbor(bytes.NewReader(c.selector.Raw))
+	node, err := ipldutil.NodeFromDagCbor(bytes.NewReader(c.selector.Raw))
 	if err != nil {
 		log.Error(err)
 	}
@@ -96,11 +96,11 @@ func (c channelState) Voucher() datatransfer.Voucher {
 	if len(c.vouchers) == 0 {
 		return nil
 	}
-	voucher, _ := ipldutil.FromDagCbor(bytes.NewReader(c.vouchers[0].Voucher.Raw))
+	voucher, _ := ipldutil.NodeFromDagCbor(bytes.NewReader(c.vouchers[0].Voucher.Raw))
 	return voucher
 }
 
-// Voucher returns the voucher for this data transfer
+// VoucherType returns the type of voucher for this data transfer
 func (c channelState) VoucherType() datatransfer.TypeIdentifier {
 	if len(c.vouchers) == 0 {
 		return ""
@@ -154,26 +154,34 @@ func (c channelState) Message() string {
 func (c channelState) Vouchers() []datatransfer.Voucher {
 	vouchers := make([]datatransfer.Voucher, 0, len(c.vouchers))
 	for _, encoded := range c.vouchers {
-		voucher, _ := ipldutil.FromDagCbor(bytes.NewReader(encoded.Voucher.Raw))
+		voucher, _ := ipldutil.NodeFromDagCbor(bytes.NewReader(encoded.Voucher.Raw))
 		vouchers = append(vouchers, voucher)
 	}
 	return vouchers
 }
 
+// LastVoucherType returns the type of the last voucher for this data transfer
+func (c channelState) LastVoucherType() datatransfer.TypeIdentifier {
+	if len(c.vouchers) == 0 {
+		return ""
+	}
+	return c.vouchers[len(c.vouchers)-1].Type
+}
+
 func (c channelState) LastVoucher() datatransfer.Voucher {
-	voucher, _ := ipldutil.FromDagCbor(bytes.NewReader(c.vouchers[len(c.vouchers)-1].Voucher.Raw))
+	voucher, _ := ipldutil.NodeFromDagCbor(bytes.NewReader(c.vouchers[len(c.vouchers)-1].Voucher.Raw))
 	return voucher
 }
 
 func (c channelState) LastVoucherResult() datatransfer.VoucherResult {
-	voucher, _ := ipldutil.FromDagCbor(bytes.NewReader(c.voucherResults[len(c.voucherResults)-1].VoucherResult.Raw))
+	voucher, _ := ipldutil.NodeFromDagCbor(bytes.NewReader(c.voucherResults[len(c.voucherResults)-1].VoucherResult.Raw))
 	return voucher
 }
 
 func (c channelState) VoucherResults() []datatransfer.VoucherResult {
 	voucherResults := make([]datatransfer.VoucherResult, 0, len(c.voucherResults))
 	for _, encoded := range c.voucherResults {
-		voucherResult, _ := ipldutil.FromDagCbor(bytes.NewReader(encoded.VoucherResult.Raw))
+		voucherResult, _ := ipldutil.NodeFromDagCbor(bytes.NewReader(encoded.VoucherResult.Raw))
 		voucherResults = append(voucherResults, voucherResult)
 	}
 	return voucherResults

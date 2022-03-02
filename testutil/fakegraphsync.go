@@ -10,7 +10,6 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/traversal"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -390,7 +389,7 @@ type fakeRequest struct {
 	selector    ipld.Node
 	priority    graphsync.Priority
 	requestType graphsync.RequestType
-	extensions  map[graphsync.ExtensionName]datamodel.Node
+	extensions  map[graphsync.ExtensionName]ipld.Node
 }
 
 // ID Returns the request ID for this Request
@@ -415,7 +414,7 @@ func (fr *fakeRequest) Priority() graphsync.Priority {
 
 // Extension returns the content for an extension on a response, or errors
 // if extension is not present
-func (fr *fakeRequest) Extension(name graphsync.ExtensionName) (datamodel.Node, bool) {
+func (fr *fakeRequest) Extension(name graphsync.ExtensionName) (ipld.Node, bool) {
 	data, has := fr.extensions[name]
 	return data, has
 }
@@ -426,7 +425,7 @@ func (fr *fakeRequest) Type() graphsync.RequestType {
 }
 
 // NewFakeRequest returns a fake request that matches the request data interface
-func NewFakeRequest(id graphsync.RequestID, extensions map[graphsync.ExtensionName]datamodel.Node) graphsync.RequestData {
+func NewFakeRequest(id graphsync.RequestID, extensions map[graphsync.ExtensionName]ipld.Node) graphsync.RequestData {
 	return &fakeRequest{
 		id:          id,
 		root:        GenerateCids(1)[0],
@@ -440,7 +439,7 @@ func NewFakeRequest(id graphsync.RequestID, extensions map[graphsync.ExtensionNa
 type fakeResponse struct {
 	id         graphsync.RequestID
 	status     graphsync.ResponseStatusCode
-	extensions map[graphsync.ExtensionName]datamodel.Node
+	extensions map[graphsync.ExtensionName]ipld.Node
 }
 
 // RequestID returns the request ID for this response
@@ -455,7 +454,7 @@ func (fr *fakeResponse) Status() graphsync.ResponseStatusCode {
 
 // Extension returns the content for an extension on a response, or errors
 // if extension is not present
-func (fr *fakeResponse) Extension(name graphsync.ExtensionName) (datamodel.Node, bool) {
+func (fr *fakeResponse) Extension(name graphsync.ExtensionName) (ipld.Node, bool) {
 	data, has := fr.extensions[name]
 	return data, has
 }
@@ -466,7 +465,7 @@ func (fr *fakeResponse) Metadata() graphsync.LinkMetadata {
 }
 
 // NewFakeResponse returns a fake response that matches the response data interface
-func NewFakeResponse(id graphsync.RequestID, extensions map[graphsync.ExtensionName]datamodel.Node, status graphsync.ResponseStatusCode) graphsync.ResponseData {
+func NewFakeResponse(id graphsync.RequestID, extensions map[graphsync.ExtensionName]ipld.Node, status graphsync.ResponseStatusCode) graphsync.ResponseData {
 	return &fakeResponse{
 		id:         id,
 		status:     status,

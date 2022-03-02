@@ -602,6 +602,10 @@ func (m *mockChannelState) VoucherResults() []datatransfer.VoucherResult {
 	panic("implement me")
 }
 
+func (m *mockChannelState) LastVoucherType() datatransfer.TypeIdentifier {
+	panic("implement me")
+}
+
 func (m *mockChannelState) LastVoucher() datatransfer.Voucher {
 	panic("implement me")
 }

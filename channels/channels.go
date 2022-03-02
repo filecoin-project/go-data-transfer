@@ -8,7 +8,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
-	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
@@ -112,7 +112,7 @@ func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 
 // CreateNew creates a new channel id and channel state and saves to channels.
 // returns error if the channel exists already.
-func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector datamodel.Node, voucherType datatransfer.TypeIdentifier, voucher datatransfer.Voucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
+func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector ipld.Node, voucherType datatransfer.TypeIdentifier, voucher datatransfer.Voucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
 	var responder peer.ID
 	if dataSender == initiator {
 		responder = dataReceiver
@@ -273,7 +273,7 @@ func (c *Channels) NewVoucher(chid datatransfer.ChannelID, voucherType datatrans
 }
 
 // NewVoucherResult records a new voucher result for this channel
-func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResultType datatransfer.TypeIdentifier, voucherResult datamodel.Node) error {
+func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResultType datatransfer.TypeIdentifier, voucherResult ipld.Node) error {
 	voucherResultBytes, err := ipldutil.ToDagCbor(voucherResult)
 	if err != nil {
 		return err

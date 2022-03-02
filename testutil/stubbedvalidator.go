@@ -22,11 +22,12 @@ func (sv *StubbedValidator) ValidatePush(
 	isRestart bool,
 	chid datatransfer.ChannelID,
 	sender peer.ID,
+	voucherType datatransfer.TypeIdentifier,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
 	selector ipld.Node) (datatransfer.VoucherResult, error) {
 	sv.didPush = true
-	sv.ValidationsReceived = append(sv.ValidationsReceived, ReceivedValidation{false, sender, voucher, baseCid, selector})
+	sv.ValidationsReceived = append(sv.ValidationsReceived, ReceivedValidation{false, sender, voucherType, voucher, baseCid, selector})
 	return sv.result, sv.pushError
 }
 
@@ -35,11 +36,12 @@ func (sv *StubbedValidator) ValidatePull(
 	isRestart bool,
 	chid datatransfer.ChannelID,
 	receiver peer.ID,
+	voucherType datatransfer.TypeIdentifier,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
 	selector ipld.Node) (datatransfer.VoucherResult, error) {
 	sv.didPull = true
-	sv.ValidationsReceived = append(sv.ValidationsReceived, ReceivedValidation{true, receiver, voucher, baseCid, selector})
+	sv.ValidationsReceived = append(sv.ValidationsReceived, ReceivedValidation{true, receiver, voucherType, voucher, baseCid, selector})
 	return sv.result, sv.pullError
 }
 
@@ -126,11 +128,12 @@ func (sv *StubbedValidator) VerifyExpectations(t *testing.T) {
 
 // ReceivedValidation records a call to either ValidatePush or ValidatePull
 type ReceivedValidation struct {
-	IsPull   bool
-	Other    peer.ID
-	Voucher  datatransfer.Voucher
-	BaseCid  cid.Cid
-	Selector ipld.Node
+	IsPull      bool
+	Other       peer.ID
+	VoucherType datatransfer.TypeIdentifier
+	Voucher     datatransfer.Voucher
+	BaseCid     cid.Cid
+	Selector    ipld.Node
 }
 
 // StubbedValidator is a validator that returns predictable results
@@ -187,7 +190,7 @@ func (srv *StubbedRevalidator) OnComplete(chid datatransfer.ChannelID) (bool, da
 }
 
 // Revalidate returns a stubbed result for revalidating a request
-func (srv *StubbedRevalidator) Revalidate(chid datatransfer.ChannelID, voucher datatransfer.Voucher) (datatransfer.VoucherResult, error) {
+func (srv *StubbedRevalidator) Revalidate(chid datatransfer.ChannelID, voucherType datatransfer.TypeIdentifier, voucher datatransfer.Voucher) (datatransfer.VoucherResult, error) {
 	srv.didRevalidate = true
 	return srv.checkResult, srv.revalidationError
 }

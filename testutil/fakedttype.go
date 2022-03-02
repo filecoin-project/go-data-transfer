@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/stretchr/testify/require"
 
@@ -19,7 +18,7 @@ type FakeDTType struct {
 
 type FakeDTTypeWithEncoded struct {
 	FakeDTType *FakeDTType
-	Encoded    datamodel.Node
+	Encoded    ipld.Node
 }
 
 const FakeDTVoucherType = datatransfer.TypeIdentifier("FakeDTType")
@@ -57,7 +56,7 @@ func AssertEqualFakeDTVoucher(t *testing.T, expectedRequest datatransfer.Request
 }
 
 // AssertFakeDTVoucherResult asserts that a data transfer response contains the expected fake data transfer voucher result type
-func AssertFakeDTVoucherResult(t *testing.T, response datatransfer.Response, expected datamodel.Node) {
+func AssertFakeDTVoucherResult(t *testing.T, response datatransfer.Response, expected ipld.Node) {
 	require.Equal(t, datatransfer.TypeIdentifier("FakeDTType"), response.VoucherResultType())
 	node, err := response.VoucherResult()
 	require.NoError(t, err)
@@ -89,7 +88,7 @@ func NewFakeDTType() *FakeDTType {
 	return &FakeDTType{Data: string(RandomBytes(100))}
 }
 
-func NewFakeDTTypeNode() datamodel.Node {
+func NewFakeDTTypeNode() ipld.Node {
 	node, err := ipldutil.ToNode(NewFakeDTType())
 	if err != nil {
 		panic(err)
@@ -97,7 +96,7 @@ func NewFakeDTTypeNode() datamodel.Node {
 	return node
 }
 
-func NewFakeDTTypeNodeWithData(data string) datamodel.Node {
+func NewFakeDTTypeNodeWithData(data string) ipld.Node {
 	node, err := ipldutil.ToNode(&FakeDTType{Data: data})
 	if err != nil {
 		panic(err)

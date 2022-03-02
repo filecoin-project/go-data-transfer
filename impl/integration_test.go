@@ -191,7 +191,8 @@ func TestRoundTrip(t *testing.T) {
 					bs := bstore.NewBlockstore(namespace.Wrap(ds, datastore.NewKey("blockstore")))
 					lsys := storeutil.LinkSystemForBlockstore(bs)
 					sourceDagService = merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
-					err := dt1.RegisterTransportConfigurer(testutil.FakeDTVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+					err := dt1.RegisterTransportConfigurer(testutil.FakeDTVoucherType, func(channelID datatransfer.ChannelID, testVoucherType datatransfer.TypeIdentifier, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+						require.Equal(t, testVoucherType, testutil.FakeDTVoucherType)
 						fvPtr, err := ipldutil.FromNode(testVoucher, &testutil.FakeDTType{})
 						require.NoError(t, err)
 						fv, ok := fvPtr.(*testutil.FakeDTType)
@@ -217,7 +218,8 @@ func TestRoundTrip(t *testing.T) {
 					bs := bstore.NewBlockstore(namespace.Wrap(ds, datastore.NewKey("blockstore")))
 					lsys := storeutil.LinkSystemForBlockstore(bs)
 					destDagService = merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
-					err := dt2.RegisterTransportConfigurer(testutil.FakeDTVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+					err := dt2.RegisterTransportConfigurer(testutil.FakeDTVoucherType, func(channelID datatransfer.ChannelID, testVoucherType datatransfer.TypeIdentifier, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+						require.Equal(t, testVoucherType, testutil.FakeDTVoucherType)
 						fvPtr, err := ipldutil.FromNode(testVoucher, &testutil.FakeDTType{})
 						require.NoError(t, err)
 						fv, ok := fvPtr.(*testutil.FakeDTType)
@@ -352,7 +354,8 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 				linkSystems = append(linkSystems, lsys)
 			}
 
-			err = dt2.RegisterTransportConfigurer(testutil.FakeDTVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+			err = dt2.RegisterTransportConfigurer(testutil.FakeDTVoucherType, func(channelID datatransfer.ChannelID, testVoucherType datatransfer.TypeIdentifier, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+				require.Equal(t, testVoucherType, testutil.FakeDTVoucherType)
 				fvPtr, err := ipldutil.FromNode(testVoucher, &testutil.FakeDTType{})
 				require.NoError(t, err)
 				fv, ok := fvPtr.(*testutil.FakeDTType)
@@ -459,7 +462,8 @@ func TestManyReceiversAtOnce(t *testing.T) {
 				err = receiver.Start(gsData.Ctx)
 				require.NoError(t, err)
 
-				err = receiver.RegisterTransportConfigurer(testutil.FakeDTVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+				err = receiver.RegisterTransportConfigurer(testutil.FakeDTVoucherType, func(channelID datatransfer.ChannelID, testVoucherType datatransfer.TypeIdentifier, testVoucher datatransfer.Voucher, transport datatransfer.Transport) {
+					require.Equal(t, testVoucherType, testutil.FakeDTVoucherType)
 					_, err := ipldutil.FromNode(testVoucher, &testutil.FakeDTType{})
 					gsTransport, isGs := transport.(*tp.Transport)
 					if err == nil && isGs {
@@ -1434,7 +1438,6 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			srv.ExpectSuccessErrResume()
 			require.NoError(t, dt1.RegisterRevalidator(testutil.FakeDTVoucherType, srv))
 
-			require.NoError(t, dt2.RegisterVoucherResultType(testutil.FakeDTVoucherType))
 			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), testutil.FakeDTVoucherType, voucherNode, rootCid, gsData.AllSelector)
 			require.NoError(t, err)
 
@@ -1841,8 +1844,6 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt1)
 	voucherResult := testutil.NewFakeDTTypeNode()
-	err = dt1.RegisterVoucherResultType(testutil.FakeDTVoucherType)
-	require.NoError(t, err)
 
 	t.Run("when request is initiated", func(t *testing.T) {
 		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), testutil.FakeDTVoucherType, voucherResult, link.(cidlink.Link).Cid, gsData.AllSelector)
@@ -2164,9 +2165,6 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	srv.ExpectSuccessErrResume()
 	require.NoError(t, dt1.RegisterRevalidator(testutil.FakeDTVoucherType, srv))
 
-	// Register our response voucher with the client
-	require.NoError(t, dt2.RegisterVoucherResultType(testutil.FakeDTVoucherType))
-
 	voucher := testutil.NewFakeDTTypeNodeWithData("applesauce")
 	chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), testutil.FakeDTVoucherType, voucher, rootCid, gsData.AllSelector)
 	require.NoError(t, err)
@@ -2250,9 +2248,6 @@ func TestMultipleParallelTransfers(t *testing.T) {
 	}
 	srv.ExpectSuccessErrResume()
 	require.NoError(t, dt1.RegisterRevalidator(testutil.FakeDTVoucherType, srv))
-
-	// Register our response voucher with the client
-	require.NoError(t, dt2.RegisterVoucherResultType(testutil.FakeDTVoucherType))
 
 	// for each size we create a new random DAG of the given size and try to retrieve it
 	for _, size := range sizes {

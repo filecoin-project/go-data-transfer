@@ -5,7 +5,6 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/protocol"
 )
 
@@ -26,7 +25,7 @@ type Message interface {
 	IsCancel() bool
 	TransferID() TransferID
 	ToNet(w io.Writer) error
-	ToIPLD() (datamodel.Node, error)
+	ToIPLD() (ipld.Node, error)
 	MessageForProtocol(targetProtocol protocol.ID) (newMsg Message, err error)
 }
 

@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/ipfs/go-graphsync"
-	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p-core/protocol"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -58,7 +58,7 @@ func ToExtensionData(msg datatransfer.Message, supportedExtensions []graphsync.E
 
 // GsExtended is a small interface used by GetTransferData
 type GsExtended interface {
-	Extension(name graphsync.ExtensionName) (datamodel.Node, bool)
+	Extension(name graphsync.ExtensionName) (ipld.Node, bool)
 }
 
 // GetTransferData unmarshals extension data.
@@ -76,7 +76,7 @@ func GetTransferData(extendedData GsExtended, extNames []graphsync.ExtensionName
 	return nil, nil
 }
 
-type decoder func(datamodel.Node) (datatransfer.Message, error)
+type decoder func(ipld.Node) (datatransfer.Message, error)
 
 var decoders = map[graphsync.ExtensionName]decoder{
 	ExtensionIncomingRequest1_1: message.FromIPLD,
