@@ -54,26 +54,29 @@ Install the module in your package or app with `go get "github.com/filecoin-proj
 
     [datatransfer.Voucher](https://github.com/filecoin-project/go-data-transfer/blob/21dd66ba370176224114b13030ee68cb785fadb2/datatransfer/types.go#L17)
     and [datatransfer.Validator](https://github.com/filecoin-project/go-data-transfer/blob/21dd66ba370176224114b13030ee68cb785fadb2/datatransfer/types.go#L153)
-    are the interfaces used for validation of graphsync datatransfer messages.  Voucher types plus a Validator for them must be registered
-    with the peer to whom requests will be sent.  
+    are the types used for validation of graphsync datatransfer messages. **Both of these are simply [ipld.Node](https://pkg.go.dev/github.com/ipld/go-ipld-prime#Node)s**.
 
 #### Example Toy Voucher and Validator
 ```go
+const myVoucherType = datatransfer.TypeIdentifier("myVoucher")
+
 type myVoucher struct {
 	data string
 }
 
-func (v *myVoucher) ToBytes() ([]byte, error) {
-	return []byte(v.data), nil
+func fromNode(node ipld.Node) (myVoucher, error) {
+	if node.Kind() != datamodel.Kind_String {
+		return nil, fmt.Errorf("invalid node kind")
+	}
+	str, err := node.AsString()
+	if err != nil {
+		return nil, err
+	}
+	return myVoucher{data: str}, nil
 }
 
-func (v *myVoucher) FromBytes(data []byte) error {
-	v.data = string(data)
-	return nil
-}
-
-func (v *myVoucher) Type() string {
-	return "FakeDTType"
+func (m myVoucher) toNode() ipld.Node {
+	return basicnode.NewString(m.data)
 }
 
 type myValidator struct {
@@ -83,32 +86,39 @@ type myValidator struct {
 
 func (vl *myValidator) ValidatePush(
 	sender peer.ID,
+	voucherType datatransfer.TypeIdentifier,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
 	selector ipld.Node) error {
-    
-    v := voucher.(*myVoucher)
-    if v.data == "" || v.data != "validpush" {
-        return errors.New("invalid")
-    }   
+
+	v, err := fromNode(voucher)
+	if err != nil {
+		return err
+	}
+	if v.data == "" || v.data != "validpush" {
+			return errors.New("invalid")
+	} 
 
 	return nil
 }
 
 func (vl *myValidator) ValidatePull(
 	receiver peer.ID,
+	voucherType datatransfer.TypeIdentifier,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
 	selector ipld.Node) error {
 
-    v := voucher.(*myVoucher)
-    if v.data == "" || v.data != "validpull" {
-        return errors.New("invalid")
-    }   
+	v, err := fromNode(voucher)
+	if err != nil {
+		return err
+	}
+	if v.data == "" || v.data != "validpull" {
+			return errors.New("invalid")
+	} 
 
 	return nil
 }
-
 ```
 
 
@@ -118,29 +128,27 @@ for more detail.
 
 
 ### Register a validator
-Before sending push or pull requests, you must register a `datatransfer.Voucher` 
-by its `reflect.Type` and `dataTransfer.RequestValidator` for vouchers that
+Before sending push or pull requests, you must register a voucher type by its `datatransfer.TypeIdentifier` and `dataTransfer.RequestValidator` for vouchers that
 must be sent with the request.  Using the trivial examples above:
 ```go
     func NewGraphsyncDatatransfer(h host.Host, gs graphsync.GraphExchange) {
         tp := gstransport.NewTransport(h.ID(), gs)
         dt := impl.NewDataTransfer(h, tp)
 
-        vouch := &myVoucher{}
         mv := &myValidator{} 
-        dt.RegisterVoucherType(reflect.TypeOf(vouch), mv)
+        dt.RegisterVoucherType(myVoucherType, mv)
     }
 ```
     
 For more detail, please see the [unit tests](https://github.com/filecoin-project/go-data-transfer/blob/master/impl/impl_test.go).
 
 ### Open a Push or Pull Request
-For a push or pull request, provide a context, a `datatransfer.Voucher`, a host recipient `peer.ID`, a baseCID `cid.CID` and a selector `ipld.Node`.  These
+For a push or pull request, provide a context, a voucher type `datatransfer.TypeIdentifier`, a `datatransfer.Voucher`, a host recipient `peer.ID`, a baseCID `cid.CID` and a selector `ipld.Node`.  These
 calls return a `datatransfer.ChannelID` and any error:
 ```go
-    channelID, err := dtm.OpenPullDataChannel(ctx, recipient, voucher, baseCid, selector)
+    channelID, err := dtm.OpenPullDataChannel(ctx, recipient, voucherType, voucher, baseCid, selector)
     // OR
-    channelID, err := dtm.OpenPushDataChannel(ctx, recipient, voucher, baseCid, selector)
+    channelID, err := dtm.OpenPushDataChannel(ctx, recipient, voucherType, voucher, baseCid, selector)
 
 ```
 
