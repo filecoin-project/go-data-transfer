@@ -8,7 +8,7 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/ipldutil"
-	message1_1 "github.com/filecoin-project/go-data-transfer/message/message1_1prime"
+	message1_1 "github.com/filecoin-project/go-data-transfer/message/message1_1"
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
 
