@@ -35,7 +35,6 @@ type Request interface {
 	IsPull() bool
 	IsVoucher() bool
 	VoucherType() TypeIdentifier
-	// VoucherInto(interface{}) (interface{}, error)
 	Voucher() (Voucher, error)
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
@@ -50,7 +49,6 @@ type Response interface {
 	IsComplete() bool
 	Accepted() bool
 	VoucherResultType() TypeIdentifier
-	// VoucherResultInto(interface{}) (interface{}, error)
 	VoucherResult() (VoucherResult, error)
 	EmptyVoucherResult() bool
 }
