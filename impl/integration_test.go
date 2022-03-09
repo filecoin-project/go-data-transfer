@@ -920,7 +920,6 @@ func TestAutoRestart(t *testing.T) {
 // 6. The connection is automatically re-established and the transfer completes
 func TestAutoRestartAfterBouncingInitiator(t *testing.T) {
 	t.Skip("flaky test")
-	SetDTLogLevelDebug()
 
 	runTest := func(t *testing.T, isPush bool) {
 		ctx := context.Background()
@@ -1484,13 +1483,13 @@ func TestPauseAndResume(t *testing.T) {
 			resumeResponder := make(chan struct{}, 2)
 			var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 
-				if event.Code == datatransfer.DataQueued {
+				if event.Code == datatransfer.DataQueuedProgress {
 					if channelState.Queued() > 0 {
 						sent <- channelState.Queued()
 					}
 				}
 
-				if event.Code == datatransfer.DataReceived {
+				if event.Code == datatransfer.DataReceivedProgress {
 					if channelState.Received() > 0 {
 						received <- channelState.Received()
 					}
@@ -2177,7 +2176,6 @@ func (r *completeRevalidator) OnComplete(chid datatransfer.ChannelID) (bool, dat
 }
 
 func TestMultipleParallelTransfers(t *testing.T) {
-	SetDTLogLevelDebug()
 
 	// Add more sizes here to trigger more transfers.
 	sizes := []int{300000, 256000, 200000, 256000}
