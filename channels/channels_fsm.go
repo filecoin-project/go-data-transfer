@@ -187,7 +187,8 @@ var ChannelEvents = fsm.Events{
 		FromAny().To(datatransfer.TransferFinished).
 		FromMany(datatransfer.Failing, datatransfer.Cancelling).ToJustRecord().
 		From(datatransfer.ResponderCompleted).To(datatransfer.Completing).
-		From(datatransfer.ResponderFinalizing).To(datatransfer.ResponderFinalizingTransferFinished).Action(func(chst *internal.ChannelState) error {
+		From(datatransfer.ResponderFinalizing).To(datatransfer.ResponderFinalizingTransferFinished).
+		From(datatransfer.Requested).To(datatransfer.Completing).Action(func(chst *internal.ChannelState) error {
 		chst.AddLog("")
 		return nil
 	}),
