@@ -110,6 +110,14 @@ const (
 
 	// Opened is fired when a request for data is sent from this node to a peer
 	Opened
+
+	// SetDataLimit is fired when a responder sets a limit for data it will allow
+	// before pausing the request
+	SetDataLimit
+
+	// SetRevalidateToComplete is fired when a responder sets a limit for data it will allow
+	// before pausing the request
+	SetRevalidateToComplete
 )
 
 // Events are human readable names for data transfer events

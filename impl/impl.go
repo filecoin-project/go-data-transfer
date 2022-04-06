@@ -24,6 +24,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
 	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/network"
 	"github.com/filecoin-project/go-data-transfer/v2/registry"
 	"github.com/filecoin-project/go-data-transfer/v2/tracing"
@@ -36,7 +37,6 @@ type manager struct {
 	dataTransferNetwork  network.DataTransferNetwork
 	validatedTypes       *registry.Registry
 	resultTypes          *registry.Registry
-	revalidators         *registry.Registry
 	transportConfigurers *registry.Registry
 	pubSub               *pubsub.PubSub
 	readySub             *pubsub.PubSub
@@ -97,7 +97,6 @@ func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTran
 		dataTransferNetwork:  dataTransferNetwork,
 		validatedTypes:       registry.NewRegistry(),
 		resultTypes:          registry.NewRegistry(),
-		revalidators:         registry.NewRegistry(),
 		transportConfigurers: registry.NewRegistry(),
 		pubSub:               pubsub.New(dispatcher),
 		readySub:             pubsub.New(readyDispatcher),
@@ -126,11 +125,7 @@ func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTran
 }
 
 func (m *manager) voucherDecoder(voucherType datatransfer.TypeIdentifier) (encoding.Decoder, bool) {
-	decoder, has := m.validatedTypes.Decoder(voucherType)
-	if !has {
-		return m.revalidators.Decoder(voucherType)
-	}
-	return decoder, true
+	return m.validatedTypes.Decoder(voucherType)
 }
 
 func (m *manager) notifier(evt datatransfer.Event, chst datatransfer.ChannelState) {
@@ -300,6 +295,49 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 	return m.channels.NewVoucher(channelID, voucher)
 }
 
+func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.ChannelID, voucherResult datatransfer.VoucherResult) error {
+	chst, err := m.channels.GetByID(ctx, channelID)
+	if err != nil {
+		return err
+	}
+	ctx, _ = m.spansIndex.SpanForChannel(ctx, channelID)
+	ctx, span := otel.Tracer("data-transfer").Start(ctx, "sendVoucherResult", trace.WithAttributes(
+		attribute.String("channelID", channelID.String()),
+		attribute.String("voucherResultType", string(voucherResult.Type())),
+	))
+	defer span.End()
+	if channelID.Initiator == m.peerID {
+		err := errors.New("cannot send voucher result for request we initiated")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	messageType := types.VoucherResultMessage
+	if chst.Status().InFinalization() {
+		messageType = types.CompleteMessage
+	}
+	updateResponse, err := message.NewResponse(channelID.ID, messageType, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), voucherResult.Type(), voucherResult)
+
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherPeer(), updateResponse); err != nil {
+		err = fmt.Errorf("Unable to send request: %w", err)
+		_ = m.OnRequestDisconnected(channelID, err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return m.channels.NewVoucherResult(channelID, voucherResult)
+}
+
+func (m *manager) SetDataLimit(ctx context.Context, chid datatransfer.ChannelID, totalData uint64, stopAtEnd bool) {
+
+}
+
 // close an open channel (effectively a cancel)
 func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
 	log.Infof("close channel %s", chid)
@@ -459,19 +497,6 @@ func (m *manager) SubscribeToEvents(subscriber datatransfer.Subscriber) datatran
 // get all in progress transfers
 func (m *manager) InProgressChannels(ctx context.Context) (map[datatransfer.ChannelID]datatransfer.ChannelState, error) {
 	return m.channels.InProgress()
-}
-
-// RegisterRevalidator registers a revalidator for the given voucher type
-// Note: this is the voucher type used to revalidate. It can share a name
-// with the initial validator type and CAN be the same type, or a different type.
-// The revalidator can simply be the sampe as the original request validator,
-// or a different validator that satisfies the revalidator interface.
-func (m *manager) RegisterRevalidator(voucherType datatransfer.Voucher, revalidator datatransfer.Revalidator) error {
-	err := m.revalidators.Register(voucherType, revalidator)
-	if err != nil {
-		return xerrors.Errorf("error registering revalidator type: %w", err)
-	}
-	return nil
 }
 
 // RegisterVoucherResultType allows deserialization of a voucher result,

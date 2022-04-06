@@ -2,7 +2,6 @@ package impl
 
 import (
 	"context"
-	"errors"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -14,8 +13,8 @@ import (
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/encoding"
-	"github.com/filecoin-project/go-data-transfer/v2/registry"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
 // OnChannelOpened is called when we send a request for data to the other
@@ -51,46 +50,17 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 	))
 	defer span.End()
 
-	isNew, err := m.channels.DataReceived(chid, link.(cidlink.Link).Cid, size, index, unique)
-	if err != nil {
-		return err
-	}
-
-	// If this block has already been received on the channel, take no further
-	// action (this can happen when the data-transfer channel is restarted)
-	if !isNew {
-		return nil
-	}
-
-	// If this node initiated the data transfer, there's nothing more to do
-	if chid.Initiator == m.peerID {
-		return nil
-	}
-
-	// Check each revalidator to see if they want to pause / resume, or send
-	// a message over the transport
-	var result datatransfer.VoucherResult
-	var handled bool
-	_ = m.revalidators.Each(func(_ datatransfer.TypeIdentifier, _ encoding.Decoder, processor registry.Processor) error {
-		revalidator := processor.(datatransfer.Revalidator)
-		handled, result, err = revalidator.OnPushDataReceived(chid, size)
-		if handled {
-			return errors.New("stop processing")
+	err := m.channels.DataReceived(chid, link.(cidlink.Link).Cid, size, index, unique)
+	// if this channel is now paused, send the pause message
+	if err == datatransfer.ErrPause {
+		msg := message.UpdateResponse(chid.ID, true)
+		ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
+		if err := m.dataTransferNetwork.SendMessage(ctx, chid.Initiator, msg); err != nil {
+			return err
 		}
-		return nil
-	})
-	if err != nil || result != nil {
-		msg, err := m.processRevalidationResult(chid, result, err)
-		if msg != nil {
-			ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-			if err := m.dataTransferNetwork.SendMessage(ctx, chid.Initiator, msg); err != nil {
-				return err
-			}
-		}
-		return err
 	}
 
-	return nil
+	return err
 }
 
 // OnDataQueued is called when the transport layer reports that it has queued
@@ -110,41 +80,14 @@ func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size
 	))
 	defer span.End()
 
-	isNew, err := m.channels.DataQueued(chid, link.(cidlink.Link).Cid, size, index, unique)
-	if err != nil {
-		return nil, err
+	var msg datatransfer.Message
+	err := m.channels.DataQueued(chid, link.(cidlink.Link).Cid, size, index, unique)
+	// if this channel is now paused, send the pause message
+	if err == datatransfer.ErrPause {
+		msg = message.UpdateResponse(chid.ID, true)
 	}
 
-	// If this block has already been queued on the channel, take no further
-	// action (this can happen when the data-transfer channel is restarted)
-	if !isNew {
-		return nil, nil
-	}
-
-	// If this node initiated the data transfer, there's nothing more to do
-	if chid.Initiator == m.peerID {
-		return nil, nil
-	}
-
-	// Check each revalidator to see if they want to pause / resume, or send
-	// a message over the transport.
-	// For example if the data-sender is waiting for the receiver to pay for
-	// data they may pause the data-transfer.
-	var result datatransfer.VoucherResult
-	var handled bool
-	_ = m.revalidators.Each(func(_ datatransfer.TypeIdentifier, _ encoding.Decoder, processor registry.Processor) error {
-		revalidator := processor.(datatransfer.Revalidator)
-		handled, result, err = revalidator.OnPullDataSent(chid, size)
-		if handled {
-			return errors.New("stop processing")
-		}
-		return nil
-	})
-	if err != nil || result != nil {
-		return m.processRevalidationResult(chid, result, err)
-	}
-
-	return nil, nil
+	return msg, err
 }
 
 func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
@@ -157,43 +100,35 @@ func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size u
 	))
 	defer span.End()
 
-	_, err := m.channels.DataSent(chid, link.(cidlink.Link).Cid, size, index, unique)
-	return err
+	return m.channels.DataSent(chid, link.(cidlink.Link).Cid, size, index, unique)
 }
 
 func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
+	// if request is restart, process as restart
 	if request.IsRestart() {
 		return m.receiveRestartRequest(chid, request)
 	}
 
+	// if request is new, process as new
 	if request.IsNew() {
 		return m.receiveNewRequest(chid, request)
 	}
+
+	// if request is cancel, process as cancel
 	if request.IsCancel() {
 		log.Infof("channel %s: received cancel request, cleaning up channel", chid)
 
 		m.transport.CleanupChannel(chid)
 		return nil, m.channels.Cancel(chid)
 	}
+
+	// if request is a new voucher, process as voucher
 	if request.IsVoucher() {
 		return m.processUpdateVoucher(chid, request)
 	}
-	if request.IsPaused() {
-		return nil, m.pauseOther(chid)
-	}
-	err := m.resumeOther(chid)
-	if err != nil {
-		return nil, err
-	}
-	chst, err := m.channels.GetByID(context.TODO(), chid)
-	if err != nil {
-		return nil, err
-	}
-	if chst.Status() == datatransfer.ResponderPaused ||
-		chst.Status() == datatransfer.ResponderFinalizing {
-		return nil, datatransfer.ErrPause
-	}
-	return nil, nil
+
+	// otherwise process as an update message (pause or resume)
+	return m.receiveUpdateRequest(chid, request)
 }
 
 func (m *manager) OnTransferQueued(chid datatransfer.ChannelID) {
@@ -201,16 +136,19 @@ func (m *manager) OnTransferQueued(chid datatransfer.ChannelID) {
 }
 
 func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datatransfer.Response) error {
-	if response.IsComplete() {
-		log.Infow("received complete response", "chid", chid, "isAccepted", response.Accepted())
-	}
 
+	// if response is cancel, process as cancel
 	if response.IsCancel() {
 		log.Infof("channel %s: received cancel response, cancelling channel", chid)
 		return m.channels.Cancel(chid)
 	}
+
+	// does this response contain a response to a validation attempt?
 	if response.IsVoucherResult() {
+
+		// is there a voucher response in this message?
 		if !response.EmptyVoucherResult() {
+			// if so decode and save it
 			vresult, err := m.decodeVoucherResult(response)
 			if err != nil {
 				return err
@@ -220,38 +158,53 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 				return err
 			}
 		}
+
+		// was the validateion attempt successful?
 		if !response.Accepted() {
+			// if not, error and fail
 			log.Infof("channel %s: received rejected response, erroring out channel", chid)
 			return m.channels.Error(chid, datatransfer.ErrRejected)
 		}
-		if response.IsNew() {
-			log.Infof("channel %s: received new response, accepting channel", chid)
-			err := m.channels.Accept(chid)
-			if err != nil {
-				return err
-			}
-		}
+	}
 
-		if response.IsRestart() {
-			log.Infof("channel %s: received restart response, restarting channel", chid)
-			err := m.channels.Restart(chid)
-			if err != nil {
-				return err
-			}
+	// was it the response to our initial validation attempt?
+	if response.IsNew() {
+		log.Infof("channel %s: received new response, accepting channel", chid)
+		// if so, accept
+		err := m.channels.Accept(chid)
+		if err != nil {
+			return err
 		}
 	}
-	if response.IsComplete() && response.Accepted() {
+
+	// was this a response to a restart attempt?
+	if response.IsRestart() {
+		log.Infof("channel %s: received restart response, restarting channel", chid)
+		// if so, restart
+		err := m.channels.Restart(chid)
+		if err != nil {
+			return err
+		}
+	}
+
+	// was this response a final status message?
+	if response.IsComplete() {
+		// is the responder paused pending final settlement?
 		if !response.IsPaused() {
+			// if not, mark the responder done and return
 			log.Infow("received complete response,responder not paused, completing channel", "chid", chid)
 			return m.channels.ResponderCompletes(chid)
 		}
 
+		// if yes, mark the responder being in final settlement
 		log.Infow("received complete response, responder is paused, not completing channel", "chid", chid)
 		err := m.channels.ResponderBeginsFinalization(chid)
 		if err != nil {
-			return nil
+			return err
 		}
 	}
+
+	// handle pause/resume for all response types
 	if response.IsPaused() {
 		return m.pauseOther(chid)
 	}
@@ -282,52 +235,52 @@ func (m *manager) OnReceiveDataError(chid datatransfer.ChannelID, err error) err
 // - by the requester when all data for a transfer has been received
 // - by the responder when all data for a transfer has been sent
 func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr error) error {
-	// If the channel completed successfully
-	if completeErr == nil {
-		// If the channel was initiated by the other peer
-		if chid.Initiator != m.peerID {
-			log.Infow("received OnChannelCompleted, will send completion message to initiator", "chid", chid)
-			msg, err := m.completeMessage(chid)
-			if err != nil {
-				return err
-			}
-			if msg != nil {
-				// Send the other peer a message that the transfer has completed
-				log.Infow("sending completion message to initiator", "chid", chid)
-				ctx, _ := m.spansIndex.SpanForChannel(context.Background(), chid)
-				if err := m.dataTransferNetwork.SendMessage(ctx, chid.Initiator, msg); err != nil {
-					err := xerrors.Errorf("channel %s: failed to send completion message to initiator: %w", chid, err)
-					log.Warnw("failed to send completion message to initiator", "chid", chid, "err", err)
-					return m.OnRequestDisconnected(chid, err)
-				}
-				log.Infow("successfully sent completion message to initiator", "chid", chid)
-			}
-			if msg.Accepted() {
-				if msg.IsPaused() {
-					return m.channels.BeginFinalizing(chid)
-				}
-				return m.channels.Complete(chid)
-			}
-			return m.channels.Error(chid, err)
-		}
 
-		// The channel was initiated by this node, so move to the finished state
-		log.Infof("channel %s: transfer initiated by local node is complete", chid)
-		return m.channels.FinishTransfer(chid)
-	}
-
-	// There was an error so fire an Error event
+	// read the channel state
 	chst, err := m.channels.GetByID(context.TODO(), chid)
 	if err != nil {
 		return err
 	}
-	// send an error, but only if we haven't already errored for some reason
-	if chst.Status() != datatransfer.Failing && chst.Status() != datatransfer.Failed {
-		err := xerrors.Errorf("data transfer channel %s failed to transfer data: %w", chid, completeErr)
-		log.Warnf(err.Error())
-		return m.channels.Error(chid, err)
+
+	// If the transferred errored on completion
+	if completeErr != nil {
+		// send an error, but only if we haven't already errored for some reason
+		if chst.Status() != datatransfer.Failing && chst.Status() != datatransfer.Failed {
+			err := xerrors.Errorf("data transfer channel %s failed to transfer data: %w", chid, completeErr)
+			log.Warnf(err.Error())
+			return m.channels.Error(chid, err)
+		}
+		return nil
 	}
-	return nil
+
+	// if the channel was initiated by this node, simply record the transfer being finished
+	if chid.Initiator == m.peerID {
+		log.Infof("channel %s: transfer initiated by local node is complete", chid)
+		return m.channels.FinishTransfer(chid)
+	}
+
+	// otherwise, process as responder
+	log.Infow("received OnChannelCompleted, will send completion message to initiator", "chid", chid)
+
+	// generate and send the final status message
+	msg, err := message.NewResponse(chst.TransferID(), types.CompleteMessage, true, chst.RevalidateToComplete(), datatransfer.EmptyTypeIdentifier, nil)
+	if err != nil {
+		return err
+	}
+	log.Infow("sending completion message to initiator", "chid", chid)
+	ctx, _ := m.spansIndex.SpanForChannel(context.Background(), chid)
+	if err := m.dataTransferNetwork.SendMessage(ctx, chid.Initiator, msg); err != nil {
+		err := xerrors.Errorf("channel %s: failed to send completion message to initiator: %w", chid, err)
+		log.Warnw("failed to send completion message to initiator", "chid", chid, "err", err)
+		return m.OnRequestDisconnected(chid, err)
+	}
+	log.Infow("successfully sent completion message to initiator", "chid", chid)
+
+	// set the channel state based on whether its paused final settlement
+	if chst.RevalidateToComplete() {
+		return m.channels.BeginFinalizing(chid)
+	}
+	return m.channels.Complete(chid)
 }
 
 func (m *manager) OnContextAugment(chid datatransfer.ChannelID) func(context.Context) context.Context {
@@ -341,55 +294,59 @@ func (m *manager) receiveRestartRequest(chid datatransfer.ChannelID, incoming da
 	log.Infof("channel %s: received restart request", chid)
 
 	result, err := m.restartRequest(chid, incoming)
-	msg, msgErr := m.response(true, false, err, incoming.TransferID(), result)
+	msg, msgErr := m.validationResponseMessage(types.RestartMessage, incoming.TransferID(), result, err)
 	if msgErr != nil {
 		return nil, msgErr
 	}
-	return msg, err
+	return msg, m.requestError(result, err, false)
 }
 
 func (m *manager) receiveNewRequest(chid datatransfer.ChannelID, incoming datatransfer.Request) (datatransfer.Response, error) {
 	log.Infof("channel %s: received new channel request from %s", chid, chid.Initiator)
 
 	result, err := m.acceptRequest(chid, incoming)
-	msg, msgErr := m.response(false, true, err, incoming.TransferID(), result)
+	msg, msgErr := m.validationResponseMessage(types.NewMessage, incoming.TransferID(), result, err)
 	if msgErr != nil {
 		return nil, msgErr
 	}
-	return msg, err
+
+	return msg, m.requestError(result, err, false)
 }
 
 func (m *manager) restartRequest(chid datatransfer.ChannelID,
-	incoming datatransfer.Request) (datatransfer.VoucherResult, error) {
+	incoming datatransfer.Request) (datatransfer.ValidationResult, error) {
 
 	initiator := chid.Initiator
 	if m.peerID == initiator {
-		return nil, xerrors.New("initiator cannot be manager peer for a restart request")
+		return datatransfer.ValidationResult{}, xerrors.New("initiator cannot be manager peer for a restart request")
 	}
 
 	if err := m.validateRestartRequest(context.Background(), initiator, chid, incoming); err != nil {
-		return nil, xerrors.Errorf("restart request for channel %s failed validation: %w", chid, err)
+		return datatransfer.ValidationResult{}, xerrors.Errorf("restart request for channel %s failed validation: %w", chid, err)
 	}
 
-	stor, err := incoming.Selector()
+	chst, err := m.channels.GetByID(context.TODO(), chid)
 	if err != nil {
-		return nil, err
+		return datatransfer.ValidationResult{}, err
 	}
 
-	voucher, result, err := m.validateVoucher(true, chid, initiator, incoming, incoming.IsPull(), incoming.BaseCid(), stor)
-	if err != nil && err != datatransfer.ErrPause {
-		return result, xerrors.Errorf("failed to validate voucher: %w", err)
-	}
-	voucherErr := err
+	result, err := m.revalidate(chst)
 
-	if result != nil {
-		err := m.channels.NewVoucherResult(chid, result)
-		if err != nil {
-			return result, err
-		}
+	if err != nil || !result.Accepted {
+		return result, err
 	}
+
 	if err := m.channels.Restart(chid); err != nil {
 		return result, xerrors.Errorf("failed to restart channel %s: %w", chid, err)
+	}
+
+	if err := m.recordValidationEvents(chid, result, false); err != nil {
+		return result, err
+	}
+
+	voucher, err := m.decodeVoucher(incoming)
+	if err != nil {
+		return result, err
 	}
 	processor, has := m.transportConfigurers.Processor(voucher.Type())
 	if has {
@@ -397,27 +354,34 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 		transportConfigurer(chid, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(initiator, chid.String())
-	if voucherErr == datatransfer.ErrPause {
-		err := m.channels.PauseResponder(chid)
-		if err != nil {
-			return result, err
-		}
-	}
-	return result, voucherErr
+	return result, nil
 }
 
-func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransfer.Request) (datatransfer.VoucherResult, error) {
+func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransfer.Request) (datatransfer.ValidationResult, error) {
 
 	stor, err := incoming.Selector()
 	if err != nil {
-		return nil, err
+		return datatransfer.ValidationResult{}, err
 	}
 
-	voucher, result, err := m.validateVoucher(false, chid, chid.Initiator, incoming, incoming.IsPull(), incoming.BaseCid(), stor)
-	if err != nil && err != datatransfer.ErrPause {
+	voucher, err := m.decodeVoucher(incoming)
+	if err != nil {
+		return datatransfer.ValidationResult{}, err
+	}
+
+	var validatorFunc func(datatransfer.ChannelID, peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.ValidationResult, error)
+	processor, _ := m.validatedTypes.Processor(voucher.Type())
+	validator := processor.(datatransfer.RequestValidator)
+	if incoming.IsPull() {
+		validatorFunc = validator.ValidatePull
+	} else {
+		validatorFunc = validator.ValidatePush
+	}
+
+	result, err := validatorFunc(chid, chid.Initiator, voucher, incoming.BaseCid(), stor)
+	if err != nil {
 		return result, err
 	}
-	voucherErr := err
 
 	var dataSender, dataReceiver peer.ID
 	if incoming.IsPull() {
@@ -435,156 +399,149 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 		return result, err
 	}
 	log.Debugw("successfully created and started tracking channel", "channelID", chid)
-	if result != nil {
-		err := m.channels.NewVoucherResult(chid, result)
-		if err != nil {
-			return result, err
-		}
-	}
 	if err := m.channels.Accept(chid); err != nil {
 		return result, err
 	}
+
+	if err := m.recordValidationEvents(chid, result, false); err != nil {
+		return result, err
+	}
+
 	processor, has := m.transportConfigurers.Processor(voucher.Type())
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(chid.Initiator, chid.String())
-	if voucherErr == datatransfer.ErrPause {
+
+	return result, nil
+}
+
+func (m *manager) requestError(result datatransfer.ValidationResult, resultErr error, handleResumes bool) error {
+	if resultErr != nil {
+		return resultErr
+	}
+	if !result.Accepted {
+		return datatransfer.ErrRejected
+	}
+	if result.LeaveRequestPaused {
+		return datatransfer.ErrPause
+	}
+	if handleResumes {
+		return datatransfer.ErrResume
+	}
+	return nil
+}
+func (m *manager) recordValidationEvents(chid datatransfer.ChannelID, result datatransfer.ValidationResult, handleResumes bool) error {
+	if result.LeaveRequestPaused {
 		err := m.channels.PauseResponder(chid)
 		if err != nil {
-			return result, err
+			return err
+		}
+	} else if handleResumes && result.Accepted {
+		err := m.channels.ResumeResponder(chid)
+		if err != nil {
+			return err
 		}
 	}
-	return result, voucherErr
-}
 
-// validateVoucher converts a voucher in an incoming message to its appropriate
-// voucher struct, then runs the validator and returns the results.
-// returns error if:
-//   * reading voucher fails
-//   * deserialization of selector fails
-//   * validation fails
-func (m *manager) validateVoucher(
-	isRestart bool,
-	chid datatransfer.ChannelID,
-	sender peer.ID,
-	incoming datatransfer.Request,
-	isPull bool,
-	baseCid cid.Cid,
-	stor ipld.Node,
-) (datatransfer.Voucher, datatransfer.VoucherResult, error) {
-	vouch, err := m.decodeVoucher(incoming, m.validatedTypes)
+	if result.VoucherResult != nil {
+		err := m.channels.NewVoucherResult(chid, result.VoucherResult)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := m.channels.SetDataLimit(chid, result.DataLimit)
 	if err != nil {
-		return nil, nil, err
-	}
-	var validatorFunc func(bool, datatransfer.ChannelID, peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.VoucherResult, error)
-	processor, _ := m.validatedTypes.Processor(vouch.Type())
-	validator := processor.(datatransfer.RequestValidator)
-	if isPull {
-		validatorFunc = validator.ValidatePull
-	} else {
-		validatorFunc = validator.ValidatePush
+		return err
 	}
 
-	result, err := validatorFunc(isRestart, chid, sender, vouch, baseCid, stor)
-	return vouch, result, err
+	err = m.channels.SetRevalidateToComplete(chid, result.RevalidateToComplete)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// revalidateVoucher converts a voucher in an incoming message to its appropriate
+func (m *manager) revalidate(chst datatransfer.ChannelState) (datatransfer.ValidationResult, error) {
+	processor, _ := m.validatedTypes.Processor(chst.LastVoucher().Type())
+	validator := processor.(datatransfer.RequestValidator)
+
+	return validator.Revalidate(chst.ChannelID(), chst)
+}
+
+// revalidateFromRequest converts a voucher in an incoming message to its appropriate
 // voucher struct, then runs the revalidator and returns the results.
 // returns error if:
 //   * reading voucher fails
-//   * deserialization of selector fails
 //   * validation fails
-func (m *manager) revalidateVoucher(chid datatransfer.ChannelID,
-	incoming datatransfer.Request) (datatransfer.Voucher, datatransfer.VoucherResult, error) {
-	vouch, err := m.decodeVoucher(incoming, m.revalidators)
+func (m *manager) revalidateFromRequest(chid datatransfer.ChannelID,
+	incoming datatransfer.Request) (datatransfer.ChannelState, datatransfer.ValidationResult, error) {
+	vouch, err := m.decodeVoucher(incoming)
 	if err != nil {
-		return nil, nil, err
+		return nil, datatransfer.ValidationResult{}, err
 	}
-	processor, _ := m.revalidators.Processor(vouch.Type())
-	validator := processor.(datatransfer.Revalidator)
+	err = m.channels.NewVoucher(chid, vouch)
+	if err != nil {
+		return nil, datatransfer.ValidationResult{}, err
+	}
 
-	result, err := validator.Revalidate(chid, vouch)
-	return vouch, result, err
+	chst, err := m.channels.GetByID(context.TODO(), chid)
+	if err != nil {
+		return nil, datatransfer.ValidationResult{}, err
+	}
+
+	result, err := m.revalidate(chst)
+	return chst, result, err
 }
 
 func (m *manager) processUpdateVoucher(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
-	vouch, result, voucherErr := m.revalidateVoucher(chid, request)
-	if vouch != nil {
-		err := m.channels.NewVoucher(chid, vouch)
-		if err != nil {
-			return nil, err
-		}
+	chst, result, err := m.revalidateFromRequest(chid, request)
+	response, msgErr := m.revalidationResponse(chst, result, err)
+	if msgErr != nil {
+		return nil, msgErr
 	}
-	return m.processRevalidationResult(chid, result, voucherErr)
+	if err := m.recordValidationEvents(chid, result, true); err != nil {
+		return nil, err
+	}
+
+	return response, m.requestError(result, err, true)
 }
 
-func (m *manager) revalidationResponse(chid datatransfer.ChannelID, result datatransfer.VoucherResult, resultErr error) (datatransfer.Response, error) {
+func (m *manager) receiveUpdateRequest(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
+
+	if request.IsPaused() {
+		return nil, m.pauseOther(chid)
+	}
+
+	err := m.resumeOther(chid)
+	if err != nil {
+		return nil, err
+	}
 	chst, err := m.channels.GetByID(context.TODO(), chid)
 	if err != nil {
 		return nil, err
 	}
-	if chst.Status() == datatransfer.Finalizing {
-		return m.completeResponse(resultErr, chid.ID, result)
+	if chst.Status() == datatransfer.ResponderPaused ||
+		chst.Status() == datatransfer.ResponderFinalizing {
+		return nil, datatransfer.ErrPause
 	}
-	return m.response(false, false, resultErr, chid.ID, result)
+	return nil, nil
 }
 
-func (m *manager) processRevalidationResult(chid datatransfer.ChannelID, result datatransfer.VoucherResult, resultErr error) (datatransfer.Response, error) {
-	vresMessage, err := m.revalidationResponse(chid, result, resultErr)
-
+func (m *manager) revalidationResponse(chst datatransfer.ChannelState, result datatransfer.ValidationResult, resultErr error) (datatransfer.Response, error) {
+	messageType := types.VoucherResultMessage
+	if chst.Status() == datatransfer.Finalizing {
+		messageType = types.CompleteMessage
+	}
+	msg, err := m.validationResponseMessage(messageType, chst.TransferID(), result, resultErr)
 	if err != nil {
 		return nil, err
 	}
-	if result != nil {
-		err := m.channels.NewVoucherResult(chid, result)
-		if err != nil {
-			return nil, err
-		}
+	if resultErr == nil && result.LeaveRequestPaused {
+		resultErr = datatransfer.ErrPause
 	}
-
-	if resultErr == nil {
-		return vresMessage, nil
-	}
-
-	if resultErr == datatransfer.ErrPause {
-		err := m.pause(chid)
-		if err != nil {
-			return nil, err
-		}
-		return vresMessage, datatransfer.ErrPause
-	}
-
-	if resultErr == datatransfer.ErrResume {
-		err = m.resume(chid)
-		if err != nil {
-			return nil, err
-		}
-		return vresMessage, datatransfer.ErrResume
-	}
-	return vresMessage, resultErr
-}
-
-func (m *manager) completeMessage(chid datatransfer.ChannelID) (datatransfer.Response, error) {
-	var result datatransfer.VoucherResult
-	var resultErr error
-	var handled bool
-	_ = m.revalidators.Each(func(_ datatransfer.TypeIdentifier, _ encoding.Decoder, processor registry.Processor) error {
-		revalidator := processor.(datatransfer.Revalidator)
-		handled, result, resultErr = revalidator.OnComplete(chid)
-		if handled {
-			return errors.New("stop processing")
-		}
-		return nil
-	})
-	if result != nil {
-		err := m.channels.NewVoucherResult(chid, result)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return m.completeResponse(resultErr, chid.ID, result)
+	return msg, resultErr
 }

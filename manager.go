@@ -8,57 +8,55 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
+// ValidationResult describes the result of validating a voucher
+type ValidationResult struct {
+	// VoucherResult provides information to the other party about what happened
+	// with the voucher
+	VoucherResult
+	// Accepted indicates where the voucher was accepted
+	// if a voucher is not accepted, the request fails
+	Accepted bool
+	// LeaveRequestPaused indicates whether the request should stay paused
+	// even if the voucher was accepted
+	LeaveRequestPaused bool
+	// DataLimit specifies how much data this voucher is good for. When the amount
+	// amount data specified is reached (or shortly after), the request will pause
+	// pending revalidation. 0 indicates no limit.
+	DataLimit uint64
+	// RevalidateToComplete indicates at the end of the transfer, the channel should
+	// be left open for a final settlement
+	RevalidateToComplete bool
+}
+
 // RequestValidator is an interface implemented by the client of the
 // data transfer module to validate requests
 type RequestValidator interface {
 	// ValidatePush validates a push request received from the peer that will send data
+	// All information about the validation operation is contained in ValidationResult
+	// -- including if it was rejected.
+	// error indicates something went wrong with the actual process of trying to validate
 	ValidatePush(
-		isRestart bool,
 		chid ChannelID,
 		sender peer.ID,
 		voucher Voucher,
 		baseCid cid.Cid,
-		selector ipld.Node) (VoucherResult, error)
+		selector ipld.Node) (ValidationResult, error)
 	// ValidatePull validates a pull request received from the peer that will receive data
+	// All information about the validation operation is contained in ValidationResult
+	// -- including if it was rejected.
+	// error indicates something went wrong with the actual process of trying to validate
 	ValidatePull(
-		isRestart bool,
 		chid ChannelID,
 		receiver peer.ID,
 		voucher Voucher,
 		baseCid cid.Cid,
-		selector ipld.Node) (VoucherResult, error)
-}
+		selector ipld.Node) (ValidationResult, error)
 
-// Revalidator is a request validator revalidates in progress requests
-// by requesting request additional vouchers, and resuming when it receives them
-type Revalidator interface {
 	// Revalidate revalidates a request with a new voucher
-	Revalidate(channelID ChannelID, voucher Voucher) (VoucherResult, error)
-	// OnPullDataSent is called on the responder side when more bytes are sent
-	// for a given pull request. The first value indicates whether the request was
-	// recognized by this revalidator and should be considered 'handled'. If true,
-	// the remaining two values are interpreted. If 'false' the request is passed on
-	// to the next revalidators.
-	// It should return a VoucherResult + ErrPause to
-	// request revalidation or nil to continue uninterrupted,
-	// other errors will terminate the request.
-	OnPullDataSent(chid ChannelID, additionalBytesSent uint64) (bool, VoucherResult, error)
-	// OnPushDataReceived is called on the responder side when more bytes are received
-	// for a given push request. The first value indicates whether the request was
-	// recognized by this revalidator and should be considered 'handled'. If true,
-	// the remaining two values are interpreted. If 'false' the request is passed on
-	// to the next revalidators. It should return a VoucherResult + ErrPause to
-	// request revalidation or nil to continue uninterrupted,
-	// other errors will terminate the request
-	OnPushDataReceived(chid ChannelID, additionalBytesReceived uint64) (bool, VoucherResult, error)
-	// OnComplete is called to make a final request for revalidation -- often for the
-	// purpose of settlement. The first value indicates whether the request was
-	// recognized by this revalidator and should be considered 'handled'. If true,
-	// the remaining two values are interpreted. If 'false' the request is passed on
-	// to the next revalidators.
-	// if VoucherResult is non nil, the request will enter a settlement phase awaiting
-	// a final update
-	OnComplete(chid ChannelID) (bool, VoucherResult, error)
+	// All information about the validation operation is contained in ValidationResult
+	// -- including if it was rejected.
+	// error indicates something went wrong with the actual process of trying to validate
+	Revalidate(channelID ChannelID, channel ChannelState) (ValidationResult, error)
 }
 
 // TransportConfigurer provides a mechanism to provide transport specific configuration for a given voucher type
@@ -85,13 +83,6 @@ type Manager interface {
 	// or if there is a voucher type registered with an identical identifier
 	RegisterVoucherType(voucherType Voucher, validator RequestValidator) error
 
-	// RegisterRevalidator registers a revalidator for the given voucher type
-	// Note: this is the voucher type used to revalidate. It can share a name
-	// with the initial validator type and CAN be the same type, or a different type.
-	// The revalidator can simply be the sampe as the original request validator,
-	// or a different validator that satisfies the revalidator interface.
-	RegisterRevalidator(voucherType Voucher, revalidator Revalidator) error
-
 	// RegisterVoucherResultType allows deserialization of a voucher result,
 	// so that a listener can read the metadata
 	RegisterVoucherResultType(resultType VoucherResult) error
@@ -110,6 +101,9 @@ type Manager interface {
 
 	// send an intermediate voucher as needed when the receiver sends a request for revalidation
 	SendVoucher(ctx context.Context, chid ChannelID, voucher Voucher) error
+
+	// send information from the responder to update the initiator on the state of their voucher
+	SendVoucherResult(ctx context.Context, chid ChannelID, voucher VoucherResult) error
 
 	// close an open channel (effectively a cancel)
 	CloseDataTransferChannel(ctx context.Context, chid ChannelID) error

@@ -34,7 +34,7 @@ func TestChannels(t *testing.T) {
 	tid2 := datatransfer.TransferID(1)
 	fv1 := &testutil.FakeDTType{}
 	fv2 := &testutil.FakeDTType{}
-	cids := testutil.GenerateCids(2)
+	cids := testutil.GenerateCids(4)
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	peers := testutil.GeneratePeers(4)
 
@@ -141,13 +141,13 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, datatransfer.TransferFinished, state.Status())
 
 		// send a data-sent event and ensure it's a no-op
-		_, err = channelList.DataSent(chid, cids[1], 1, 1, true)
+		err = channelList.DataSent(chid, cids[1], 1, 1, true)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.DataSent)
 		require.Equal(t, datatransfer.TransferFinished, state.Status())
 
 		// send a data-queued event and ensure it's a no-op.
-		_, err = channelList.DataQueued(chid, cids[1], 1, 1, true)
+		err = channelList.DataQueued(chid, cids[1], 1, 1, true)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.DataQueued)
 		require.Equal(t, datatransfer.TransferFinished, state.Status())
@@ -168,59 +168,106 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, uint64(0), state.Received())
 		require.Equal(t, uint64(0), state.Sent())
 
-		isNew, err := channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[0], 50, 1, true)
+		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[0], 50, 1, true)
 		require.NoError(t, err)
 		_ = checkEvent(ctx, t, received, datatransfer.DataReceivedProgress)
-		require.True(t, isNew)
 		state = checkEvent(ctx, t, received, datatransfer.DataReceived)
 		require.Equal(t, uint64(50), state.Received())
 		require.Equal(t, uint64(0), state.Sent())
 
-		isNew, err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 100, 1, true)
+		err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 100, 1, true)
 		require.NoError(t, err)
 		_ = checkEvent(ctx, t, received, datatransfer.DataSentProgress)
-		require.True(t, isNew)
 		state = checkEvent(ctx, t, received, datatransfer.DataSent)
 		require.Equal(t, uint64(50), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
 
 		// send block again has no effect
-		isNew, err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 100, 1, true)
+		err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 100, 1, true)
 		require.NoError(t, err)
-		require.False(t, isNew)
 		state = checkEvent(ctx, t, received, datatransfer.DataSent)
 		require.Equal(t, uint64(50), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
 
 		// errors if channel does not exist
-		isNew, err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200, 2, true)
+		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200, 2, true)
 		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
-		require.False(t, isNew)
-		isNew, err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200, 2, true)
+		err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200, 2, true)
 		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
-		require.False(t, isNew)
 
-		isNew, err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 50, 2, true)
+		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 50, 2, true)
 		require.NoError(t, err)
 		_ = checkEvent(ctx, t, received, datatransfer.DataReceivedProgress)
-		require.True(t, isNew)
 		state = checkEvent(ctx, t, received, datatransfer.DataReceived)
 		require.Equal(t, uint64(100), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
 
-		isNew, err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 25, 2, false)
+		err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 25, 2, false)
 		require.NoError(t, err)
-		require.False(t, isNew)
 		state = checkEvent(ctx, t, received, datatransfer.DataSent)
 		require.Equal(t, uint64(100), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
 
-		isNew, err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[0], 50, 3, false)
+		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[0], 50, 3, false)
 		require.NoError(t, err)
-		require.False(t, isNew)
 		state = checkEvent(ctx, t, received, datatransfer.DataReceived)
 		require.Equal(t, uint64(100), state.Received())
 		require.Equal(t, uint64(100), state.Sent())
+	})
+
+	t.Run("data limit", func(t *testing.T) {
+		ds := dss.MutexWrap(datastore.NewMapDatastore())
+
+		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+		require.NoError(t, err)
+		err = channelList.Start(ctx)
+		require.NoError(t, err)
+
+		_, err = channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[1], peers[0], peers[1])
+		require.NoError(t, err)
+		state := checkEvent(ctx, t, received, datatransfer.Open)
+
+		err = channelList.DataQueued(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[0], 300, 1, true)
+		require.NoError(t, err)
+		_ = checkEvent(ctx, t, received, datatransfer.DataQueuedProgress)
+		state = checkEvent(ctx, t, received, datatransfer.DataQueued)
+		require.Equal(t, uint64(300), state.Queued())
+
+		err = channelList.SetDataLimit(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, 400)
+		require.NoError(t, err)
+		state = checkEvent(ctx, t, received, datatransfer.SetDataLimit)
+		require.Equal(t, state.DataLimit(), uint64(400))
+
+		// send block again has no effect
+		err = channelList.DataQueued(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[0], 300, 1, true)
+		require.NoError(t, err)
+		state = checkEvent(ctx, t, received, datatransfer.DataQueued)
+		require.Equal(t, uint64(300), state.Queued())
+
+		err = channelList.DataQueued(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200, 2, true)
+		require.EqualError(t, err, datatransfer.ErrPause.Error())
+		_ = checkEvent(ctx, t, received, datatransfer.DataQueuedProgress)
+		_ = checkEvent(ctx, t, received, datatransfer.DataQueued)
+		state = checkEvent(ctx, t, received, datatransfer.PauseResponder)
+		require.Equal(t, uint64(500), state.Queued())
+
+		err = channelList.SetDataLimit(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, 700)
+		require.NoError(t, err)
+		state = checkEvent(ctx, t, received, datatransfer.SetDataLimit)
+		require.Equal(t, state.DataLimit(), uint64(700))
+
+		err = channelList.DataQueued(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[2], 150, 3, true)
+		require.NoError(t, err)
+		_ = checkEvent(ctx, t, received, datatransfer.DataQueuedProgress)
+		state = checkEvent(ctx, t, received, datatransfer.DataQueued)
+		require.Equal(t, uint64(650), state.Queued())
+
+		err = channelList.DataQueued(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[3], 200, 4, true)
+		require.EqualError(t, err, datatransfer.ErrPause.Error())
+		_ = checkEvent(ctx, t, received, datatransfer.DataQueuedProgress)
+		_ = checkEvent(ctx, t, received, datatransfer.DataQueued)
+		state = checkEvent(ctx, t, received, datatransfer.PauseResponder)
+		require.Equal(t, uint64(850), state.Queued())
 	})
 
 	t.Run("pause/resume", func(t *testing.T) {

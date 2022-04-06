@@ -23,7 +23,7 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{180}); err != nil {
+	if _, err := w.Write([]byte{182}); err != nil {
 		return err
 	}
 
@@ -411,6 +411,38 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
+	// t.DataLimit (uint64) (uint64)
+	if len("DataLimit") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"DataLimit\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("DataLimit"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("DataLimit")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.DataLimit)); err != nil {
+		return err
+	}
+
+	// t.RevalidateToComplete (bool) (bool)
+	if len("RevalidateToComplete") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"RevalidateToComplete\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("RevalidateToComplete"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("RevalidateToComplete")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteBool(w, t.RevalidateToComplete); err != nil {
+		return err
+	}
+
 	// t.Stages (datatransfer.ChannelStages) (struct)
 	if len("Stages") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Stages\" was too long")
@@ -779,6 +811,39 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 				}
 
 				t.SentBlocksTotal = int64(extraI)
+			}
+			// t.DataLimit (uint64) (uint64)
+		case "DataLimit":
+
+			{
+
+				maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+				if maj != cbg.MajUnsignedInt {
+					return fmt.Errorf("wrong type for uint64 field")
+				}
+				t.DataLimit = uint64(extra)
+
+			}
+			// t.RevalidateToComplete (bool) (bool)
+		case "RevalidateToComplete":
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.RevalidateToComplete = false
+			case 21:
+				t.RevalidateToComplete = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 			}
 			// t.Stages (datatransfer.ChannelStages) (struct)
 		case "Stages":

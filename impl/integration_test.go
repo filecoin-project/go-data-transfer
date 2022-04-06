@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ipfs/go-blockservice"
+	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
 	dss "github.com/ipfs/go-datastore/sync"
@@ -38,6 +39,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 	. "github.com/filecoin-project/go-data-transfer/v2/impl"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/network"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 	tp "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
@@ -182,6 +184,7 @@ func TestRoundTrip(t *testing.T) {
 				dt2.SubscribeToEvents(subscriber)
 				voucher := testutil.FakeDTType{Data: "applesauce"}
 				sv := testutil.NewStubbedValidator()
+				sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 
 				var sourceDagService ipldformat.DAGService
 				if data.customSourceStore {
@@ -328,6 +331,7 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 				vouchers = append(vouchers, testutil.NewFakeDTType())
 			}
 			sv := testutil.NewStubbedValidator()
+			sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 
 			root, origBytes := testutil.LoadUnixFSFile(ctx, t, gsData.DagService1, loremFile)
 			rootCid := root.(cidlink.Link).Cid
@@ -490,6 +494,7 @@ func TestManyReceiversAtOnce(t *testing.T) {
 				vouchers = append(vouchers, testutil.NewFakeDTType())
 			}
 			sv := testutil.NewStubbedValidator()
+			sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 
 			root, origBytes := testutil.LoadUnixFSFile(ctx, t, gsData.DagService1, loremFile)
 			rootCid := root.(cidlink.Link).Cid
@@ -554,66 +559,6 @@ func (dc *disconnectCoordinator) signalReadyForDisconnect(awaitDisconnect bool) 
 
 func (dc *disconnectCoordinator) onDisconnect() {
 	close(dc.disconnected)
-}
-
-type restartRevalidator struct {
-	*testutil.StubbedRevalidator
-	pullDataSent map[datatransfer.ChannelID][]uint64
-	pushDataRcvd map[datatransfer.ChannelID][]uint64
-}
-
-func newRestartRevalidator() *restartRevalidator {
-	return &restartRevalidator{
-		StubbedRevalidator: testutil.NewStubbedRevalidator(),
-		pullDataSent:       make(map[datatransfer.ChannelID][]uint64),
-		pushDataRcvd:       make(map[datatransfer.ChannelID][]uint64),
-	}
-}
-
-func (r *restartRevalidator) OnPullDataSent(chid datatransfer.ChannelID, additionalBytesSent uint64) (bool, datatransfer.VoucherResult, error) {
-	chSent, ok := r.pullDataSent[chid]
-	if !ok {
-		chSent = []uint64{}
-	}
-	chSent = append(chSent, additionalBytesSent)
-	r.pullDataSent[chid] = chSent
-
-	return true, nil, nil
-}
-
-func (r *restartRevalidator) pullDataSum(chid datatransfer.ChannelID) uint64 {
-	pullDataSent, ok := r.pullDataSent[chid]
-	var total uint64
-	if !ok {
-		return total
-	}
-	for _, sent := range pullDataSent {
-		total += sent
-	}
-	return total
-}
-
-func (r *restartRevalidator) OnPushDataReceived(chid datatransfer.ChannelID, additionalBytesReceived uint64) (bool, datatransfer.VoucherResult, error) {
-	chRcvd, ok := r.pushDataRcvd[chid]
-	if !ok {
-		chRcvd = []uint64{}
-	}
-	chRcvd = append(chRcvd, additionalBytesReceived)
-	r.pushDataRcvd[chid] = chRcvd
-
-	return true, nil, nil
-}
-
-func (r *restartRevalidator) pushDataSum(chid datatransfer.ChannelID) uint64 {
-	pushDataRcvd, ok := r.pushDataRcvd[chid]
-	var total uint64
-	if !ok {
-		return total
-	}
-	for _, rcvd := range pushDataRcvd {
-		total += rcvd
-	}
-	return total
 }
 
 // TestAutoRestart tests that if the connection for a push or pull request
@@ -794,6 +739,8 @@ func TestAutoRestart(t *testing.T) {
 				responder.SubscribeToEvents(subscriber)
 				voucher := testutil.FakeDTType{Data: "applesauce"}
 				sv := testutil.NewStubbedValidator()
+				sv.StubResult(datatransfer.ValidationResult{Accepted: true})
+				sv.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
 
 				var sourceDagService, destDagService ipldformat.DAGService
 				if tc.isPush {
@@ -809,10 +756,6 @@ func TestAutoRestart(t *testing.T) {
 
 				require.NoError(t, initiator.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				require.NoError(t, responder.RegisterVoucherType(&testutil.FakeDTType{}, sv))
-
-				// Register a revalidator that records calls to OnPullDataSent and OnPushDataReceived
-				srv := newRestartRevalidator()
-				require.NoError(t, responder.RegisterRevalidator(testutil.NewFakeDTType(), srv))
 
 				// If the test case needs to subscribe to response events, provide
 				// the test case with the responder
@@ -895,12 +838,13 @@ func TestAutoRestart(t *testing.T) {
 					}
 				})()
 
-				// Verify that the total amount of data sent / received that was
-				// reported to the revalidator is correct
+				chst, err := responder.ChannelState(ctx, chid)
+				require.NoError(t, err)
+				// Verify that the total amount of data sent / received was correct
 				if tc.isPush {
-					require.EqualValues(t, loremFileTransferBytes, srv.pushDataSum(chid))
+					require.EqualValues(t, uint64(loremFileTransferBytes), chst.Received())
 				} else {
-					require.EqualValues(t, loremFileTransferBytes, srv.pullDataSum(chid))
+					require.EqualValues(t, uint64(loremFileTransferBytes), chst.Sent())
 				}
 
 				// Verify that the file was transferred to the destination node
@@ -988,6 +932,8 @@ func TestAutoRestartAfterBouncingInitiator(t *testing.T) {
 
 		voucher := testutil.FakeDTType{Data: "applesauce"}
 		sv := testutil.NewStubbedValidator()
+		sv.StubResult(datatransfer.ValidationResult{Accepted: true})
+		sv.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
 
 		var sourceDagService, destDagService ipldformat.DAGService
 		if isPush {
@@ -1003,10 +949,6 @@ func TestAutoRestartAfterBouncingInitiator(t *testing.T) {
 
 		require.NoError(t, initiator.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 		require.NoError(t, responder.RegisterVoucherType(&testutil.FakeDTType{}, sv))
-
-		// Register a revalidator that records calls to OnPullDataSent and OnPushDataReceived
-		srv := newRestartRevalidator()
-		require.NoError(t, responder.RegisterRevalidator(testutil.NewFakeDTType(), srv))
 
 		var chid datatransfer.ChannelID
 		if isPush {
@@ -1112,12 +1054,13 @@ func TestAutoRestartAfterBouncingInitiator(t *testing.T) {
 			}
 		})()
 
-		// Verify that the total amount of data sent / received that was
-		// reported to the revalidator is correct
+		chst, err := responder.ChannelState(ctx, chid)
+		require.NoError(t, err)
+		// Verify that the total amount of data sent / received was correct
 		if isPush {
-			require.EqualValues(t, loremLargeFileTransferBytes, srv.pushDataSum(chid))
+			require.EqualValues(t, uint64(loremFileTransferBytes), chst.Received())
 		} else {
-			require.EqualValues(t, loremLargeFileTransferBytes, srv.pullDataSum(chid))
+			require.EqualValues(t, uint64(loremFileTransferBytes), chst.Sent())
 		}
 
 		// Verify that the file was transferred to the destination node
@@ -1192,11 +1135,13 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 
 			var chid datatransfer.ChannelID
 			if data.isPull {
-				sv.ExpectPausePull()
+				sv.ExpectSuccessPull()
+				sv.StubResult(datatransfer.ValidationResult{Accepted: true, LeaveRequestPaused: true})
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
 			} else {
-				sv.ExpectPausePush()
+				sv.ExpectSuccessPush()
+				sv.StubResult(datatransfer.ValidationResult{Accepted: true, LeaveRequestPaused: true})
 				require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
 			}
@@ -1239,33 +1184,62 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 }
 
 type retrievalRevalidator struct {
-	*testutil.StubbedRevalidator
-	dataSoFar          uint64
-	providerPausePoint int
-	pausePoints        []uint64
-	finalVoucher       datatransfer.VoucherResult
-	revalVouchers      []datatransfer.VoucherResult
+	*testutil.StubbedValidator
+	providerPausePoint   int
+	pausePoints          []uint64
+	leavePausedInitially bool
+	initialVoucherResult datatransfer.VoucherResult
+	revalidateToComplete bool
 }
 
-func (r *retrievalRevalidator) OnPullDataSent(chid datatransfer.ChannelID, additionalBytesSent uint64) (bool, datatransfer.VoucherResult, error) {
-	r.dataSoFar += additionalBytesSent
-	if r.providerPausePoint < len(r.pausePoints) &&
-		r.dataSoFar >= r.pausePoints[r.providerPausePoint] {
-		var v datatransfer.VoucherResult = testutil.NewFakeDTType()
-		if len(r.revalVouchers) > r.providerPausePoint {
-			v = r.revalVouchers[r.providerPausePoint]
-		}
-		r.providerPausePoint++
-		return true, v, datatransfer.ErrPause
+func (r *retrievalRevalidator) ValidatePush(
+	chid datatransfer.ChannelID,
+	sender peer.ID,
+	voucher datatransfer.Voucher,
+	baseCid cid.Cid,
+	selector ipld.Node) (datatransfer.ValidationResult, error) {
+	vr := datatransfer.ValidationResult{
+		Accepted:             true,
+		RevalidateToComplete: r.revalidateToComplete,
+		LeaveRequestPaused:   r.leavePausedInitially,
+		VoucherResult:        r.initialVoucherResult,
 	}
-	return true, nil, nil
+	if len(r.pausePoints) > r.providerPausePoint {
+		vr.DataLimit = r.pausePoints[r.providerPausePoint]
+		r.providerPausePoint++
+	}
+	r.StubbedValidator.StubResult(vr)
+	return r.StubbedValidator.ValidatePush(chid, sender, voucher, baseCid, selector)
 }
 
-func (r *retrievalRevalidator) OnPushDataReceived(chid datatransfer.ChannelID, additionalBytesReceived uint64) (bool, datatransfer.VoucherResult, error) {
-	return false, nil, nil
+func (r *retrievalRevalidator) ValidatePull(
+	chid datatransfer.ChannelID,
+	sender peer.ID,
+	voucher datatransfer.Voucher,
+	baseCid cid.Cid,
+	selector ipld.Node) (datatransfer.ValidationResult, error) {
+	vr := datatransfer.ValidationResult{
+		Accepted:             true,
+		RevalidateToComplete: r.revalidateToComplete,
+		LeaveRequestPaused:   r.leavePausedInitially,
+		VoucherResult:        r.initialVoucherResult,
+	}
+	if len(r.pausePoints) > r.providerPausePoint {
+		vr.DataLimit = r.pausePoints[r.providerPausePoint]
+		r.providerPausePoint++
+	}
+	r.StubbedValidator.StubResult(vr)
+	return r.StubbedValidator.ValidatePull(chid, sender, voucher, baseCid, selector)
 }
-func (r *retrievalRevalidator) OnComplete(chid datatransfer.ChannelID) (bool, datatransfer.VoucherResult, error) {
-	return true, r.finalVoucher, datatransfer.ErrPause
+
+func (r *retrievalRevalidator) Revalidate(chid datatransfer.ChannelID, channelState datatransfer.ChannelState) (datatransfer.ValidationResult, error) {
+	vr := datatransfer.ValidationResult{Accepted: true, RevalidateToComplete: r.revalidateToComplete}
+	if len(r.pausePoints) > r.providerPausePoint {
+		vr.DataLimit = r.pausePoints[r.providerPausePoint]
+		r.providerPausePoint++
+	}
+	r.StubbedValidator.StubRevalidationResult(vr)
+	return r.StubbedValidator.Revalidate(chid, channelState)
 }
 
 func TestSimulatedRetrievalFlow(t *testing.T) {
@@ -1396,7 +1370,12 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 							<-timer.C
 							_ = dt1.ResumeDataTransferChannel(ctx, chid)
 						}()
+					} else {
+						dt1.SendVoucherResult(ctx, chid, testutil.NewFakeDTType())
 					}
+				}
+				if event.Code == datatransfer.BeginFinalizing {
+					dt1.SendVoucherResult(ctx, chid, finalVoucherResult)
 				}
 				if event.Code == datatransfer.Error {
 					errChan <- struct{}{}
@@ -1407,15 +1386,14 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			}
 			dt1.SubscribeToEvents(providerSubscriber)
 			voucher := testutil.FakeDTType{Data: "applesauce"}
-			sv := testutil.NewStubbedValidator()
-			sv.ExpectPausePull()
-			require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
-			srv := &retrievalRevalidator{
-				testutil.NewStubbedRevalidator(), 0, 0, config.pausePoints, finalVoucherResult, []datatransfer.VoucherResult{},
+			sv := &retrievalRevalidator{
+				StubbedValidator:     testutil.NewStubbedValidator(),
+				pausePoints:          config.pausePoints,
+				revalidateToComplete: true,
+				leavePausedInitially: true,
 			}
-			srv.ExpectSuccessErrResume()
-			require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
+			require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 			require.NoError(t, dt2.RegisterVoucherResultType(testutil.NewFakeDTType()))
 			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
@@ -1434,9 +1412,8 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 				}
 			}
 			sv.VerifyExpectations(t)
-			srv.VerifyExpectations(t)
 			gsData.VerifyFileTransferred(t, root, true)
-			require.Equal(t, srv.providerPausePoint, len(config.pausePoints))
+			require.Equal(t, sv.providerPausePoint, len(config.pausePoints))
 			require.Equal(t, clientPausePoint, len(config.pausePoints))
 			traces := collectTracing(t).TracesToStrings(3)
 			for _, expectedTrace := range config.expectedTraces {
@@ -1521,6 +1498,8 @@ func TestPauseAndResume(t *testing.T) {
 			dt2.SubscribeToEvents(subscriber)
 			voucher := testutil.FakeDTType{Data: "applesauce"}
 			sv := testutil.NewStubbedValidator()
+			sv.StubResult(datatransfer.ValidationResult{Accepted: true})
+			sv.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
 
 			var chid datatransfer.ChannelID
 			if isPull {
@@ -1833,7 +1812,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		}
 		requestReceived := messageReceived.message.(datatransfer.Request)
 
-		response, err := message.NewResponse(requestReceived.TransferID(), true, false, voucherResult.Type(), voucherResult)
+		response, err := message.NewResponse(requestReceived.TransferID(), types.NewMessage, true, false, voucherResult.Type(), voucherResult)
 		require.NoError(t, err)
 		nd, err := response.ToIPLD()
 		require.NoError(t, err)
@@ -1852,7 +1831,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	})
 
 	t.Run("when no request is initiated", func(t *testing.T) {
-		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint32()), true, false, voucher.Type(), voucher)
+		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint32()), types.NewMessage, true, false, voucher.Type(), voucher)
 		require.NoError(t, err)
 		nd, err := response.ToIPLD()
 		require.NoError(t, err)
@@ -1938,6 +1917,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 			test: func(t *testing.T, gsData *testutil.GraphsyncTestingData, tp2 datatransfer.Transport, link ipld.Link, id datatransfer.TransferID, gsr *fakeGraphSyncReceiver) {
 				sv := testutil.NewStubbedValidator()
 				sv.ExpectSuccessPull()
+				sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 
 				dt1, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2)
 				require.NoError(t, err)
@@ -2115,6 +2095,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	})
 
 	providerFinished := make(chan struct{}, 1)
+	nextVoucherResult := 0
 	dt1.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 		if event.Code == datatransfer.Error {
 			errChan <- struct{}{}
@@ -2122,24 +2103,26 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 		if channelState.Status() == datatransfer.Completed {
 			providerFinished <- struct{}{}
 		}
+		if event.Code == datatransfer.PauseResponder {
+			if nextVoucherResult < len(pausePoints) {
+				dt1.SendVoucherResult(ctx, chid, voucherResults[nextVoucherResult])
+				nextVoucherResult++
+			}
+		}
+		if event.Code == datatransfer.BeginFinalizing {
+			dt1.SendVoucherResult(ctx, chid, finalVoucherResult)
+		}
 	})
 
-	sv := testutil.NewStubbedValidator()
-	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
-	// Stub in the validator so it returns that exact voucher when calling ValidatePull
-	// this validator will not pause transfer when accepting a transfer and will start
-	// sending blocks immediately
-	sv.StubResult(respVoucher)
-
-	srv := &retrievalRevalidator{
-		testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult, voucherResults,
+	sv := &retrievalRevalidator{
+		StubbedValidator:     testutil.NewStubbedValidator(),
+		pausePoints:          pausePoints,
+		revalidateToComplete: true,
+		initialVoucherResult: respVoucher,
 	}
-	// The stubbed revalidator will authorize Revalidate and return ErrResume to finisht the transfer
-	srv.ExpectSuccessErrResume()
-	require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
+	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
-	// Register our response voucher with the client
-	require.NoError(t, dt2.RegisterVoucherResultType(respVoucher))
+	require.NoError(t, dt2.RegisterVoucherResultType(testutil.NewFakeDTType()))
 
 	voucher := testutil.FakeDTType{Data: "applesauce"}
 	chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
@@ -2162,17 +2145,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 		}
 	}
 	sv.VerifyExpectations(t)
-	srv.VerifyExpectations(t)
 	gsData.VerifyFileTransferred(t, root, true)
-}
-
-// completeRevalidator does not pause when sending the last voucher to confirm the deal is completed
-type completeRevalidator struct {
-	*retrievalRevalidator
-}
-
-func (r *completeRevalidator) OnComplete(chid datatransfer.ChannelID) (bool, datatransfer.VoucherResult, error) {
-	return true, r.finalVoucher, nil
 }
 
 func TestMultipleParallelTransfers(t *testing.T) {
@@ -2208,25 +2181,13 @@ func TestMultipleParallelTransfers(t *testing.T) {
 	encodedFVR, err := encoding.Encode(finalVoucherResult)
 	require.NoError(t, err)
 
-	sv := testutil.NewStubbedValidator()
-	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
-	// Stub in the validator so it returns that exact voucher when calling ValidatePull
-	// this validator will not pause transfer when accepting a transfer and will start
-	// sending blocks immediately
-	sv.StubResult(respVoucher)
-
-	// no need for intermediary voucher results
-	voucherResults := []datatransfer.VoucherResult{}
-
-	pausePoints := []uint64{}
-	srv := &retrievalRevalidator{
-		testutil.NewStubbedRevalidator(), 0, 0, pausePoints, finalVoucherResult, voucherResults,
+	sv := &retrievalRevalidator{
+		StubbedValidator:     testutil.NewStubbedValidator(),
+		initialVoucherResult: respVoucher,
 	}
-	srv.ExpectSuccessErrResume()
-	require.NoError(t, dt1.RegisterRevalidator(testutil.NewFakeDTType(), srv))
+	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
-	// Register our response voucher with the client
-	require.NoError(t, dt2.RegisterVoucherResultType(respVoucher))
+	require.NoError(t, dt2.RegisterVoucherResultType(testutil.NewFakeDTType()))
 
 	// for each size we create a new random DAG of the given size and try to retrieve it
 	for _, size := range sizes {
@@ -2290,6 +2251,9 @@ func TestMultipleParallelTransfers(t *testing.T) {
 				if channelState.Status() == datatransfer.Completed {
 					providerFinished <- struct{}{}
 				}
+				if event.Code == datatransfer.BeginFinalizing {
+					dt1.SendVoucherResult(ctx, chid, finalVoucherResult)
+				}
 			})
 
 			root, origBytes := LoadRandomData(ctx, t, gsData.DagService1, size)
@@ -2325,7 +2289,6 @@ func TestMultipleParallelTransfers(t *testing.T) {
 				}
 			}
 			sv.VerifyExpectations(t)
-			srv.VerifyExpectations(t)
 			testutil.VerifyHasFile(gsData.Ctx, t, gsData.DagService2, root, origBytes)
 		})
 	}

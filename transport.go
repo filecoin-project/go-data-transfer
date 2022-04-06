@@ -27,8 +27,6 @@ type EventsHandler interface {
 
 	// OnDataQueued is called when data is queued for sending for the given channel ID
 	// return values are:
-	// message = data transfer message along with data
-	// err = error
 	// - nil = proceed with sending data
 	// - error = cancel this request
 	// - err == ErrPause - pause this request

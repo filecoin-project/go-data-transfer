@@ -49,6 +49,7 @@ type Channels struct {
 	voucherDecoder       DecoderByTypeFunc
 	voucherResultDecoder DecoderByTypeFunc
 	blockIndexCache      *blockIndexCache
+	progressCache        *progressCache
 	stateMachines        fsm.Group
 	migrateStateMachines func(context.Context) error
 }
@@ -75,6 +76,7 @@ func New(ds datastore.Batching,
 		voucherResultDecoder: voucherResultDecoder,
 	}
 	c.blockIndexCache = newBlockIndexCache()
+	c.progressCache = newProgressCache()
 	channelMigrations, err := migrations.GetChannelStateMigrations(selfPeer)
 	if err != nil {
 		return nil, err
@@ -235,18 +237,35 @@ func (c *Channels) getSentIndex(chid datatransfer.ChannelID) (int64, error) {
 	return chst.SentCidsTotal(), nil
 }
 
-func (c *Channels) DataSent(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) (bool, error) {
-	return c.fireProgressEvent(chid, datatransfer.DataSent, datatransfer.DataSentProgress, k, delta, index, unique, c.getSentIndex)
+func (c *Channels) getQueuedProgress(chid datatransfer.ChannelID) (uint64, uint64, error) {
+	chst, err := c.GetByID(context.TODO(), chid)
+	if err != nil {
+		return 0, 0, err
+	}
+	dataLimit := chst.DataLimit()
+	return dataLimit, chst.Queued(), nil
 }
 
-func (c *Channels) DataQueued(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) (bool, error) {
-	return c.fireProgressEvent(chid, datatransfer.DataQueued, datatransfer.DataQueuedProgress, k, delta, index, unique, c.getQueuedIndex)
+func (c *Channels) getReceivedProgress(chid datatransfer.ChannelID) (uint64, uint64, error) {
+	chst, err := c.GetByID(context.TODO(), chid)
+	if err != nil {
+		return 0, 0, err
+	}
+	dataLimit := chst.DataLimit()
+	return dataLimit, chst.Received(), nil
+}
+
+func (c *Channels) DataSent(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) error {
+	return c.fireProgressEvent(chid, datatransfer.DataSent, datatransfer.DataSentProgress, delta, index, unique, c.getSentIndex, nil)
+}
+
+func (c *Channels) DataQueued(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) error {
+	return c.fireProgressEvent(chid, datatransfer.DataQueued, datatransfer.DataQueuedProgress, delta, index, unique, c.getQueuedIndex, c.getQueuedProgress)
 }
 
 // Returns true if this is the first time the block has been received
-func (c *Channels) DataReceived(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) (bool, error) {
-	new, err := c.fireProgressEvent(chid, datatransfer.DataReceived, datatransfer.DataReceivedProgress, k, delta, index, unique, c.getReceivedIndex)
-	return new, err
+func (c *Channels) DataReceived(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) error {
+	return c.fireProgressEvent(chid, datatransfer.DataReceived, datatransfer.DataReceivedProgress, delta, index, unique, c.getReceivedIndex, c.getReceivedProgress)
 }
 
 // PauseInitiator pauses the initator of this channel
@@ -354,6 +373,17 @@ func (c *Channels) ReceiveDataError(chid datatransfer.ChannelID, err error) erro
 	return c.send(chid, datatransfer.ReceiveDataError, err)
 }
 
+// SetDataLimit means a data limit has been set on this channel
+func (c *Channels) SetDataLimit(chid datatransfer.ChannelID, dataLimit uint64) error {
+	c.progressCache.setDataLimit(chid, dataLimit)
+	return c.send(chid, datatransfer.SetDataLimit, dataLimit)
+}
+
+// SetRevalidateToComplete sets the state of whether a data transfer can complete
+func (c *Channels) SetRevalidateToComplete(chid datatransfer.ChannelID, revalidateToComplete bool) error {
+	return c.send(chid, datatransfer.SetRevalidateToComplete, revalidateToComplete)
+}
+
 // HasChannel returns true if the given channel id is being tracked
 func (c *Channels) HasChannel(chid datatransfer.ChannelID) (bool, error) {
 	return c.stateMachines.Has(chid)
@@ -362,29 +392,74 @@ func (c *Channels) HasChannel(chid datatransfer.ChannelID) (bool, error) {
 // fireProgressEvent fires
 // - an event for queuing / sending / receiving blocks
 // - a corresponding "progress" event if the block has not been seen before
+// - a pause event if the progress goes past the data limit
 // For example, if a block is being sent for the first time, the method will
 // fire both DataSent AND DataSentProgress.
 // If a block is resent, the method will fire DataSent but not DataSentProgress.
-// Returns true if the block is new (both the event and a progress event were fired).
-func (c *Channels) fireProgressEvent(chid datatransfer.ChannelID, evt datatransfer.EventCode, progressEvt datatransfer.EventCode, k cid.Cid, delta uint64, index int64, unique bool, readFromOriginal readOriginalFn) (bool, error) {
+// If a block is sent for the first time, and more data has been sent than the data limit,
+// the method will fire DataSent AND DataProgress AND PauseResponder AND it will return
+// datatransfer.ErrPause as the error
+func (c *Channels) fireProgressEvent(chid datatransfer.ChannelID, evt datatransfer.EventCode, progressEvt datatransfer.EventCode, delta uint64, index int64, unique bool, readFromOriginal readIndexFn, readProgress readProgressFn) error {
 	if err := c.checkChannelExists(chid, evt); err != nil {
-		return false, err
+		return err
 	}
 
-	isNewIndex, err := c.blockIndexCache.updateIfGreater(evt, chid, index, readFromOriginal)
+	pause, progress, err := c.checkEvents(chid, evt, delta, index, unique, readFromOriginal, readProgress)
+
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	// If the block has not been seen before, fire the progress event
-	if unique && isNewIndex {
+	// Fire the progress event if there is progress
+	if progress {
 		if err := c.stateMachines.Send(chid, progressEvt, delta); err != nil {
-			return false, err
+			return err
 		}
 	}
 
 	// Fire the regular event
-	return unique && isNewIndex, c.stateMachines.Send(chid, evt, index)
+	if err := c.stateMachines.Send(chid, evt, index); err != nil {
+		return err
+	}
+
+	// fire the pause event if we past our data limit
+	if pause {
+		// pause. Data limits only exist on the responder, so we always pause the responder
+		if err := c.stateMachines.Send(chid, datatransfer.PauseResponder); err != nil {
+			return err
+		}
+		// return a pause error so the transfer knows to pause
+		return datatransfer.ErrPause
+	}
+	return nil
+}
+
+func (c *Channels) checkEvents(chid datatransfer.ChannelID, evt datatransfer.EventCode, delta uint64, index int64, unique bool, readFromOriginal readIndexFn, readProgress readProgressFn) (pause bool, progress bool, err error) {
+
+	// if this is not a unique block, no data progress is made, return
+	if !unique {
+		return
+	}
+
+	// check if data progress is made
+	progress, err = c.blockIndexCache.updateIfGreater(evt, chid, index, readFromOriginal)
+	if err != nil {
+		return false, false, err
+	}
+
+	// if no data progress, return
+	if !progress {
+		return
+	}
+
+	// if we don't check data limits on this function, return
+	if readProgress == nil {
+		return
+	}
+
+	// check if we're past our data limit
+	pause, err = c.progressCache.progress(chid, delta, readProgress)
+	return
 }
 
 func (c *Channels) send(chid datatransfer.ChannelID, code datatransfer.EventCode, args ...interface{}) error {

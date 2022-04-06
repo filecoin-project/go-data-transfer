@@ -9,6 +9,7 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
 // NewDTRequest makes a new DT Request message
@@ -24,7 +25,7 @@ func NewDTRequest(t *testing.T, transferID datatransfer.TransferID) datatransfer
 // NewDTResponse makes a new DT Request message
 func NewDTResponse(t *testing.T, transferID datatransfer.TransferID) datatransfer.Response {
 	vresult := NewFakeDTType()
-	r, err := message.NewResponse(transferID, false, false, vresult.Type(), vresult)
+	r, err := message.NewResponse(transferID, types.NewMessage, false, false, vresult.Type(), vresult)
 	require.NoError(t, err)
 	return r
 }

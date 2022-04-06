@@ -60,6 +60,18 @@ const (
 	ChannelNotFoundError
 )
 
+func (s Status) IsAccepted() bool {
+	return s != Requested && s != Cancelled && s != Cancelling && s != Failed && s != Failing
+}
+
+func (s Status) IsResponderPaused() bool {
+	return s == ResponderPaused || s == BothPaused || s == Finalizing
+}
+
+func (s Status) InFinalization() bool {
+	return s == Finalizing || s == Completed || s == Completing
+}
+
 // Statuses are human readable names for data transfer states
 var Statuses = map[Status]string{
 	// Requested means a data transfer was requested by has not yet been approved

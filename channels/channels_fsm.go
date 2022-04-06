@@ -109,6 +109,18 @@ var ChannelEvents = fsm.Events{
 			chst.AddLog("")
 			return nil
 		}),
+	fsm.Event(datatransfer.SetDataLimit).FromAny().ToJustRecord().
+		Action(func(chst *internal.ChannelState, dataLimit uint64) error {
+			chst.DataLimit = dataLimit
+			chst.AddLog("")
+			return nil
+		}),
+	fsm.Event(datatransfer.SetRevalidateToComplete).FromAny().ToJustRecord().
+		Action(func(chst *internal.ChannelState, revalidateToComplete bool) error {
+			chst.RevalidateToComplete = revalidateToComplete
+			chst.AddLog("")
+			return nil
+		}),
 	fsm.Event(datatransfer.Disconnected).FromAny().ToNoChange().Action(func(chst *internal.ChannelState, err error) error {
 		chst.Message = err.Error()
 		chst.AddLog("data transfer disconnected: %s", chst.Message)
@@ -200,7 +212,8 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.ResponderBeginsFinalization).
 		FromAny().To(datatransfer.ResponderFinalizing).
 		FromMany(datatransfer.Failing, datatransfer.Cancelling).ToJustRecord().
-		From(datatransfer.TransferFinished).To(datatransfer.ResponderFinalizingTransferFinished).Action(func(chst *internal.ChannelState) error {
+		From(datatransfer.TransferFinished).To(datatransfer.ResponderFinalizingTransferFinished).
+		FromMany(datatransfer.ResponderFinalizing, datatransfer.ResponderFinalizingTransferFinished).ToJustRecord().Action(func(chst *internal.ChannelState) error {
 		chst.AddLog("")
 		return nil
 	}),

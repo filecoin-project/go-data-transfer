@@ -19,6 +19,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
 	. "github.com/filecoin-project/go-data-transfer/v2/impl"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
@@ -150,7 +151,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
+				response, err := message.NewResponse(channelID.ID, types.NewMessage, true, false, datatransfer.EmptyTypeIdentifier, nil)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
@@ -162,7 +163,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, h.voucherResult.Type(), h.voucherResult)
+				response, err := message.NewResponse(channelID.ID, types.NewMessage, true, false, h.voucherResult.Type(), h.voucherResult)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
@@ -174,7 +175,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
+				response, err := message.NewResponse(channelID.ID, types.NewMessage, true, false, datatransfer.EmptyTypeIdentifier, nil)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
@@ -230,7 +231,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
+				response, err := message.NewResponse(channelID.ID, types.NewMessage, true, false, datatransfer.EmptyTypeIdentifier, nil)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
@@ -445,9 +446,18 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			},
 		},
 		"RestartDataTransferChannel: Manager Peer Receive Push Restart works ": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept},
+			expectedEvents: []datatransfer.EventCode{
+				datatransfer.Open,
+				datatransfer.Accept,
+				datatransfer.SetDataLimit,
+				datatransfer.SetRevalidateToComplete,
+			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()
+
+				h.voucherValidator.ExpectSuccessPush()
+				h.voucherValidator.StubResult(datatransfer.ValidationResult{Accepted: true})
+
 				// receive a push request
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
 				require.Len(t, h.transport.OpenedChannels, 1)
@@ -455,19 +465,16 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the push request received above and validate it
+				h.voucherValidator.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
 				require.NoError(t, h.dt.RestartDataTransferChannel(ctx, chid))
-				require.Len(t, h.voucherValidator.ValidationsReceived, 2)
+				require.Len(t, h.voucherValidator.RevalidationsReceived, 1)
 				require.Len(t, h.transport.OpenedChannels, 1)
 				require.Len(t, h.network.SentMessages, 1)
 
 				// assert validation on restart
-				vmsg := h.voucherValidator.ValidationsReceived[1]
-				require.Equal(t, h.voucher, vmsg.Voucher)
-				require.False(t, vmsg.IsPull)
-				require.Equal(t, h.stor, vmsg.Selector)
-				require.Equal(t, h.baseCid, vmsg.BaseCid)
-				require.Equal(t, h.peers[1], vmsg.Other)
+				vmsg := h.voucherValidator.RevalidationsReceived[0]
+				require.Equal(t, channelID(h.id, h.peers), vmsg.ChannelID)
 
 				// assert req was sent correctly
 				req := h.network.SentMessages[0]
@@ -480,35 +487,38 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				achId, err := receivedRequest.RestartChannelId()
 				require.NoError(t, err)
 				require.Equal(t, chid, achId)
-
-				h.voucherValidator.ExpectSuccessPush()
 			},
 		},
 		"RestartDataTransferChannel: Manager Peer Receive Pull Restart works ": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept},
+			expectedEvents: []datatransfer.EventCode{
+				datatransfer.Open,
+				datatransfer.Accept,
+				datatransfer.SetDataLimit,
+				datatransfer.SetRevalidateToComplete,
+			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()
 				// receive a pull request
+				h.voucherValidator.ExpectSuccessPull()
+				h.voucherValidator.StubResult(datatransfer.ValidationResult{Accepted: true})
+
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pullRequest)
 				require.Len(t, h.transport.OpenedChannels, 0)
 				require.Len(t, h.network.SentMessages, 1)
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the pull request received above
-				h.voucherValidator.ExpectSuccessPull()
+				h.voucherValidator.ExpectSuccessRevalidation()
+				h.voucherValidator.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pullRequest.TransferID()}
 				require.NoError(t, h.dt.RestartDataTransferChannel(ctx, chid))
 				require.Len(t, h.transport.OpenedChannels, 0)
 				require.Len(t, h.network.SentMessages, 2)
-				require.Len(t, h.voucherValidator.ValidationsReceived, 2)
+				require.Len(t, h.voucherValidator.RevalidationsReceived, 1)
 
 				// assert validation on restart
-				vmsg := h.voucherValidator.ValidationsReceived[1]
-				require.Equal(t, h.voucher, vmsg.Voucher)
-				require.True(t, vmsg.IsPull)
-				require.Equal(t, h.stor, vmsg.Selector)
-				require.Equal(t, h.baseCid, vmsg.BaseCid)
-				require.Equal(t, h.peers[1], vmsg.Other)
+				vmsg := h.voucherValidator.RevalidationsReceived[0]
+				require.Equal(t, channelID(h.id, h.peers), vmsg.ChannelID)
 
 				// assert req was sent correctly
 				req := h.network.SentMessages[1]
@@ -524,35 +534,51 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			},
 		},
 		"RestartDataTransferChannel: Manager Peer Receive Pull Restart fails if validation fails ": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept},
+			expectedEvents: []datatransfer.EventCode{
+				datatransfer.Open,
+				datatransfer.Accept,
+				datatransfer.SetDataLimit,
+				datatransfer.SetRevalidateToComplete,
+			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()
 				// receive a pull request
+				h.voucherValidator.ExpectSuccessPull()
+				h.voucherValidator.StubResult(datatransfer.ValidationResult{Accepted: true})
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pullRequest)
 				require.Len(t, h.transport.OpenedChannels, 0)
 				require.Len(t, h.network.SentMessages, 1)
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the pull request received above
-				h.voucherValidator.ExpectErrorPull()
+				h.voucherValidator.ExpectSuccessRevalidation()
+				h.voucherValidator.StubRevalidationResult(datatransfer.ValidationResult{Accepted: false})
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pullRequest.TransferID()}
-				require.EqualError(t, h.dt.RestartDataTransferChannel(ctx, chid), "failed to restart channel, validation error: something went wrong")
+				require.EqualError(t, h.dt.RestartDataTransferChannel(ctx, chid), datatransfer.ErrRejected.Error())
 			},
 		},
 		"RestartDataTransferChannel: Manager Peer Receive Push Restart fails if validation fails ": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept},
+			expectedEvents: []datatransfer.EventCode{
+				datatransfer.Open,
+				datatransfer.Accept,
+				datatransfer.SetDataLimit,
+				datatransfer.SetRevalidateToComplete,
+			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()
 				// receive a push request
+				h.voucherValidator.ExpectSuccessPush()
+				h.voucherValidator.StubResult(datatransfer.ValidationResult{Accepted: true})
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
 				require.Len(t, h.transport.OpenedChannels, 1)
 				require.Len(t, h.network.SentMessages, 0)
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the pull request received above
-				h.voucherValidator.ExpectErrorPush()
+				h.voucherValidator.ExpectSuccessRevalidation()
+				h.voucherValidator.StubRevalidationResult(datatransfer.ValidationResult{Accepted: false})
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
-				require.EqualError(t, h.dt.RestartDataTransferChannel(ctx, chid), "failed to restart channel, validation error: something went wrong")
+				require.EqualError(t, h.dt.RestartDataTransferChannel(ctx, chid), datatransfer.ErrRejected.Error())
 			},
 		},
 		"Fails if channel does not exist": {
@@ -640,12 +666,8 @@ type eventVerifier struct {
 func (e eventVerifier) setup(t *testing.T, dt datatransfer.Manager) {
 	if len(e.expectedEvents) > 0 {
 		received := 0
-		max := len(e.expectedEvents)
 		dt.SubscribeToEvents(func(evt datatransfer.Event, state datatransfer.ChannelState) {
 			received++
-			if received > max {
-				t.Fatalf("received too many events: %s", datatransfer.Events[evt.Code])
-			}
 			e.events <- evt.Code
 		})
 	}
@@ -661,6 +683,12 @@ func (e eventVerifier) verify(ctx context.Context, t *testing.T) {
 			case event := <-e.events:
 				receivedEvents = append(receivedEvents, event)
 			}
+		}
+		timer := time.NewTimer(50 * time.Millisecond)
+		select {
+		case event := <-e.events:
+			t.Fatalf("received extra event: %s", datatransfer.Events[event])
+		case <-timer.C:
 		}
 		require.Equal(t, e.expectedEvents, receivedEvents)
 	}
