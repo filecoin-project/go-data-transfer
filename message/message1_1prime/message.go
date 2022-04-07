@@ -89,15 +89,47 @@ func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifie
 	}, nil
 }
 
-// NewResponse builds a new Data Transfer response
-func NewResponse(id datatransfer.TransferID, messageType types.MessageType, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
+// RestartResponse builds a new Data Transfer response
+func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
 	vnode, err := encoding.EncodeToNode(voucherResult)
 	if err != nil {
 		return nil, xerrors.Errorf("Creating request: %w", err)
 	}
 	return &TransferResponse1_1{
 		RequestAccepted:       accepted,
-		MessageType:           uint64(messageType),
+		MessageType:           uint64(types.RestartMessage),
+		Paused:                isPaused,
+		TransferId:            uint64(id),
+		VoucherTypeIdentifier: voucherResultType,
+		VoucherResultPtr:      &vnode,
+	}, nil
+}
+
+// NewResponse builds a new Data Transfer response
+func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
+	vnode, err := encoding.EncodeToNode(voucherResult)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
+	return &TransferResponse1_1{
+		RequestAccepted:       accepted,
+		MessageType:           uint64(types.NewMessage),
+		Paused:                isPaused,
+		TransferId:            uint64(id),
+		VoucherTypeIdentifier: voucherResultType,
+		VoucherResultPtr:      &vnode,
+	}, nil
+}
+
+// VoucherResultResponse builds a new response for a voucher result
+func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
+	vnode, err := encoding.EncodeToNode(voucherResult)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
+	return &TransferResponse1_1{
+		RequestAccepted:       accepted,
+		MessageType:           uint64(types.VoucherResultMessage),
 		Paused:                isPaused,
 		TransferId:            uint64(id),
 		VoucherTypeIdentifier: voucherResultType,
@@ -120,6 +152,22 @@ func CancelResponse(id datatransfer.TransferID) datatransfer.Response {
 		MessageType: uint64(types.CancelMessage),
 		TransferId:  uint64(id),
 	}
+}
+
+// CompleteResponse returns a new complete response message
+func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
+	vnode, err := encoding.EncodeToNode(voucherResult)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
+	return &TransferResponse1_1{
+		MessageType:           uint64(types.CompleteMessage),
+		RequestAccepted:       isAccepted,
+		Paused:                isPaused,
+		VoucherTypeIdentifier: voucherResultType,
+		VoucherResultPtr:      &vnode,
+		TransferId:            uint64(id),
+	}, nil
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage

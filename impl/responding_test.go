@@ -21,7 +21,6 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
 	. "github.com/filecoin-project/go-data-transfer/v2/impl"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
-	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
@@ -676,7 +675,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 
-				response, err := message.NewResponse(channelID.ID, types.RestartMessage, true, false, datatransfer.EmptyTypeIdentifier, nil)
+				response, err := message.RestartResponse(channelID.ID, true, false, datatransfer.EmptyTypeIdentifier, nil)
 				require.NoError(t, err)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)

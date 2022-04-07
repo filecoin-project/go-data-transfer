@@ -20,7 +20,6 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
-	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/network"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
@@ -132,7 +131,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		accepted := false
 		id := datatransfer.TransferID(rand.Int31())
 		voucherResult := testutil.NewFakeDTType()
-		response, err := message.NewResponse(id, types.NewMessage, accepted, false, voucherResult.Type(), voucherResult)
+		response, err := message.NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
 		require.NoError(t, err)
 		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), response))
 

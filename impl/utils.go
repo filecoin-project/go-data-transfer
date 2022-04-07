@@ -2,6 +2,7 @@ package impl
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -46,7 +47,18 @@ func (m *manager) validationResponseMessage(
 	if validationResult.VoucherResult != nil {
 		resultType = validationResult.VoucherResult.Type()
 	}
-	return message.NewResponse(tid, messageType, validationErr == nil && validationResult.Accepted, validationResult.LeaveRequestPaused, resultType, validationResult.VoucherResult)
+	switch messageType {
+	case types.NewMessage:
+		return message.NewResponse(tid, validationErr == nil && validationResult.Accepted, validationResult.LeaveRequestPaused, resultType, validationResult.VoucherResult)
+	case types.RestartMessage:
+		return message.RestartResponse(tid, validationErr == nil && validationResult.Accepted, validationResult.LeaveRequestPaused, resultType, validationResult.VoucherResult)
+	case types.CompleteMessage:
+		return message.CompleteResponse(tid, validationErr == nil && validationResult.Accepted, validationResult.LeaveRequestPaused, resultType, validationResult.VoucherResult)
+	case types.VoucherResultMessage:
+		return message.VoucherResultResponse(tid, validationErr == nil && validationResult.Accepted, validationResult.LeaveRequestPaused, resultType, validationResult.VoucherResult)
+	default:
+		return nil, errors.New("incompatible response type")
+	}
 }
 
 func (m *manager) resume(chid datatransfer.ChannelID) error {

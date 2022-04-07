@@ -39,7 +39,6 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 	. "github.com/filecoin-project/go-data-transfer/v2/impl"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
-	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/network"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 	tp "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
@@ -1812,7 +1811,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		}
 		requestReceived := messageReceived.message.(datatransfer.Request)
 
-		response, err := message.NewResponse(requestReceived.TransferID(), types.NewMessage, true, false, voucherResult.Type(), voucherResult)
+		response, err := message.NewResponse(requestReceived.TransferID(), true, false, voucherResult.Type(), voucherResult)
 		require.NoError(t, err)
 		nd, err := response.ToIPLD()
 		require.NoError(t, err)
@@ -1831,7 +1830,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	})
 
 	t.Run("when no request is initiated", func(t *testing.T) {
-		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint32()), types.NewMessage, true, false, voucher.Type(), voucher)
+		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint32()), true, false, voucher.Type(), voucher)
 		require.NoError(t, err)
 		nd, err := response.ToIPLD()
 		require.NoError(t, err)

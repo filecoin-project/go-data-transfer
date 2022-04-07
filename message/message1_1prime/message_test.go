@@ -19,7 +19,6 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 	message1_1 "github.com/filecoin-project/go-data-transfer/v2/message/message1_1prime"
-	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
@@ -173,7 +172,7 @@ func TestTransferRequest_UnmarshalCBOR(t *testing.T) {
 func TestResponses(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucherResult := testutil.NewFakeDTType()
-	response, err := message1_1.NewResponse(id, types.NewMessage, false, true, voucherResult.Type(), voucherResult) // not accepted
+	response, err := message1_1.NewResponse(id, false, true, voucherResult.Type(), voucherResult) // not accepted
 	require.NoError(t, err)
 	assert.Equal(t, response.TransferID(), id)
 	assert.False(t, response.Accepted())
@@ -196,7 +195,7 @@ func TestResponses(t *testing.T) {
 func TestTransferResponse_MarshalCBOR(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucherResult := testutil.NewFakeDTType()
-	response, err := message1_1.NewResponse(id, types.NewMessage, true, false, voucherResult.Type(), voucherResult) // accepted
+	response, err := message1_1.NewResponse(id, true, false, voucherResult.Type(), voucherResult) // accepted
 	require.NoError(t, err)
 
 	// sanity check that we can marshal data
@@ -209,7 +208,7 @@ func TestTransferResponse_UnmarshalCBOR(t *testing.T) {
 	t.Run("round-trip", func(t *testing.T) {
 		id := datatransfer.TransferID(rand.Int31())
 		voucherResult := testutil.NewFakeDTType()
-		response, err := message1_1.NewResponse(id, types.NewMessage, true, false, voucherResult.Type(), voucherResult) // accepted
+		response, err := message1_1.NewResponse(id, true, false, voucherResult.Type(), voucherResult) // accepted
 		require.NoError(t, err)
 
 		wbuf := new(bytes.Buffer)
@@ -382,7 +381,7 @@ func TestCancelResponse(t *testing.T) {
 
 func TestCompleteResponse(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	response, err := message1_1.NewResponse(id, types.CompleteMessage, true, true, datatransfer.EmptyTypeIdentifier, nil)
+	response, err := message1_1.CompleteResponse(id, true, true, datatransfer.EmptyTypeIdentifier, nil)
 	require.NoError(t, err)
 	assert.Equal(t, response.TransferID(), id)
 	assert.False(t, response.IsNew())
@@ -430,7 +429,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		testutil.AssertEqualFakeDTVoucher(t, request, deserializedRequest)
 		testutil.AssertEqualSelector(t, request, deserializedRequest)
 
-		response, err := message1_1.NewResponse(id, types.NewMessage, accepted, false, voucherResult.Type(), voucherResult)
+		response, err := message1_1.NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
 		require.NoError(t, err)
 		err = response.ToNet(buf)
 		require.NoError(t, err)
@@ -490,7 +489,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		testutil.AssertEqualFakeDTVoucher(t, request, deserializedRequest)
 		testutil.AssertEqualSelector(t, request, deserializedRequest)
 
-		response, err := message1_1.NewResponse(id, types.NewMessage, accepted, false, voucherResult.Type(), voucherResult)
+		response, err := message1_1.NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
 		require.NoError(t, err)
 		err = response.ToNet(buf)
 		require.NoError(t, err)

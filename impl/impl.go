@@ -24,7 +24,6 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
 	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
-	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/network"
 	"github.com/filecoin-project/go-data-transfer/v2/registry"
 	"github.com/filecoin-project/go-data-transfer/v2/tracing"
@@ -313,11 +312,12 @@ func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.
 		return err
 	}
 
-	messageType := types.VoucherResultMessage
+	var updateResponse datatransfer.Response
 	if chst.Status().InFinalization() {
-		messageType = types.CompleteMessage
+		updateResponse, err = message.CompleteResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), voucherResult.Type(), voucherResult)
+	} else {
+		updateResponse, err = message.VoucherResultResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), voucherResult.Type(), voucherResult)
 	}
-	updateResponse, err := message.NewResponse(channelID.ID, messageType, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), voucherResult.Type(), voucherResult)
 
 	if err != nil {
 		span.RecordError(err)

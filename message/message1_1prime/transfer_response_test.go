@@ -8,14 +8,13 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	message1_1 "github.com/filecoin-project/go-data-transfer/v2/message/message1_1prime"
-	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 func TestResponseMessageForProtocol(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucherResult := testutil.NewFakeDTType()
-	response, err := message1_1.NewResponse(id, types.NewMessage, false, true, voucherResult.Type(), voucherResult) // not accepted
+	response, err := message1_1.NewResponse(id, false, true, voucherResult.Type(), voucherResult) // not accepted
 	require.NoError(t, err)
 
 	// v1.2 protocol

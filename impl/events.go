@@ -263,7 +263,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	log.Infow("received OnChannelCompleted, will send completion message to initiator", "chid", chid)
 
 	// generate and send the final status message
-	msg, err := message.NewResponse(chst.TransferID(), types.CompleteMessage, true, chst.RequiresFinalization(), datatransfer.EmptyTypeIdentifier, nil)
+	msg, err := message.CompleteResponse(chst.TransferID(), true, chst.RequiresFinalization(), datatransfer.EmptyTypeIdentifier, nil)
 	if err != nil {
 		return err
 	}
