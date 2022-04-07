@@ -32,9 +32,10 @@ type ValidationResult struct {
 // data transfer module to validate requests
 type RequestValidator interface {
 	// ValidatePush validates a push request received from the peer that will send data
-	// All information about the validation operation is contained in ValidationResult
-	// -- including if it was rejected.
-	// error indicates something went wrong with the actual process of trying to validate
+	// -- All information about the validation operation is contained in ValidationResult,
+	// including if it was rejected. Information about why a rejection occurred is embedded
+	// in the VoucherResult.
+	// -- error indicates something went wrong with the actual process of trying to validate
 	ValidatePush(
 		chid ChannelID,
 		sender peer.ID,
@@ -42,9 +43,10 @@ type RequestValidator interface {
 		baseCid cid.Cid,
 		selector ipld.Node) (ValidationResult, error)
 	// ValidatePull validates a pull request received from the peer that will receive data
-	// All information about the validation operation is contained in ValidationResult
-	// -- including if it was rejected.
-	// error indicates something went wrong with the actual process of trying to validate
+	// -- All information about the validation operation is contained in ValidationResult,
+	// including if it was rejected. Information about why a rejection occurred should be embedded
+	// in the VoucherResult.
+	// -- error indicates something went wrong with the actual process of trying to validate
 	ValidatePull(
 		chid ChannelID,
 		receiver peer.ID,
@@ -53,9 +55,10 @@ type RequestValidator interface {
 		selector ipld.Node) (ValidationResult, error)
 
 	// Revalidate revalidates a request with a new voucher
-	// All information about the validation operation is contained in ValidationResult
-	// -- including if it was rejected.
-	// error indicates something went wrong with the actual process of trying to validate
+	// -- All information about the validation operation is contained in ValidationResult,
+	// including if it was rejected. Information about why a rejection occurred should be embedded
+	// in the VoucherResult.
+	// -- error indicates something went wrong with the actual process of trying to validate
 	Revalidate(channelID ChannelID, channel ChannelState) (ValidationResult, error)
 }
 
