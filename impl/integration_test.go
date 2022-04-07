@@ -1189,7 +1189,7 @@ type retrievalRevalidator struct {
 	pausePoints          []uint64
 	leavePausedInitially bool
 	initialVoucherResult datatransfer.VoucherResult
-	revalidateToComplete bool
+	requiresFinalization bool
 }
 
 func (r *retrievalRevalidator) ValidatePush(
@@ -1200,7 +1200,7 @@ func (r *retrievalRevalidator) ValidatePush(
 	selector ipld.Node) (datatransfer.ValidationResult, error) {
 	vr := datatransfer.ValidationResult{
 		Accepted:             true,
-		RevalidateToComplete: r.revalidateToComplete,
+		RequiresFinalization: r.requiresFinalization,
 		LeaveRequestPaused:   r.leavePausedInitially,
 		VoucherResult:        r.initialVoucherResult,
 	}
@@ -1220,7 +1220,7 @@ func (r *retrievalRevalidator) ValidatePull(
 	selector ipld.Node) (datatransfer.ValidationResult, error) {
 	vr := datatransfer.ValidationResult{
 		Accepted:             true,
-		RevalidateToComplete: r.revalidateToComplete,
+		RequiresFinalization: r.requiresFinalization,
 		LeaveRequestPaused:   r.leavePausedInitially,
 		VoucherResult:        r.initialVoucherResult,
 	}
@@ -1233,7 +1233,7 @@ func (r *retrievalRevalidator) ValidatePull(
 }
 
 func (r *retrievalRevalidator) Revalidate(chid datatransfer.ChannelID, channelState datatransfer.ChannelState) (datatransfer.ValidationResult, error) {
-	vr := datatransfer.ValidationResult{Accepted: true, RevalidateToComplete: r.revalidateToComplete}
+	vr := datatransfer.ValidationResult{Accepted: true, RequiresFinalization: r.requiresFinalization}
 	if len(r.pausePoints) > r.providerPausePoint {
 		vr.DataLimit = r.pausePoints[r.providerPausePoint]
 		r.providerPausePoint++
@@ -1390,7 +1390,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			sv := &retrievalRevalidator{
 				StubbedValidator:     testutil.NewStubbedValidator(),
 				pausePoints:          config.pausePoints,
-				revalidateToComplete: true,
+				requiresFinalization: true,
 				leavePausedInitially: true,
 			}
 			require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
@@ -2117,7 +2117,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	sv := &retrievalRevalidator{
 		StubbedValidator:     testutil.NewStubbedValidator(),
 		pausePoints:          pausePoints,
-		revalidateToComplete: true,
+		requiresFinalization: true,
 		initialVoucherResult: respVoucher,
 	}
 	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))

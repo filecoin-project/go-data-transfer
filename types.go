@@ -148,9 +148,9 @@ type ChannelState interface {
 	// revalidation. 0 indicates no limit.
 	DataLimit() uint64
 
-	// RevalidateToComplete indicates at the end of the transfer, the channel should
+	// RequiresFinalization indicates at the end of the transfer, the channel should
 	// be left open for a final settlement
-	RevalidateToComplete() bool
+	RequiresFinalization() bool
 
 	// Stages returns the timeline of events this data transfer has gone through,
 	// for observability purposes.

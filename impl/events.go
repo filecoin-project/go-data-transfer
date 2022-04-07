@@ -263,7 +263,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	log.Infow("received OnChannelCompleted, will send completion message to initiator", "chid", chid)
 
 	// generate and send the final status message
-	msg, err := message.NewResponse(chst.TransferID(), types.CompleteMessage, true, chst.RevalidateToComplete(), datatransfer.EmptyTypeIdentifier, nil)
+	msg, err := message.NewResponse(chst.TransferID(), types.CompleteMessage, true, chst.RequiresFinalization(), datatransfer.EmptyTypeIdentifier, nil)
 	if err != nil {
 		return err
 	}
@@ -277,7 +277,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	log.Infow("successfully sent completion message to initiator", "chid", chid)
 
 	// set the channel state based on whether its paused final settlement
-	if chst.RevalidateToComplete() {
+	if chst.RequiresFinalization() {
 		return m.channels.BeginFinalizing(chid)
 	}
 	return m.channels.Complete(chid)
@@ -457,7 +457,7 @@ func (m *manager) recordValidationEvents(chid datatransfer.ChannelID, result dat
 		return err
 	}
 
-	err = m.channels.SetRevalidateToComplete(chid, result.RevalidateToComplete)
+	err = m.channels.SetRequiresFinalization(chid, result.RequiresFinalization)
 	if err != nil {
 		return err
 	}

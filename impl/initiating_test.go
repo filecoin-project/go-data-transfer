@@ -450,7 +450,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.Accept,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()
@@ -494,7 +494,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.Accept,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()
@@ -538,7 +538,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.Accept,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()
@@ -562,7 +562,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.Accept,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()

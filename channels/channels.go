@@ -379,9 +379,9 @@ func (c *Channels) SetDataLimit(chid datatransfer.ChannelID, dataLimit uint64) e
 	return c.send(chid, datatransfer.SetDataLimit, dataLimit)
 }
 
-// SetRevalidateToComplete sets the state of whether a data transfer can complete
-func (c *Channels) SetRevalidateToComplete(chid datatransfer.ChannelID, revalidateToComplete bool) error {
-	return c.send(chid, datatransfer.SetRevalidateToComplete, revalidateToComplete)
+// SetRequiresFinalization sets the state of whether a data transfer can complete
+func (c *Channels) SetRequiresFinalization(chid datatransfer.ChannelID, RequiresFinalization bool) error {
+	return c.send(chid, datatransfer.SetRequiresFinalization, RequiresFinalization)
 }
 
 // HasChannel returns true if the given channel id is being tracked

@@ -72,9 +72,9 @@ type ChannelState struct {
 	// DataLimit is the maximum data that can be transferred on this channel before
 	// revalidation. 0 indicates no limit.
 	DataLimit uint64
-	// RevalidateToComplete indicates at the end of the transfer, the channel should
+	// RequiresFinalization indicates at the end of the transfer, the channel should
 	// be left open for a final settlement
-	RevalidateToComplete bool
+	RequiresFinalization bool
 	// Stages traces the execution fo a data transfer.
 	//
 	// EXPERIMENTAL; subject to change.

@@ -164,6 +164,6 @@ func (m *MockChannelState) DataLimit() uint64 {
 	panic("implement me")
 }
 
-func (m *MockChannelState) RevalidateToComplete() bool {
+func (m *MockChannelState) RequiresFinalization() bool {
 	panic("implement me")
 }

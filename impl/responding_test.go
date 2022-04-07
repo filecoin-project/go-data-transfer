@@ -39,7 +39,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
@@ -148,7 +148,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.Accept,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
@@ -271,11 +271,11 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.NewVoucher,
 				datatransfer.ResumeResponder,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
@@ -295,7 +295,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.PauseInitiator,
 				datatransfer.ResumeInitiator},
 			configureValidator: func(sv *testutil.StubbedValidator) {
@@ -316,7 +316,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.PauseInitiator,
 				datatransfer.PauseResponder,
 				datatransfer.ResumeInitiator},
@@ -340,7 +340,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.Cancel,
 				datatransfer.CleanupComplete,
 			},
@@ -362,7 +362,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.DataReceivedProgress,
 				datatransfer.DataReceived,
 				datatransfer.PauseResponder,
@@ -370,7 +370,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.ResumeResponder,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
@@ -407,14 +407,14 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.DataReceivedProgress,
 				datatransfer.DataReceived,
 				datatransfer.PauseResponder,
 				datatransfer.NewVoucher,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
@@ -451,7 +451,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.DataQueuedProgress,
 				datatransfer.DataQueued,
 				datatransfer.PauseResponder,
@@ -459,7 +459,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.ResumeResponder,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
@@ -499,18 +499,18 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.BeginFinalizing,
 				datatransfer.NewVoucher,
 				datatransfer.ResumeResponder,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.CleanupComplete,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
-				sv.StubResult(datatransfer.ValidationResult{Accepted: true, RevalidateToComplete: true, VoucherResult: testutil.NewFakeDTType()})
+				sv.StubResult(datatransfer.ValidationResult{Accepted: true, RequiresFinalization: true, VoucherResult: testutil.NewFakeDTType()})
 				sv.ExpectSuccessRevalidation()
 				sv.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true, VoucherResult: testutil.NewFakeDTType()})
 			},
@@ -542,7 +542,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.Accept,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.Error,
 				datatransfer.CleanupComplete,
 			},
@@ -562,7 +562,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.Accept,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
@@ -589,7 +589,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.Accept,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
@@ -688,7 +688,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.DataReceivedProgress,
 				datatransfer.DataReceived,
 				datatransfer.DataReceivedProgress,
@@ -696,7 +696,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.Restart,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
@@ -757,11 +757,11 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 				datatransfer.Restart,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
@@ -806,7 +806,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
@@ -835,7 +835,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
@@ -865,7 +865,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
@@ -894,7 +894,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
@@ -923,7 +923,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
@@ -1050,7 +1050,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.Accept,
 				datatransfer.SetDataLimit,
-				datatransfer.SetRevalidateToComplete,
+				datatransfer.SetRequiresFinalization,
 			},
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()

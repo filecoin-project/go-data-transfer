@@ -155,8 +155,8 @@ func (c channelState) DataLimit() uint64 {
 	return c.ic.DataLimit
 }
 
-func (c channelState) RevalidateToComplete() bool {
-	return c.ic.RevalidateToComplete
+func (c channelState) RequiresFinalization() bool {
+	return c.ic.RequiresFinalization
 }
 
 // Stages returns the current ChannelStages object, or an empty object.

@@ -115,9 +115,9 @@ const (
 	// before pausing the request
 	SetDataLimit
 
-	// SetRevalidateToComplete is fired when a responder sets a limit for data it will allow
+	// SetRequiresFinalization is fired when a responder sets a limit for data it will allow
 	// before pausing the request
-	SetRevalidateToComplete
+	SetRequiresFinalization
 )
 
 // Events are human readable names for data transfer events

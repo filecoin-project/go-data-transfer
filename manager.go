@@ -23,9 +23,9 @@ type ValidationResult struct {
 	// amount data specified is reached (or shortly after), the request will pause
 	// pending revalidation. 0 indicates no limit.
 	DataLimit uint64
-	// RevalidateToComplete indicates at the end of the transfer, the channel should
+	// RequiresFinalization indicates at the end of the transfer, the channel should
 	// be left open for a final settlement
-	RevalidateToComplete bool
+	RequiresFinalization bool
 }
 
 // RequestValidator is an interface implemented by the client of the

@@ -427,19 +427,19 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.RevalidateToComplete (bool) (bool)
-	if len("RevalidateToComplete") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"RevalidateToComplete\" was too long")
+	// t.RequiresFinalization (bool) (bool)
+	if len("RequiresFinalization") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"RequiresFinalization\" was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("RevalidateToComplete"))); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("RequiresFinalization"))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string("RevalidateToComplete")); err != nil {
+	if _, err := io.WriteString(w, string("RequiresFinalization")); err != nil {
 		return err
 	}
 
-	if err := cbg.WriteBool(w, t.RevalidateToComplete); err != nil {
+	if err := cbg.WriteBool(w, t.RequiresFinalization); err != nil {
 		return err
 	}
 
@@ -827,8 +827,8 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 				t.DataLimit = uint64(extra)
 
 			}
-			// t.RevalidateToComplete (bool) (bool)
-		case "RevalidateToComplete":
+			// t.RequiresFinalization (bool) (bool)
+		case "RequiresFinalization":
 
 			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 			if err != nil {
@@ -839,9 +839,9 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 			}
 			switch extra {
 			case 20:
-				t.RevalidateToComplete = false
+				t.RequiresFinalization = false
 			case 21:
-				t.RevalidateToComplete = true
+				t.RequiresFinalization = true
 			default:
 				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 			}

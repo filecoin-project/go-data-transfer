@@ -115,9 +115,9 @@ var ChannelEvents = fsm.Events{
 			chst.AddLog("")
 			return nil
 		}),
-	fsm.Event(datatransfer.SetRevalidateToComplete).FromAny().ToJustRecord().
-		Action(func(chst *internal.ChannelState, revalidateToComplete bool) error {
-			chst.RevalidateToComplete = revalidateToComplete
+	fsm.Event(datatransfer.SetRequiresFinalization).FromAny().ToJustRecord().
+		Action(func(chst *internal.ChannelState, RequiresFinalization bool) error {
+			chst.RequiresFinalization = RequiresFinalization
 			chst.AddLog("")
 			return nil
 		}),
