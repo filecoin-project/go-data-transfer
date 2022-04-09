@@ -448,8 +448,6 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{
 				datatransfer.Open,
 				datatransfer.Accept,
-				datatransfer.SetDataLimit,
-				datatransfer.SetRequiresFinalization,
 			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()
@@ -492,8 +490,6 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{
 				datatransfer.Open,
 				datatransfer.Accept,
-				datatransfer.SetDataLimit,
-				datatransfer.SetRequiresFinalization,
 			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()
@@ -536,8 +532,6 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{
 				datatransfer.Open,
 				datatransfer.Accept,
-				datatransfer.SetDataLimit,
-				datatransfer.SetRequiresFinalization,
 			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()
@@ -560,8 +554,6 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{
 				datatransfer.Open,
 				datatransfer.Accept,
-				datatransfer.SetDataLimit,
-				datatransfer.SetRequiresFinalization,
 			},
 			verify: func(t *testing.T, h *harness) {
 				ctx := context.Background()

@@ -84,8 +84,14 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 		return result, err
 	}
 
+	// read the channel state
+	chst, err := m.channels.GetByID(context.TODO(), chid)
+	if err != nil {
+		return datatransfer.ValidationResult{}, err
+	}
+
 	// record validation events
-	if err := m.recordAcceptedValidationEvents(chid, result, false); err != nil {
+	if err := m.recordAcceptedValidationEvents(chst, result); err != nil {
 		return result, err
 	}
 
@@ -160,7 +166,7 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 	}
 
 	// record validation events
-	if err := m.recordAcceptedValidationEvents(chid, result, false); err != nil {
+	if err := m.recordAcceptedValidationEvents(chst, result); err != nil {
 		return result, err
 	}
 
@@ -232,7 +238,7 @@ func (m *manager) revalidateRequest(chid datatransfer.ChannelID,
 	}
 
 	// record validation events and return
-	return chst, result, m.recordAcceptedValidationEvents(chid, result, true)
+	return chst, result, m.recordAcceptedValidationEvents(chst, result)
 
 }
 
@@ -290,19 +296,27 @@ func (m *manager) recordRejectedValidationEvents(chid datatransfer.ChannelID, re
 }
 
 // recordAcceptedValidationEvents sends changes based on an accepted validation to the state machine
-func (m *manager) recordAcceptedValidationEvents(chid datatransfer.ChannelID, result datatransfer.ValidationResult, handleResumes bool) error {
+func (m *manager) recordAcceptedValidationEvents(chst datatransfer.ChannelState, result datatransfer.ValidationResult) error {
+	chid := chst.ChannelID()
+
+	// pause or resume the request as neccesary
 	if result.LeaveRequestPaused {
-		err := m.channels.PauseResponder(chid)
-		if err != nil {
-			return err
+		if !chst.Status().IsResponderPaused() {
+			err := m.channels.PauseResponder(chid)
+			if err != nil {
+				return err
+			}
 		}
-	} else if handleResumes && result.Accepted {
-		err := m.channels.ResumeResponder(chid)
-		if err != nil {
-			return err
+	} else {
+		if chst.Status().IsResponderPaused() {
+			err := m.channels.ResumeResponder(chid)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
+	// record the voucher result if present
 	if result.VoucherResult != nil {
 		err := m.channels.NewVoucherResult(chid, result.VoucherResult)
 		if err != nil {
@@ -310,16 +324,21 @@ func (m *manager) recordAcceptedValidationEvents(chid datatransfer.ChannelID, re
 		}
 	}
 
-	err := m.channels.SetDataLimit(chid, result.DataLimit)
-	if err != nil {
-		return err
+	// record the change in data limit if different
+	if result.DataLimit != chst.DataLimit() {
+		err := m.channels.SetDataLimit(chid, result.DataLimit)
+		if err != nil {
+			return err
+		}
 	}
 
-	err = m.channels.SetRequiresFinalization(chid, result.RequiresFinalization)
-	if err != nil {
-		return err
+	// record the finalization state if different
+	if result.RequiresFinalization != chst.RequiresFinalization() {
+		err := m.channels.SetRequiresFinalization(chid, result.RequiresFinalization)
+		if err != nil {
+			return err
+		}
 	}
-
 	return nil
 }
 
