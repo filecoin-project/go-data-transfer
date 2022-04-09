@@ -10,14 +10,14 @@ import (
 
 // ValidationResult describes the result of validating a voucher
 type ValidationResult struct {
+	// Accepted indicates where the request was accepted if a request is not
+	// accepted, the request fails. This is true for revalidation as well
+	Accepted bool
 	// VoucherResult provides information to the other party about what happened
 	// with the voucher
 	VoucherResult
-	// Accepted indicates where the voucher was accepted
-	// if a voucher is not accepted, the request fails
-	Accepted bool
 	// LeaveRequestPaused indicates whether the request should stay paused
-	// even if the voucher was accepted
+	// even if the request was accepted
 	LeaveRequestPaused bool
 	// DataLimit specifies how much data this voucher is good for. When the amount
 	// amount data specified is reached (or shortly after), the request will pause
