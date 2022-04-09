@@ -2,7 +2,6 @@ package impl
 
 import (
 	"context"
-	"errors"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -11,7 +10,6 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
-	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
 type statusList []datatransfer.Status
@@ -36,29 +34,6 @@ func (m *manager) newRequest(ctx context.Context, selector ipld.Node, isPull boo
 	// Generate a new transfer ID for the request
 	tid := datatransfer.TransferID(m.transferIDGen.next())
 	return message.NewRequest(tid, false, isPull, voucher.Type(), voucher, baseCid, selector)
-}
-
-func (m *manager) validationResponseMessage(
-	messageType types.MessageType,
-	tid datatransfer.TransferID,
-	validationResult datatransfer.ValidationResult,
-	validationErr error) (datatransfer.Response, error) {
-	resultType := datatransfer.EmptyTypeIdentifier
-	if validationResult.VoucherResult != nil {
-		resultType = validationResult.VoucherResult.Type()
-	}
-	switch messageType {
-	case types.NewMessage:
-		return message.NewResponse(tid, validationErr == nil && validationResult.Accepted, validationResult.LeaveRequestPaused, resultType, validationResult.VoucherResult)
-	case types.RestartMessage:
-		return message.RestartResponse(tid, validationErr == nil && validationResult.Accepted, validationResult.LeaveRequestPaused, resultType, validationResult.VoucherResult)
-	case types.CompleteMessage:
-		return message.CompleteResponse(tid, validationErr == nil && validationResult.Accepted, validationResult.LeaveRequestPaused, resultType, validationResult.VoucherResult)
-	case types.VoucherResultMessage:
-		return message.VoucherResultResponse(tid, validationErr == nil && validationResult.Accepted, validationResult.LeaveRequestPaused, resultType, validationResult.VoucherResult)
-	default:
-		return nil, errors.New("incompatible response type")
-	}
 }
 
 func (m *manager) resume(chid datatransfer.ChannelID) error {

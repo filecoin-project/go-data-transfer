@@ -69,7 +69,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
 				require.True(t, response.IsNew())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 			},
 		},
 		"new push request rejects": {
@@ -90,7 +90,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
 				require.True(t, response.IsNew())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 			},
 		},
 		"new push request errors": {
@@ -111,7 +111,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
 				require.True(t, response.IsNew())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 			},
 		},
 		"new push request pauses": {
@@ -137,7 +137,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.True(t, response.IsPaused())
 				require.True(t, response.IsNew())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 				require.Len(t, h.transport.PausedChannels, 1)
 				require.Equal(t, channelID(h.id, h.peers), h.transport.PausedChannels[0])
 			},
@@ -169,7 +169,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
 				require.True(t, response.IsNew())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 			},
 		},
 		"new pull request rejects": {
@@ -186,7 +186,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
 				require.True(t, response.IsNew())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 			},
 		},
 		"new pull request errors": {
@@ -202,7 +202,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
 				require.True(t, response.IsNew())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 			},
 		},
 		"new pull request pauses": {
@@ -220,7 +220,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.True(t, response.IsPaused())
 				require.True(t, response.IsNew())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 				require.True(t, response.EmptyVoucherResult())
 			},
 		},
@@ -396,7 +396,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.True(t, response.IsUpdate())
 				require.False(t, response.IsCancel())
 				require.True(t, response.IsPaused())
-				require.False(t, response.IsVoucherResult())
+				require.False(t, response.IsValidationResult())
 				response, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.voucherUpdate)
 				require.EqualError(t, err, datatransfer.ErrResume.Error())
 				require.True(t, response.Accepted())
@@ -404,7 +404,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsUpdate())
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 				require.False(t, response.EmptyVoucherResult())
 			},
 		},
@@ -440,7 +440,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.True(t, response.IsUpdate())
 				require.False(t, response.IsCancel())
 				require.True(t, response.IsPaused())
-				require.False(t, response.IsVoucherResult())
+				require.False(t, response.IsValidationResult())
 				response, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.voucherUpdate)
 				require.EqualError(t, err, datatransfer.ErrRejected.Error())
 				require.False(t, response.Accepted())
@@ -448,7 +448,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsUpdate())
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 				require.False(t, response.EmptyVoucherResult())
 			},
 		},
@@ -480,7 +480,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.True(t, response.IsUpdate())
 				require.False(t, response.IsCancel())
 				require.True(t, response.IsPaused())
-				require.False(t, response.IsVoucherResult())
+				require.False(t, response.IsValidationResult())
 				response, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.voucherUpdate)
 				require.EqualError(t, err, "something went wrong")
 				require.False(t, response.Accepted())
@@ -488,7 +488,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsUpdate())
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 				require.True(t, response.EmptyVoucherResult())
 			},
 		},
@@ -528,7 +528,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.True(t, response.IsUpdate())
 				require.False(t, response.IsCancel())
 				require.True(t, response.IsPaused())
-				require.False(t, response.IsVoucherResult())
+				require.False(t, response.IsValidationResult())
 				response, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.voucherUpdate)
 				require.EqualError(t, err, datatransfer.ErrResume.Error())
 				require.True(t, response.Accepted())
@@ -536,7 +536,7 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsUpdate())
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 				require.False(t, response.EmptyVoucherResult())
 			},
 		},
@@ -575,12 +575,12 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.True(t, response.IsComplete())
 				require.True(t, response.IsPaused())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 				require.True(t, response.EmptyVoucherResult())
 				response, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.voucherUpdate)
 				require.EqualError(t, err, datatransfer.ErrResume.Error())
 				require.Equal(t, response.TransferID(), h.id)
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 				require.False(t, response.IsPaused())
 			},
 		},
@@ -792,7 +792,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
 				require.False(t, response.IsNew())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 
 				vmsg := h.sv.RevalidationsReceived[0]
 				require.Equal(t, channelID(h.id, h.peers), vmsg.ChannelID)
@@ -841,7 +841,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.False(t, response.IsPaused())
 				require.False(t, response.IsNew())
-				require.True(t, response.IsVoucherResult())
+				require.True(t, response.IsValidationResult())
 
 				vmsg := h.sv.RevalidationsReceived[0]
 				require.Equal(t, channelID(h.id, h.peers), vmsg.ChannelID)

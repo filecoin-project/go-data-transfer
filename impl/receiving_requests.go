@@ -4,6 +4,7 @@ import (
 	"context"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -21,7 +22,7 @@ func (m *manager) receiveNewRequest(chid datatransfer.ChannelID, incoming datatr
 	result, err := m.acceptRequest(chid, incoming)
 
 	// generate a response message
-	msg, msgErr := m.validationResponseMessage(types.NewMessage, incoming.TransferID(), result, err)
+	msg, msgErr := message.ValidationResultResponse(types.NewMessage, incoming.TransferID(), result, err)
 	if msgErr != nil {
 		return nil, msgErr
 	}
@@ -107,7 +108,7 @@ func (m *manager) receiveRestartRequest(chid datatransfer.ChannelID, incoming da
 	result, err := m.restartRequest(chid, incoming)
 
 	// generate a response message
-	msg, msgErr := m.validationResponseMessage(types.RestartMessage, incoming.TransferID(), result, err)
+	msg, msgErr := message.ValidationResultResponse(types.RestartMessage, incoming.TransferID(), result, err)
 	if msgErr != nil {
 		return nil, msgErr
 	}
@@ -188,7 +189,7 @@ func (m *manager) processUpdateVoucher(chid datatransfer.ChannelID, request data
 	if chst.Status() == datatransfer.Finalizing {
 		messageType = types.CompleteMessage
 	}
-	response, msgErr := m.validationResponseMessage(messageType, chst.TransferID(), result, err)
+	response, msgErr := message.ValidationResultResponse(messageType, chst.TransferID(), result, err)
 	if msgErr != nil {
 		return nil, msgErr
 	}

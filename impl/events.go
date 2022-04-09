@@ -148,7 +148,7 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 	}
 
 	// does this response contain a response to a validation attempt?
-	if response.IsVoucherResult() {
+	if response.IsValidationResult() {
 
 		// is there a voucher response in this message?
 		if !response.EmptyVoucherResult() {

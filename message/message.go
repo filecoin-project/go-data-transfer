@@ -9,6 +9,7 @@ var RestartExistingChannelRequest = message1_1.RestartExistingChannelRequest
 var UpdateRequest = message1_1.UpdateRequest
 var VoucherRequest = message1_1.VoucherRequest
 var RestartResponse = message1_1.RestartResponse
+var ValidationResultResponse = message1_1.ValidationResultResponse
 var NewResponse = message1_1.NewResponse
 var VoucherResultResponse = message1_1.VoucherResultResponse
 var CancelResponse = message1_1.CancelResponse
