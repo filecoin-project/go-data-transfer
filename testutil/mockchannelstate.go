@@ -1,10 +1,11 @@
 package testutil
 
 import (
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	cid "github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p-core/peer"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
 type MockChannelStateParams struct {
