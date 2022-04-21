@@ -1359,19 +1359,16 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			}
 			dt2.SubscribeToEvents(clientSubscriber)
 			providerFinished := make(chan struct{}, 1)
-			providerAccepted := false
 			var providerSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 				if event.Code == datatransfer.PauseResponder {
-					if !providerAccepted {
-						providerAccepted = true
-						timer := time.NewTimer(config.unpauseResponderDelay)
-						go func() {
-							<-timer.C
-							_ = dt1.ResumeDataTransferChannel(ctx, chid)
-						}()
-					} else {
-						dt1.SendVoucherResult(ctx, chid, testutil.NewFakeDTType())
-					}
+					timer := time.NewTimer(config.unpauseResponderDelay)
+					go func() {
+						<-timer.C
+						_ = dt1.ResumeDataTransferChannel(ctx, chid)
+					}()
+				}
+				if event.Code == datatransfer.DataLimitExceeded {
+					dt1.SendVoucherResult(ctx, chid, testutil.NewFakeDTType())
 				}
 				if event.Code == datatransfer.BeginFinalizing {
 					dt1.SendVoucherResult(ctx, chid, finalVoucherResult)
@@ -2102,7 +2099,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 		if channelState.Status() == datatransfer.Completed {
 			providerFinished <- struct{}{}
 		}
-		if event.Code == datatransfer.PauseResponder {
+		if event.Code == datatransfer.DataLimitExceeded {
 			if nextVoucherResult < len(pausePoints) {
 				dt1.SendVoucherResult(ctx, chid, voucherResults[nextVoucherResult])
 				nextVoucherResult++

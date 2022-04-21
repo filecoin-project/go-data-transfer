@@ -392,12 +392,12 @@ func (c *Channels) HasChannel(chid datatransfer.ChannelID) (bool, error) {
 // fireProgressEvent fires
 // - an event for queuing / sending / receiving blocks
 // - a corresponding "progress" event if the block has not been seen before
-// - a pause event if the progress goes past the data limit
+// - a DataLimitExceeded event if the progress goes past the data limit
 // For example, if a block is being sent for the first time, the method will
 // fire both DataSent AND DataSentProgress.
 // If a block is resent, the method will fire DataSent but not DataSentProgress.
 // If a block is sent for the first time, and more data has been sent than the data limit,
-// the method will fire DataSent AND DataProgress AND PauseResponder AND it will return
+// the method will fire DataSent AND DataProgress AND DataLimitExceeded AND it will return
 // datatransfer.ErrPause as the error
 func (c *Channels) fireProgressEvent(chid datatransfer.ChannelID, evt datatransfer.EventCode, progressEvt datatransfer.EventCode, delta uint64, index int64, unique bool, readFromOriginal readIndexFn, readProgress readProgressFn) error {
 	if err := c.checkChannelExists(chid, evt); err != nil {
@@ -425,7 +425,7 @@ func (c *Channels) fireProgressEvent(chid datatransfer.ChannelID, evt datatransf
 	// fire the pause event if we past our data limit
 	if pause {
 		// pause. Data limits only exist on the responder, so we always pause the responder
-		if err := c.stateMachines.Send(chid, datatransfer.PauseResponder); err != nil {
+		if err := c.stateMachines.Send(chid, datatransfer.DataLimitExceeded); err != nil {
 			return err
 		}
 		// return a pause error so the transfer knows to pause

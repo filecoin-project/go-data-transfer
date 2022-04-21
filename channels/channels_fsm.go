@@ -177,6 +177,14 @@ var ChannelEvents = fsm.Events{
 		return nil
 	}),
 
+	fsm.Event(datatransfer.DataLimitExceeded).
+		FromMany(datatransfer.Requested, datatransfer.Ongoing).To(datatransfer.ResponderPaused).
+		From(datatransfer.InitiatorPaused).To(datatransfer.BothPaused).
+		FromAny().ToJustRecord().Action(func(chst *internal.ChannelState) error {
+		chst.AddLog("")
+		return nil
+	}),
+
 	fsm.Event(datatransfer.ResumeInitiator).
 		From(datatransfer.InitiatorPaused).To(datatransfer.Ongoing).
 		From(datatransfer.BothPaused).To(datatransfer.ResponderPaused).

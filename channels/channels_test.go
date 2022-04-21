@@ -248,7 +248,7 @@ func TestChannels(t *testing.T) {
 		require.EqualError(t, err, datatransfer.ErrPause.Error())
 		_ = checkEvent(ctx, t, received, datatransfer.DataQueuedProgress)
 		_ = checkEvent(ctx, t, received, datatransfer.DataQueued)
-		state = checkEvent(ctx, t, received, datatransfer.PauseResponder)
+		state = checkEvent(ctx, t, received, datatransfer.DataLimitExceeded)
 		require.Equal(t, uint64(500), state.Queued())
 
 		err = channelList.SetDataLimit(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, 700)
@@ -266,7 +266,7 @@ func TestChannels(t *testing.T) {
 		require.EqualError(t, err, datatransfer.ErrPause.Error())
 		_ = checkEvent(ctx, t, received, datatransfer.DataQueuedProgress)
 		_ = checkEvent(ctx, t, received, datatransfer.DataQueued)
-		state = checkEvent(ctx, t, received, datatransfer.PauseResponder)
+		state = checkEvent(ctx, t, received, datatransfer.DataLimitExceeded)
 		require.Equal(t, uint64(850), state.Queued())
 	})
 
