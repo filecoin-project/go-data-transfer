@@ -103,37 +103,37 @@ func (sv *StubbedValidator) VerifyExpectations(t *testing.T) {
 	}
 }
 
-func (sv *StubbedValidator) Revalidate(chid datatransfer.ChannelID, channelState datatransfer.ChannelState) (datatransfer.ValidationResult, error) {
+func (sv *StubbedValidator) ValidateRestart(chid datatransfer.ChannelID, channelState datatransfer.ChannelState) (datatransfer.ValidationResult, error) {
 	sv.didRevalidate = true
-	sv.RevalidationsReceived = append(sv.RevalidationsReceived, ReceivedRevalidation{chid, channelState})
+	sv.RevalidationsReceived = append(sv.RevalidationsReceived, ReceivedRestartValidation{chid, channelState})
 	return sv.revalidationResult, sv.revalidationError
 }
 
-// StubRevalidationResult returns the given voucher result when a call is made to Revalidate
-func (sv *StubbedValidator) StubRevalidationResult(voucherResult datatransfer.ValidationResult) {
+// StubRestartResult returns the given voucher result when a call is made to ValidateRestart
+func (sv *StubbedValidator) StubRestartResult(voucherResult datatransfer.ValidationResult) {
 	sv.revalidationResult = voucherResult
 }
 
-// StubErrorRevalidation sets Revalidate to error
-func (sv *StubbedValidator) StubErrorRevalidation() {
+// StubErrorValidateRestart sets ValidateRestart to error
+func (sv *StubbedValidator) StubErrorValidateRestart() {
 	sv.revalidationError = errors.New("something went wrong")
 }
 
-// StubSuccessRevalidation sets Revalidate to succeed
-func (sv *StubbedValidator) StubSuccessRevalidation() {
+// StubSuccessValidateRestart sets ValidateRestart to succeed
+func (sv *StubbedValidator) StubSuccessValidateRestart() {
 	sv.revalidationError = nil
 }
 
-// ExpectErrorRevalidation expects Revalidate to error
-func (sv *StubbedValidator) ExpectErrorRevalidation() {
+// ExpectErrorValidateRestart expects ValidateRestart to error
+func (sv *StubbedValidator) ExpectErrorValidateRestart() {
 	sv.expectRevalidate = true
-	sv.StubErrorRevalidation()
+	sv.StubErrorValidateRestart()
 }
 
-// ExpectSuccessRevalidation expects Revalidate to succeed
-func (sv *StubbedValidator) ExpectSuccessRevalidation() {
+// ExpectSuccessValidateRestart expects ValidateRestart to succeed
+func (sv *StubbedValidator) ExpectSuccessValidateRestart() {
 	sv.expectRevalidate = true
-	sv.StubSuccessRevalidation()
+	sv.StubSuccessValidateRestart()
 }
 
 // ReceivedValidation records a call to either ValidatePush or ValidatePull
@@ -145,8 +145,8 @@ type ReceivedValidation struct {
 	Selector ipld.Node
 }
 
-// ReceivedRevalidation records a call to Revalidate
-type ReceivedRevalidation struct {
+// ReceivedRestartValidation records a call to ValidateRestart
+type ReceivedRestartValidation struct {
 	ChannelID    datatransfer.ChannelID
 	ChannelState datatransfer.ChannelState
 }
@@ -165,7 +165,7 @@ type StubbedValidator struct {
 	pullError             error
 	revalidationError     error
 	ValidationsReceived   []ReceivedValidation
-	RevalidationsReceived []ReceivedRevalidation
+	RevalidationsReceived []ReceivedRestartValidation
 }
 
 var _ datatransfer.RequestValidator = (*StubbedValidator)(nil)

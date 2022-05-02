@@ -54,12 +54,12 @@ type RequestValidator interface {
 		baseCid cid.Cid,
 		selector ipld.Node) (ValidationResult, error)
 
-	// Revalidate revalidates a request with a new voucher
+	// ValidateRestart validates restarting a request
 	// -- All information about the validation operation is contained in ValidationResult,
 	// including if it was rejected. Information about why a rejection occurred should be embedded
 	// in the VoucherResult.
 	// -- error indicates something went wrong with the actual process of trying to validate
-	Revalidate(channelID ChannelID, channel ChannelState) (ValidationResult, error)
+	ValidateRestart(channelID ChannelID, channel ChannelState) (ValidationResult, error)
 }
 
 // TransportConfigurer provides a mechanism to provide transport specific configuration for a given voucher type
@@ -107,6 +107,10 @@ type Manager interface {
 
 	// send information from the responder to update the initiator on the state of their voucher
 	SendVoucherResult(ctx context.Context, chid ChannelID, voucher VoucherResult) error
+
+	// Update the validation status for a given channel, to change data limits, finalization, accepted status, and pause state
+	// and send new voucher results as
+	UpdateValidationStatus(ctx context.Context, chid ChannelID, validationResult ValidationResult) error
 
 	// close an open channel (effectively a cancel)
 	CloseDataTransferChannel(ctx context.Context, chid ChannelID) error

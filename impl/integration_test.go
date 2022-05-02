@@ -739,7 +739,7 @@ func TestAutoRestart(t *testing.T) {
 				voucher := testutil.FakeDTType{Data: "applesauce"}
 				sv := testutil.NewStubbedValidator()
 				sv.StubResult(datatransfer.ValidationResult{Accepted: true})
-				sv.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
+				sv.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
 
 				var sourceDagService, destDagService ipldformat.DAGService
 				if tc.isPush {
@@ -932,7 +932,7 @@ func TestAutoRestartAfterBouncingInitiator(t *testing.T) {
 		voucher := testutil.FakeDTType{Data: "applesauce"}
 		sv := testutil.NewStubbedValidator()
 		sv.StubResult(datatransfer.ValidationResult{Accepted: true})
-		sv.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
+		sv.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
 
 		var sourceDagService, destDagService ipldformat.DAGService
 		if isPush {
@@ -1231,16 +1231,14 @@ func (r *retrievalRevalidator) ValidatePull(
 	return r.StubbedValidator.ValidatePull(chid, sender, voucher, baseCid, selector)
 }
 
-func (r *retrievalRevalidator) Revalidate(chid datatransfer.ChannelID, channelState datatransfer.ChannelState) (datatransfer.ValidationResult, error) {
+func (r *retrievalRevalidator) nextStatus() datatransfer.ValidationResult {
 	vr := datatransfer.ValidationResult{Accepted: true, RequiresFinalization: r.requiresFinalization}
 	if len(r.pausePoints) > r.providerPausePoint {
 		vr.DataLimit = r.pausePoints[r.providerPausePoint]
 		r.providerPausePoint++
 	}
-	r.StubbedValidator.StubRevalidationResult(vr)
-	return r.StubbedValidator.Revalidate(chid, channelState)
+	return vr
 }
-
 func TestSimulatedRetrievalFlow(t *testing.T) {
 	ctx := context.Background()
 	testCases := map[string]struct {
@@ -1295,7 +1293,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 				// responder: send message that we sent all data along with final voucher request
 				"transfer(1)->sendMessage(0)",
 				// responder: receive final voucher and send acceptance message
-				"transfer(1)->receiveRequest(5)->sendMessage(0)",
+				"transfer(1)->receiveRequest(5)",
 			},
 		},
 		"fast unseal, payment channel not ready": {
@@ -1358,6 +1356,13 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 				}
 			}
 			dt2.SubscribeToEvents(clientSubscriber)
+
+			sv := &retrievalRevalidator{
+				StubbedValidator:     testutil.NewStubbedValidator(),
+				pausePoints:          config.pausePoints,
+				requiresFinalization: true,
+				leavePausedInitially: true,
+			}
 			providerFinished := make(chan struct{}, 1)
 			var providerSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 				if event.Code == datatransfer.PauseResponder {
@@ -1366,6 +1371,9 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 						<-timer.C
 						_ = dt1.ResumeDataTransferChannel(ctx, chid)
 					}()
+				}
+				if event.Code == datatransfer.NewVoucher && channelState.Queued() > 0 {
+					dt1.UpdateValidationStatus(ctx, chid, sv.nextStatus())
 				}
 				if event.Code == datatransfer.DataLimitExceeded {
 					dt1.SendVoucherResult(ctx, chid, testutil.NewFakeDTType())
@@ -1383,12 +1391,6 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			dt1.SubscribeToEvents(providerSubscriber)
 			voucher := testutil.FakeDTType{Data: "applesauce"}
 
-			sv := &retrievalRevalidator{
-				StubbedValidator:     testutil.NewStubbedValidator(),
-				pausePoints:          config.pausePoints,
-				requiresFinalization: true,
-				leavePausedInitially: true,
-			}
 			require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 			require.NoError(t, dt2.RegisterVoucherResultType(testutil.NewFakeDTType()))
@@ -1495,7 +1497,7 @@ func TestPauseAndResume(t *testing.T) {
 			voucher := testutil.FakeDTType{Data: "applesauce"}
 			sv := testutil.NewStubbedValidator()
 			sv.StubResult(datatransfer.ValidationResult{Accepted: true})
-			sv.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
+			sv.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
 
 			var chid datatransfer.ChannelID
 			if isPull {
@@ -2092,12 +2094,21 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 
 	providerFinished := make(chan struct{}, 1)
 	nextVoucherResult := 0
+	sv := &retrievalRevalidator{
+		StubbedValidator:     testutil.NewStubbedValidator(),
+		pausePoints:          pausePoints,
+		requiresFinalization: true,
+		initialVoucherResult: respVoucher,
+	}
 	dt1.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 		if event.Code == datatransfer.Error {
 			errChan <- struct{}{}
 		}
 		if channelState.Status() == datatransfer.Completed {
 			providerFinished <- struct{}{}
+		}
+		if event.Code == datatransfer.NewVoucher && channelState.Queued() > 0 {
+			dt1.UpdateValidationStatus(ctx, chid, sv.nextStatus())
 		}
 		if event.Code == datatransfer.DataLimitExceeded {
 			if nextVoucherResult < len(pausePoints) {
@@ -2109,13 +2120,6 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 			dt1.SendVoucherResult(ctx, chid, finalVoucherResult)
 		}
 	})
-
-	sv := &retrievalRevalidator{
-		StubbedValidator:     testutil.NewStubbedValidator(),
-		pausePoints:          pausePoints,
-		requiresFinalization: true,
-		initialVoucherResult: respVoucher,
-	}
 	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 
 	require.NoError(t, dt2.RegisterVoucherResultType(testutil.NewFakeDTType()))

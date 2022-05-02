@@ -2,6 +2,7 @@ package impl
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -149,7 +150,7 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 	}
 
 	// perform a revalidation against the last voucher
-	result, err := m.revalidate(chst)
+	result, err := m.validateRestart(chst)
 
 	// if an error occurred during validation return
 	if err != nil {
@@ -187,60 +188,13 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 
 // processUpdateVoucher handles an incoming request message with an updated voucher
 func (m *manager) processUpdateVoucher(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
-
-	// process the voucher update request, including validations
-	chst, result, err := m.revalidateRequest(chid, request)
-
-	// generate a response message
-	messageType := types.VoucherResultMessage
-	if chst.Status() == datatransfer.Finalizing {
-		messageType = types.CompleteMessage
-	}
-	response, msgErr := message.ValidationResultResponse(messageType, chst.TransferID(), result, err)
-	if msgErr != nil {
-		return nil, msgErr
-	}
-
-	// return the response message and any errors
-	return response, m.requestError(result, err, true)
-}
-
-// revalidateRequest performs processing (including validation) on a incoming request with an updated voucher
-func (m *manager) revalidateRequest(chid datatransfer.ChannelID,
-	incoming datatransfer.Request) (datatransfer.ChannelState, datatransfer.ValidationResult, error) {
-
 	// decode the voucher and save it on the channel
-	vouch, err := m.decodeVoucher(incoming)
+	vouch, err := m.decodeVoucher(request)
+	fmt.Println(err)
 	if err != nil {
-		return nil, datatransfer.ValidationResult{}, err
+		return nil, err
 	}
-	err = m.channels.NewVoucher(chid, vouch)
-	if err != nil {
-		return nil, datatransfer.ValidationResult{}, err
-	}
-
-	// read the channel state with the saved voucher
-	chst, err := m.channels.GetByID(context.TODO(), chid)
-	if err != nil {
-		return nil, datatransfer.ValidationResult{}, err
-	}
-
-	// perform revalidation based on this updated voucher
-	result, err := m.revalidate(chst)
-
-	// if an error occurred during validation return
-	if err != nil {
-		return chst, result, err
-	}
-
-	// if the request is now rejected, error the channel
-	if !result.Accepted {
-		return chst, result, m.recordRejectedValidationEvents(chid, result)
-	}
-
-	// record validation events and return
-	return chst, result, m.recordAcceptedValidationEvents(chst, result)
-
+	return nil, m.channels.NewVoucher(chid, vouch)
 }
 
 // receiveUpdateRequest handles an incoming request message with an updated voucher
@@ -343,10 +297,10 @@ func (m *manager) recordAcceptedValidationEvents(chst datatransfer.ChannelState,
 	return nil
 }
 
-// revalidate looks up the appropriate validator based on the last voucher in a channel
-func (m *manager) revalidate(chst datatransfer.ChannelState) (datatransfer.ValidationResult, error) {
-	processor, _ := m.validatedTypes.Processor(chst.LastVoucher().Type())
+// validateRestart looks up the appropriate validator and validates a restart
+func (m *manager) validateRestart(chst datatransfer.ChannelState) (datatransfer.ValidationResult, error) {
+	processor, _ := m.validatedTypes.Processor(chst.Voucher().Type())
 	validator := processor.(datatransfer.RequestValidator)
 
-	return validator.Revalidate(chst.ChannelID(), chst)
+	return validator.ValidateRestart(chst.ChannelID(), chst)
 }
