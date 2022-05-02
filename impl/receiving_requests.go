@@ -2,7 +2,6 @@ package impl
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -24,13 +23,13 @@ func (m *manager) receiveNewRequest(chid datatransfer.ChannelID, incoming datatr
 	result, err := m.acceptRequest(chid, incoming)
 
 	// generate a response message
-	msg, msgErr := message.ValidationResultResponse(types.NewMessage, incoming.TransferID(), result, err)
+	msg, msgErr := message.ValidationResultResponse(types.NewMessage, incoming.TransferID(), result, err, result.ForcePause)
 	if msgErr != nil {
 		return nil, msgErr
 	}
 
 	// return the response message and any errors
-	return msg, m.requestError(result, err, false)
+	return msg, m.requestError(result, err, result.ForcePause)
 }
 
 // acceptRequest performs processing (including validation) on a new incoming request
@@ -113,69 +112,70 @@ func (m *manager) receiveRestartRequest(chid datatransfer.ChannelID, incoming da
 	log.Infof("channel %s: received restart request", chid)
 
 	// process the restart message, including validations
-	result, err := m.restartRequest(chid, incoming)
+	stayPaused, result, err := m.restartRequest(chid, incoming)
 
 	// generate a response message
-	msg, msgErr := message.ValidationResultResponse(types.RestartMessage, incoming.TransferID(), result, err)
+	msg, msgErr := message.ValidationResultResponse(types.RestartMessage, incoming.TransferID(), result, err, stayPaused)
 	if msgErr != nil {
 		return nil, msgErr
 	}
 
 	// return the response message and any errors
-	return msg, m.requestError(result, err, false)
+	return msg, m.requestError(result, err, result.ForcePause)
 }
 
 // restartRequest performs processing (including validation) on a incoming restart request
 func (m *manager) restartRequest(chid datatransfer.ChannelID,
-	incoming datatransfer.Request) (datatransfer.ValidationResult, error) {
+	incoming datatransfer.Request) (bool, datatransfer.ValidationResult, error) {
 
 	// restart requests are invalid if we the initiator
 	// (the responder must send a "restart existing channel request")
 	initiator := chid.Initiator
 	if m.peerID == initiator {
-		return datatransfer.ValidationResult{}, xerrors.New("initiator cannot be manager peer for a restart request")
+		return false, datatransfer.ValidationResult{}, xerrors.New("initiator cannot be manager peer for a restart request")
 	}
 
 	// valide that the request parameters match the original request
 	// TODO: not sure this is needed -- the request parameters cannot change,
 	// so perhaps the solution is just to ignore them in the message
 	if err := m.validateRestartRequest(context.Background(), initiator, chid, incoming); err != nil {
-		return datatransfer.ValidationResult{}, xerrors.Errorf("restart request for channel %s failed validation: %w", chid, err)
+		return false, datatransfer.ValidationResult{}, xerrors.Errorf("restart request for channel %s failed validation: %w", chid, err)
 	}
 
 	// read the channel state
 	chst, err := m.channels.GetByID(context.TODO(), chid)
 	if err != nil {
-		return datatransfer.ValidationResult{}, err
+		return false, datatransfer.ValidationResult{}, err
 	}
 
 	// perform a revalidation against the last voucher
 	result, err := m.validateRestart(chst)
+	stayPaused := result.LeaveRequestPaused(chst)
 
 	// if an error occurred during validation return
 	if err != nil {
-		return result, err
+		return stayPaused, result, err
 	}
 
 	// if the request is now rejected, error the channel
 	if !result.Accepted {
-		return result, m.recordRejectedValidationEvents(chid, result)
+		return stayPaused, result, m.recordRejectedValidationEvents(chid, result)
 	}
 
 	// record the restart events
 	if err := m.channels.Restart(chid); err != nil {
-		return result, xerrors.Errorf("failed to restart channel %s: %w", chid, err)
+		return stayPaused, result, xerrors.Errorf("failed to restart channel %s: %w", chid, err)
 	}
 
 	// record validation events
 	if err := m.recordAcceptedValidationEvents(chst, result); err != nil {
-		return result, err
+		return stayPaused, result, err
 	}
 
 	// configure the transport
 	voucher, err := m.decodeVoucher(incoming)
 	if err != nil {
-		return result, err
+		return stayPaused, result, err
 	}
 	processor, has := m.transportConfigurers.Processor(voucher.Type())
 	if has {
@@ -183,14 +183,13 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 		transportConfigurer(chid, voucher, m.transport)
 	}
 	m.dataTransferNetwork.Protect(initiator, chid.String())
-	return result, nil
+	return stayPaused, result, nil
 }
 
 // processUpdateVoucher handles an incoming request message with an updated voucher
 func (m *manager) processUpdateVoucher(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
 	// decode the voucher and save it on the channel
 	vouch, err := m.decodeVoucher(request)
-	fmt.Println(err)
 	if err != nil {
 		return nil, err
 	}
@@ -223,18 +222,15 @@ func (m *manager) receiveUpdateRequest(chid datatransfer.ChannelID, request data
 // ErrPause / ErrResume based off the validation result
 // TODO: get away from using ErrPause/ErrResume to indicate pause resume,
 // which would remove the need for most of this method
-func (m *manager) requestError(result datatransfer.ValidationResult, resultErr error, handleResumes bool) error {
+func (m *manager) requestError(result datatransfer.ValidationResult, resultErr error, stayPaused bool) error {
 	if resultErr != nil {
 		return resultErr
 	}
 	if !result.Accepted {
 		return datatransfer.ErrRejected
 	}
-	if result.LeaveRequestPaused {
+	if stayPaused {
 		return datatransfer.ErrPause
-	}
-	if handleResumes {
-		return datatransfer.ErrResume
 	}
 	return nil
 }
@@ -255,7 +251,7 @@ func (m *manager) recordAcceptedValidationEvents(chst datatransfer.ChannelState,
 	chid := chst.ChannelID()
 
 	// pause or resume the request as neccesary
-	if result.LeaveRequestPaused {
+	if result.LeaveRequestPaused(chst) {
 		if !chst.Status().IsResponderPaused() {
 			err := m.channels.PauseResponder(chid)
 			if err != nil {

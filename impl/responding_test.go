@@ -115,7 +115,7 @@ func TestDataTransferResponding(t *testing.T) {
 		"new push request pauses": {
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPush()
-				sv.StubResult(datatransfer.ValidationResult{Accepted: true, LeaveRequestPaused: true, VoucherResult: testutil.NewFakeDTType()})
+				sv.StubResult(datatransfer.ValidationResult{Accepted: true, ForcePause: true, VoucherResult: testutil.NewFakeDTType()})
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
@@ -204,7 +204,7 @@ func TestDataTransferResponding(t *testing.T) {
 		"new pull request pauses": {
 			configureValidator: func(sv *testutil.StubbedValidator) {
 				sv.ExpectSuccessPull()
-				sv.StubResult(datatransfer.ValidationResult{Accepted: true, LeaveRequestPaused: true})
+				sv.StubResult(datatransfer.ValidationResult{Accepted: true, ForcePause: true})
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				response, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)

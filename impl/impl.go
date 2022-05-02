@@ -388,7 +388,8 @@ func (m *manager) processValidationUpdate(ctx context.Context, chid datatransfer
 	if chst.Status() == datatransfer.Finalizing {
 		messageType = types.CompleteMessage
 	}
-	response, msgErr := message.ValidationResultResponse(messageType, chst.TransferID(), result, err)
+	response, msgErr := message.ValidationResultResponse(messageType, chst.TransferID(), result, err,
+		result.LeaveRequestPaused(chst))
 	if msgErr != nil {
 		return nil, nil, msgErr
 	}
@@ -409,8 +410,9 @@ func (m *manager) handleTransportUpdate(
 	resultErr error,
 ) error {
 
+	pauseRequest := result.LeaveRequestPaused(chst)
 	// resume channel as needed, sending the response message immediately and returning
-	if resultErr == nil && result.Accepted && !result.LeaveRequestPaused {
+	if resultErr == nil && result.Accepted && !pauseRequest {
 		if chst.Status().IsResponderPaused() && !chst.Status().InFinalization() {
 			return m.transport.(datatransfer.PauseableTransport).ResumeChannel(ctx, response, chst.ChannelID())
 		}
@@ -430,7 +432,7 @@ func (m *manager) handleTransportUpdate(
 	}
 
 	// pause the channel as needed
-	if result.LeaveRequestPaused && !chst.Status().IsResponderPaused() && !chst.Status().InFinalization() {
+	if pauseRequest && !chst.Status().IsResponderPaused() && !chst.Status().InFinalization() {
 		return m.transport.(datatransfer.PauseableTransport).PauseChannel(ctx, chst.ChannelID())
 	}
 

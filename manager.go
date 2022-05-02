@@ -16,9 +16,9 @@ type ValidationResult struct {
 	// VoucherResult provides information to the other party about what happened
 	// with the voucher
 	VoucherResult
-	// LeaveRequestPaused indicates whether the request should stay paused
-	// even if the request was accepted
-	LeaveRequestPaused bool
+	// ForcePause indicates whether the request should be paused, regardless
+	// of data limit and finalization status
+	ForcePause bool
 	// DataLimit specifies how much data this voucher is good for. When the amount
 	// of data specified is reached (or shortly after), the request will pause
 	// pending revalidation. 0 indicates no limit.
@@ -26,6 +26,23 @@ type ValidationResult struct {
 	// RequiresFinalization indicates at the end of the transfer, the channel should
 	// be left open for a final settlement
 	RequiresFinalization bool
+}
+
+// LeaveRequestPaused indicates whether all conditions are met to resume a request
+func (vr ValidationResult) LeaveRequestPaused(chst ChannelState) bool {
+	if vr.ForcePause {
+		return true
+	}
+	if vr.RequiresFinalization && chst.Status().InFinalization() {
+		return true
+	}
+	var limitFactor uint64
+	if chst.IsPull() {
+		limitFactor = chst.Queued()
+	} else {
+		limitFactor = chst.Received()
+	}
+	return vr.DataLimit != 0 && limitFactor >= vr.DataLimit
 }
 
 // RequestValidator is an interface implemented by the client of the

@@ -1135,12 +1135,12 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 			var chid datatransfer.ChannelID
 			if data.isPull {
 				sv.ExpectSuccessPull()
-				sv.StubResult(datatransfer.ValidationResult{Accepted: true, LeaveRequestPaused: true})
+				sv.StubResult(datatransfer.ValidationResult{Accepted: true, ForcePause: true})
 				require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), &voucher, rootCid, gsData.AllSelector)
 			} else {
 				sv.ExpectSuccessPush()
-				sv.StubResult(datatransfer.ValidationResult{Accepted: true, LeaveRequestPaused: true})
+				sv.StubResult(datatransfer.ValidationResult{Accepted: true, ForcePause: true})
 				require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
 				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), &voucher, rootCid, gsData.AllSelector)
 			}
@@ -1200,7 +1200,7 @@ func (r *retrievalRevalidator) ValidatePush(
 	vr := datatransfer.ValidationResult{
 		Accepted:             true,
 		RequiresFinalization: r.requiresFinalization,
-		LeaveRequestPaused:   r.leavePausedInitially,
+		ForcePause:           r.leavePausedInitially,
 		VoucherResult:        r.initialVoucherResult,
 	}
 	if len(r.pausePoints) > r.providerPausePoint {
@@ -1220,7 +1220,7 @@ func (r *retrievalRevalidator) ValidatePull(
 	vr := datatransfer.ValidationResult{
 		Accepted:             true,
 		RequiresFinalization: r.requiresFinalization,
-		LeaveRequestPaused:   r.leavePausedInitially,
+		ForcePause:           r.leavePausedInitially,
 		VoucherResult:        r.initialVoucherResult,
 	}
 	if len(r.pausePoints) > r.providerPausePoint {
@@ -1379,6 +1379,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					dt1.SendVoucherResult(ctx, chid, testutil.NewFakeDTType())
 				}
 				if event.Code == datatransfer.BeginFinalizing {
+					sv.requiresFinalization = false
 					dt1.SendVoucherResult(ctx, chid, finalVoucherResult)
 				}
 				if event.Code == datatransfer.Error {
@@ -2008,8 +2009,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
 	host1 := gsData.Host1 // initiator, data sender
 
-	root, origBytes := LoadRandomData(ctx, t, gsData.DagService1, 256000)
-	gsData.OrigBytes = origBytes
+	root := gsData.LoadUnixFSFile(t, false)
 	rootCid := root.(cidlink.Link).Cid
 	tp1 := gsData.SetupGSTransportHost1()
 	tp2 := gsData.SetupGSTransportHost2()
@@ -2108,7 +2108,8 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 			providerFinished <- struct{}{}
 		}
 		if event.Code == datatransfer.NewVoucher && channelState.Queued() > 0 {
-			dt1.UpdateValidationStatus(ctx, chid, sv.nextStatus())
+			vs := sv.nextStatus()
+			dt1.UpdateValidationStatus(ctx, chid, vs)
 		}
 		if event.Code == datatransfer.DataLimitExceeded {
 			if nextVoucherResult < len(pausePoints) {
@@ -2117,6 +2118,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 			}
 		}
 		if event.Code == datatransfer.BeginFinalizing {
+			sv.requiresFinalization = false
 			dt1.SendVoucherResult(ctx, chid, finalVoucherResult)
 		}
 	})
@@ -2245,7 +2247,6 @@ func TestMultipleParallelTransfers(t *testing.T) {
 					return
 				}
 				if event.Code == datatransfer.Error {
-					fmt.Println(event.Message)
 					errChan <- struct{}{}
 				}
 				if channelState.Status() == datatransfer.Completed {
