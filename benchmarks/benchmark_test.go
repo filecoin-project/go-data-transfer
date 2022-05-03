@@ -36,8 +36,6 @@ import (
 	"github.com/filecoin-project/go-data-transfer/testutil"
 )
 
-// const stdBlockSize = 8000
-
 type runStats struct {
 	Time time.Duration
 	Name string
@@ -132,9 +130,6 @@ func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc,
 }
 
 type distFunc func(ctx context.Context, b *testing.B, provs []testinstance.Instance) []cid.Cid
-
-// const defaultUnixfsChunkSize uint64 = 1 << 10
-// const defaultUnixfsLinksPerLevel = 1024
 
 func loadRandomUnixFxFile(ctx context.Context, b *testing.B, bs blockstore.Blockstore, size uint64, unixfsChunkSize uint64, unixfsLinksPerLevel int, useRawNodes bool) cid.Cid {
 
