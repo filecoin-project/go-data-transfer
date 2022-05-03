@@ -250,23 +250,6 @@ func (m *manager) recordRejectedValidationEvents(chid datatransfer.ChannelID, re
 func (m *manager) recordAcceptedValidationEvents(chst datatransfer.ChannelState, result datatransfer.ValidationResult) error {
 	chid := chst.ChannelID()
 
-	// pause or resume the request as neccesary
-	if result.LeaveRequestPaused(chst) {
-		if !chst.Status().IsResponderPaused() {
-			err := m.channels.PauseResponder(chid)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		if chst.Status().IsResponderPaused() {
-			err := m.channels.ResumeResponder(chid)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
 	// record the voucher result if present
 	if result.VoucherResult != nil {
 		err := m.channels.NewVoucherResult(chid, result.VoucherResult)
@@ -290,6 +273,24 @@ func (m *manager) recordAcceptedValidationEvents(chst datatransfer.ChannelState,
 			return err
 		}
 	}
+
+	// pause or resume the request as neccesary
+	if result.LeaveRequestPaused(chst) {
+		if !chst.Status().IsResponderPaused() {
+			err := m.channels.PauseResponder(chid)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		if chst.Status().IsResponderPaused() {
+			err := m.channels.ResumeResponder(chid)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
