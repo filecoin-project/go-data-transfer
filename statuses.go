@@ -61,7 +61,7 @@ const (
 )
 
 func (s Status) IsAccepted() bool {
-	return s != Requested && s != Cancelled && s != Cancelling && s != Failed && s != Failing
+	return s != Requested && s != Cancelled && s != Cancelling && s != Failed && s != Failing && s != ChannelNotFoundError
 }
 
 func (s Status) IsResponderPaused() bool {
