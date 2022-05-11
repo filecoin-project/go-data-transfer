@@ -43,7 +43,6 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 	))
 	defer span.End()
 	response, receiveErr := r.manager.OnRequestReceived(chid, incoming)
-
 	if receiveErr == datatransfer.ErrResume {
 		chst, err := r.manager.channels.GetByID(ctx, chid)
 		if err != nil {

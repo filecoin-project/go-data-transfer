@@ -134,6 +134,10 @@ func TestRestartPush(t *testing.T) {
 
 			// START DATA TRANSFER INSTANCES
 			rh.sv.ExpectSuccessPush()
+			rh.sv.StubResult(datatransfer.ValidationResult{Accepted: true})
+			rh.sv.ExpectSuccessRevalidation()
+			rh.sv.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
+
 			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
 			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 
@@ -378,6 +382,10 @@ func TestRestartPull(t *testing.T) {
 
 			// START DATA TRANSFER INSTANCES
 			rh.sv.ExpectSuccessPull()
+			rh.sv.StubResult(datatransfer.ValidationResult{Accepted: true})
+			rh.sv.ExpectSuccessRevalidation()
+			rh.sv.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
+
 			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
 			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 

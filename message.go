@@ -48,7 +48,7 @@ type Request interface {
 // Response is a response message for the data transfer protocol
 type Response interface {
 	Message
-	IsVoucherResult() bool
+	IsValidationResult() bool
 	IsComplete() bool
 	Accepted() bool
 	VoucherResultType() TypeIdentifier

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipfs/go-graphsync/donotsendfirstblocks"
 	"github.com/ipld/go-ipld-prime"
@@ -713,7 +712,7 @@ func TestManager(t *testing.T) {
 		"open channel adds block count to the DoNotSendFirstBlocks extension for v1.2 protocol": {
 			action: func(gsData *harness) {
 				cids := testutil.GenerateCids(2)
-				channel := &mockChannelState{receivedCids: cids}
+				channel := testutil.NewMockChannelState(testutil.MockChannelStateParams{ReceivedCids: cids})
 				stor, _ := gsData.outgoing.Selector()
 
 				go gsData.outgoingRequestHook()
@@ -744,7 +743,7 @@ func TestManager(t *testing.T) {
 		"ChannelsForPeer when request is open": {
 			action: func(gsData *harness) {
 				cids := testutil.GenerateCids(2)
-				channel := &mockChannelState{receivedCids: cids}
+				channel := testutil.NewMockChannelState(testutil.MockChannelStateParams{ReceivedCids: cids})
 				stor, _ := gsData.outgoing.Selector()
 
 				go gsData.outgoingRequestHook()
@@ -774,7 +773,7 @@ func TestManager(t *testing.T) {
 		"open channel cancels an existing request with the same channel ID": {
 			action: func(gsData *harness) {
 				cids := testutil.GenerateCids(2)
-				channel := &mockChannelState{receivedCids: cids}
+				channel := testutil.NewMockChannelState(testutil.MockChannelStateParams{ReceivedCids: cids})
 				stor, _ := gsData.outgoing.Selector()
 				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
@@ -1363,114 +1362,4 @@ func assertHasExtensionMessage(t *testing.T, name graphsync.ExtensionName, exten
 	if !found {
 		require.Fail(t, "extension not found")
 	}
-}
-
-type mockChannelState struct {
-	receivedCids []cid.Cid
-}
-
-var _ datatransfer.ChannelState = (*mockChannelState)(nil)
-
-func (m *mockChannelState) ReceivedCids() []cid.Cid {
-	return m.receivedCids
-}
-
-func (m *mockChannelState) ReceivedCidsLen() int {
-	return len(m.receivedCids)
-}
-
-func (m *mockChannelState) ReceivedCidsTotal() int64 {
-	return (int64)(len(m.receivedCids))
-}
-
-func (m *mockChannelState) QueuedCidsTotal() int64 {
-	panic("implement me")
-}
-
-func (m *mockChannelState) SentCidsTotal() int64 {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Queued() uint64 {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Sent() uint64 {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Received() uint64 {
-	panic("implement me")
-}
-
-func (m *mockChannelState) ChannelID() datatransfer.ChannelID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Status() datatransfer.Status {
-	panic("implement me")
-}
-
-func (m *mockChannelState) TransferID() datatransfer.TransferID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) BaseCID() cid.Cid {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Selector() ipld.Node {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Voucher() datatransfer.Voucher {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Sender() peer.ID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Recipient() peer.ID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) TotalSize() uint64 {
-	panic("implement me")
-}
-
-func (m *mockChannelState) IsPull() bool {
-	panic("implement me")
-}
-
-func (m *mockChannelState) OtherPeer() peer.ID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) SelfPeer() peer.ID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Message() string {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Vouchers() []datatransfer.Voucher {
-	panic("implement me")
-}
-
-func (m *mockChannelState) VoucherResults() []datatransfer.VoucherResult {
-	panic("implement me")
-}
-
-func (m *mockChannelState) LastVoucher() datatransfer.Voucher {
-	panic("implement me")
-}
-
-func (m *mockChannelState) LastVoucherResult() datatransfer.VoucherResult {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Stages() *datatransfer.ChannelStages {
-	panic("implement me")
 }

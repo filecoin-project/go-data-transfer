@@ -105,6 +105,33 @@ func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, v
 	}, nil
 }
 
+// ValidationResultResponse response generates a response based on a validation result
+// messageType determines what kind of response is created
+func ValidationResultResponse(
+	messageType types.MessageType,
+	id datatransfer.TransferID,
+	validationResult datatransfer.ValidationResult,
+	validationErr error) (datatransfer.Response, error) {
+	voucherResultType := datatransfer.EmptyTypeIdentifier
+	if validationResult.VoucherResult != nil {
+		voucherResultType = validationResult.VoucherResult.Type()
+	}
+	vnode, err := encoding.EncodeToNode(validationResult.VoucherResult)
+	if err != nil {
+		return nil, xerrors.Errorf("Creating request: %w", err)
+	}
+	return &TransferResponse1_1{
+		// TODO: when we area able to change the protocol, it would be helpful to record
+		// Validation errors vs rejections
+		RequestAccepted:       validationErr == nil && validationResult.Accepted,
+		MessageType:           uint64(messageType),
+		Paused:                validationResult.LeaveRequestPaused,
+		TransferId:            uint64(id),
+		VoucherTypeIdentifier: voucherResultType,
+		VoucherResultPtr:      &vnode,
+	}, nil
+}
+
 // NewResponse builds a new Data Transfer response
 func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
 	vnode, err := encoding.EncodeToNode(voucherResult)
