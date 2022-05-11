@@ -38,10 +38,10 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/network"
-	gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
-	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/network"
+	gstransport "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
 var allSelector ipld.Node

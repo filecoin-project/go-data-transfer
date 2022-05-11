@@ -15,9 +15,9 @@ import (
 	"go.uber.org/atomic"
 	"golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	. "github.com/filecoin-project/go-data-transfer/impl"
-	"github.com/filecoin-project/go-data-transfer/testutil"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	. "github.com/filecoin-project/go-data-transfer/v2/impl"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 const totalIncrements = 204

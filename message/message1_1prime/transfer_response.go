@@ -9,9 +9,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	xerrors "golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/message/types"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/encoding"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
 // TransferResponse1_1 is a private struct that satisfies the datatransfer.Response interface

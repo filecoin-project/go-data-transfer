@@ -7,7 +7,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	mockpeernet "github.com/libp2p/go-libp2p/p2p/net/mock"
 
-	dtnet "github.com/filecoin-project/go-data-transfer/network"
+	dtnet "github.com/filecoin-project/go-data-transfer/v2/network"
 )
 
 type peernet struct {

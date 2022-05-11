@@ -4,7 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
 type readOriginalFn func(datatransfer.ChannelID) (int64, error)

@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message/message1_1"
-	"github.com/filecoin-project/go-data-transfer/testutil"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message/message1_1"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 func TestNewRequest(t *testing.T) {

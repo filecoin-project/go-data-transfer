@@ -6,8 +6,8 @@ import (
 
 	"github.com/filecoin-project/go-statemachine/fsm"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/channels/internal"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
 )
 
 var log = logging.Logger("data-transfer")

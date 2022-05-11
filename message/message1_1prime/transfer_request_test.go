@@ -8,9 +8,9 @@ import (
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/stretchr/testify/require"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	message1_1 "github.com/filecoin-project/go-data-transfer/message/message1_1prime"
-	"github.com/filecoin-project/go-data-transfer/testutil"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	message1_1 "github.com/filecoin-project/go-data-transfer/v2/message/message1_1prime"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 func TestRequestMessageForProtocol(t *testing.T) {

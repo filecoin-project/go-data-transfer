@@ -1,4 +1,4 @@
-module github.com/filecoin-project/go-data-transfer
+module github.com/filecoin-project/go-data-transfer/v2
 
 go 1.16
 

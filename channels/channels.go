@@ -17,10 +17,10 @@ import (
 	"github.com/filecoin-project/go-statemachine"
 	"github.com/filecoin-project/go-statemachine/fsm"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/channels/internal"
-	"github.com/filecoin-project/go-data-transfer/channels/internal/migrations"
-	"github.com/filecoin-project/go-data-transfer/encoding"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
+	"github.com/filecoin-project/go-data-transfer/v2/channels/internal/migrations"
+	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 )
 
 type DecoderByTypeFunc func(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool)

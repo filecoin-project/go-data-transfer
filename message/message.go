@@ -1,7 +1,7 @@
 package message
 
 import (
-	message1_1 "github.com/filecoin-project/go-data-transfer/message/message1_1prime"
+	message1_1 "github.com/filecoin-project/go-data-transfer/v2/message/message1_1prime"
 )
 
 var NewRequest = message1_1.NewRequest
