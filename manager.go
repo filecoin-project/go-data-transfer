@@ -20,7 +20,7 @@ type ValidationResult struct {
 	// even if the request was accepted
 	LeaveRequestPaused bool
 	// DataLimit specifies how much data this voucher is good for. When the amount
-	// amount data specified is reached (or shortly after), the request will pause
+	// of data specified is reached (or shortly after), the request will pause
 	// pending revalidation. 0 indicates no limit.
 	DataLimit uint64
 	// RequiresFinalization indicates at the end of the transfer, the channel should
