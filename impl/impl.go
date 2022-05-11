@@ -368,7 +368,7 @@ func (m *manager) updateValidationStatus(ctx context.Context, chid datatransfer.
 func (m *manager) processValidationUpdate(ctx context.Context, chid datatransfer.ChannelID, result datatransfer.ValidationResult) (datatransfer.ChannelState, datatransfer.Response, error) {
 
 	// read the channel state
-	chst, err := m.channels.GetByID(context.TODO(), chid)
+	chst, err := m.channels.GetByID(ctx, chid)
 	if err != nil {
 		return nil, nil, err
 	}
