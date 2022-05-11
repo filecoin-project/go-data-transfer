@@ -10,7 +10,7 @@ import (
 
 // ValidationResult describes the result of validating a voucher
 type ValidationResult struct {
-	// Accepted indicates where the request was accepted if a request is not
+	// Accepted indicates whether the request was accepted. If a request is not
 	// accepted, the request fails. This is true for revalidation as well
 	Accepted bool
 	// VoucherResult provides information to the other party about what happened
