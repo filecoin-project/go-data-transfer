@@ -106,7 +106,8 @@ func ValidationResultResponse(
 	messageType types.MessageType,
 	id datatransfer.TransferID,
 	validationResult datatransfer.ValidationResult,
-	validationErr error) (datatransfer.Response, error) {
+	validationErr error,
+	paused bool) (datatransfer.Response, error) {
 	voucherResultType := datatransfer.EmptyTypeIdentifier
 	if validationResult.VoucherResult != nil {
 		voucherResultType = validationResult.VoucherResult.Type()
@@ -120,7 +121,7 @@ func ValidationResultResponse(
 		// Validation errors vs rejections
 		RequestAccepted:       validationErr == nil && validationResult.Accepted,
 		MessageType:           uint64(messageType),
-		Paused:                validationResult.LeaveRequestPaused,
+		Paused:                paused,
 		TransferId:            uint64(id),
 		VoucherTypeIdentifier: voucherResultType,
 		VoucherResultPtr:      &vnode,

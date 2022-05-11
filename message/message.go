@@ -11,6 +11,7 @@ var VoucherRequest = message1_1.VoucherRequest
 
 // DEPRECATED: Use ValidationResultResponse
 var RestartResponse = message1_1.RestartResponse
+
 var ValidationResultResponse = message1_1.ValidationResultResponse
 
 // DEPRECATED: Use ValidationResultResponse

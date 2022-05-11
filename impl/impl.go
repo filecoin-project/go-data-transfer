@@ -24,6 +24,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
 	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/network"
 	"github.com/filecoin-project/go-data-transfer/v2/registry"
 	"github.com/filecoin-project/go-data-transfer/v2/tracing"
@@ -334,8 +335,108 @@ func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.
 	return m.channels.NewVoucherResult(channelID, voucherResult)
 }
 
-func (m *manager) SetDataLimit(ctx context.Context, chid datatransfer.ChannelID, totalData uint64, stopAtEnd bool) {
+func (m *manager) UpdateValidationStatus(ctx context.Context, chid datatransfer.ChannelID, result datatransfer.ValidationResult) error {
+	ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
+	ctx, span := otel.Tracer("data-transfer").Start(ctx, "updateValidationStatus", trace.WithAttributes(
+		attribute.String("channelID", chid.String()),
+	))
+	err := m.updateValidationStatus(ctx, chid, result)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+	span.End()
+	return err
+}
 
+// updateValidationStatus is the implementation of the public method, which wraps this private method
+// in a trace
+func (m *manager) updateValidationStatus(ctx context.Context, chid datatransfer.ChannelID, result datatransfer.ValidationResult) error {
+	// first check if we are the responder -- only the responder can call UpdateValidationStatus
+	if chid.Initiator == m.peerID {
+		err := errors.New("cannot send voucher result for request we initiated")
+		return err
+	}
+
+	// dispatch channel events and generate a response message
+	chst, response, err := m.processValidationUpdate(ctx, chid, result)
+
+	// dispatch transport updates
+	return m.handleTransportUpdate(ctx, chst, response, result, err)
+}
+
+func (m *manager) processValidationUpdate(ctx context.Context, chid datatransfer.ChannelID, result datatransfer.ValidationResult) (datatransfer.ChannelState, datatransfer.Response, error) {
+
+	// read the channel state
+	chst, err := m.channels.GetByID(ctx, chid)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// if the request is now rejected, error the channel
+	if !result.Accepted {
+		err = m.recordRejectedValidationEvents(chid, result)
+	} else {
+		err = m.recordAcceptedValidationEvents(chst, result)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// generate a response message
+	messageType := types.VoucherResultMessage
+	if chst.Status() == datatransfer.Finalizing {
+		messageType = types.CompleteMessage
+	}
+	response, msgErr := message.ValidationResultResponse(messageType, chst.TransferID(), result, err,
+		result.LeaveRequestPaused(chst))
+	if msgErr != nil {
+		return nil, nil, msgErr
+	}
+
+	// return the response message and any errors
+	return chst, response, nil
+}
+
+// handleTransportUpdate updates the transport based on the validation status and the
+// response message
+// TODO: the ordering here is a bit sensitive, and the transport should
+// be refactored to accept multiple operations at once and order these itself
+func (m *manager) handleTransportUpdate(
+	ctx context.Context,
+	chst datatransfer.ChannelState,
+	response datatransfer.Message,
+	result datatransfer.ValidationResult,
+	resultErr error,
+) error {
+
+	pauseRequest := result.LeaveRequestPaused(chst)
+	// resume channel as needed, sending the response message immediately and returning
+	if resultErr == nil && result.Accepted && !pauseRequest {
+		if chst.Status().IsResponderPaused() && !chst.Status().InFinalization() {
+			return m.transport.(datatransfer.PauseableTransport).ResumeChannel(ctx, response, chst.ChannelID())
+		}
+	}
+
+	// send a response message
+	if response != nil {
+		if err := m.dataTransferNetwork.SendMessage(ctx, chst.ChannelID().Initiator, response); err != nil {
+			return err
+		}
+	}
+
+	// close the channel as needed
+	if resultErr != nil || !result.Accepted {
+		m.transport.CloseChannel(ctx, chst.ChannelID())
+		return resultErr
+	}
+
+	// pause the channel as needed
+	if pauseRequest && !chst.Status().IsResponderPaused() && !chst.Status().InFinalization() {
+		return m.transport.(datatransfer.PauseableTransport).PauseChannel(ctx, chst.ChannelID())
+	}
+
+	return nil
 }
 
 // close an open channel (effectively a cancel)
