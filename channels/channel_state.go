@@ -98,7 +98,7 @@ func (c channelState) IsPull() bool {
 }
 
 func (c channelState) ChannelID() datatransfer.ChannelID {
-	if c.ic.Initiator == c.ic.Recipient {
+	if c.IsPull() {
 		return datatransfer.ChannelID{ID: c.ic.TransferID, Initiator: c.ic.Recipient, Responder: c.ic.Sender}
 	}
 	return datatransfer.ChannelID{ID: c.ic.TransferID, Initiator: c.ic.Sender, Responder: c.ic.Recipient}
