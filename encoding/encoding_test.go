@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/encoding/testdata"
+	"github.com/filecoin-project/go-data-transfer/v2/encoding"
+	"github.com/filecoin-project/go-data-transfer/v2/encoding/testdata"
 )
 
 func TestRoundTrip(t *testing.T) {

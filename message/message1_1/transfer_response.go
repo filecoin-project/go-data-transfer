@@ -11,9 +11,9 @@ import (
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/message/types"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/encoding"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
 //go:generate cbor-gen-for --map-encoding TransferResponse1_1

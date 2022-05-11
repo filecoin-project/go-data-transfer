@@ -18,12 +18,12 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	tn "github.com/filecoin-project/go-data-transfer/benchmarks/testnet"
-	dtimpl "github.com/filecoin-project/go-data-transfer/impl"
-	dtnet "github.com/filecoin-project/go-data-transfer/network"
-	"github.com/filecoin-project/go-data-transfer/testutil"
-	gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	tn "github.com/filecoin-project/go-data-transfer/v2/benchmarks/testnet"
+	dtimpl "github.com/filecoin-project/go-data-transfer/v2/impl"
+	dtnet "github.com/filecoin-project/go-data-transfer/v2/network"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
+	gstransport "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
 )
 
 // TempDirGenerator is any interface that can generate temporary directories

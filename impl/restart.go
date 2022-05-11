@@ -8,10 +8,10 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/channels"
-	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/message"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/channels"
+	"github.com/filecoin-project/go-data-transfer/v2/encoding"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
 )
 
 // ChannelDataTransferType identifies the type of a data transfer channel for the purposes of a restart

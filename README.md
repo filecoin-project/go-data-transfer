@@ -21,7 +21,7 @@ This module encapsulates protocols for exchanging piece data between storage cli
 
 **Requires go 1.13**
 
-Install the module in your package or app with `go get "github.com/filecoin-project/go-data-transfer/datatransfer"`
+Install the module in your package or app with `go get "github.com/filecoin-project/go-data-transfer/v2/datatransfer"`
 
 
 ### Initialize a data transfer module
@@ -31,8 +31,8 @@ Install the module in your package or app with `go get "github.com/filecoin-proj
 
     import (
         gsimpl "github.com/ipfs/go-graphsync/impl"
-        datatransfer "github.com/filecoin-project/go-data-transfer/impl"
-        gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
+        datatransfer "github.com/filecoin-project/go-data-transfer/v2/impl"
+        gstransport "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
         "github.com/libp2p/go-libp2p-core/host"
     )
             
