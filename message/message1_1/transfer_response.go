@@ -63,7 +63,7 @@ func (trsp *TransferResponse1_1) IsComplete() bool {
 	return trsp.Type == uint64(types.CompleteMessage)
 }
 
-func (trsp *TransferResponse1_1) IsVoucherResult() bool {
+func (trsp *TransferResponse1_1) IsValidationResult() bool {
 	return trsp.Type == uint64(types.VoucherResultMessage) || trsp.Type == uint64(types.NewMessage) || trsp.Type == uint64(types.CompleteMessage) ||
 		trsp.Type == uint64(types.RestartMessage)
 }

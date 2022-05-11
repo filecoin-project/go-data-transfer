@@ -26,7 +26,7 @@ func TestResponseMessageForProtocol(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, resp.IsPaused())
 	require.Equal(t, voucherResult.Type(), resp.VoucherResultType())
-	require.True(t, resp.IsVoucherResult())
+	require.True(t, resp.IsValidationResult())
 
 	// random protocol
 	out, err = response.MessageForProtocol("RAND")

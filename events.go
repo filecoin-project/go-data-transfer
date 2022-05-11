@@ -110,6 +110,19 @@ const (
 
 	// Opened is fired when a request for data is sent from this node to a peer
 	Opened
+
+	// SetDataLimit is fired when a responder sets a limit for data it will allow
+	// before pausing the request
+	SetDataLimit
+
+	// SetRequiresFinalization is fired when a responder sets a limit for data it will allow
+	// before pausing the request
+	SetRequiresFinalization
+
+	// DataLimitExceeded is fired when a request exceeds it's data limit. It has the effect of
+	// pausing the responder, but is distinct from PauseResponder to indicate why the pause
+	// happened
+	DataLimitExceeded
 )
 
 // Events are human readable names for data transfer events
@@ -145,6 +158,9 @@ var Events = map[EventCode]string{
 	TransferRequestQueued:       "TransferRequestQueued",
 	RequestCancelled:            "RequestCancelled",
 	Opened:                      "Opened",
+	SetDataLimit:                "SetDataLimit",
+	SetRequiresFinalization:     "SetRequiresFinalization",
+	DataLimitExceeded:           "DataLimitExceeded",
 }
 
 // Event is a struct containing information about a data transfer event

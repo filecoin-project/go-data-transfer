@@ -69,6 +69,12 @@ type ChannelState struct {
 	// Number of blocks that have been sent, including blocks that are
 	// present in more than one place in the DAG
 	SentBlocksTotal int64
+	// DataLimit is the maximum data that can be transferred on this channel before
+	// revalidation. 0 indicates no limit.
+	DataLimit uint64
+	// RequiresFinalization indicates at the end of the transfer, the channel should
+	// be left open for a final settlement
+	RequiresFinalization bool
 	// Stages traces the execution fo a data transfer.
 	//
 	// EXPERIMENTAL; subject to change.

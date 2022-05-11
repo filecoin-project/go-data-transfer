@@ -32,8 +32,13 @@ const (
 )
 
 func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel datatransfer.ChannelState) error {
-	if err := m.validateRestartVoucher(channel, false); err != nil {
+	result, err := m.revalidate(channel)
+	if err != nil {
 		return xerrors.Errorf("failed to restart channel, validation error: %w", err)
+	}
+
+	if !result.Accepted {
+		return datatransfer.ErrRejected
 	}
 
 	// send a libp2p message to the other peer asking to send a "restart push request"
@@ -47,8 +52,13 @@ func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel dat
 }
 
 func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel datatransfer.ChannelState) error {
-	if err := m.validateRestartVoucher(channel, true); err != nil {
+	result, err := m.revalidate(channel)
+	if err != nil {
 		return xerrors.Errorf("failed to restart channel, validation error: %w", err)
+	}
+
+	if !result.Accepted {
+		return datatransfer.ErrRejected
 	}
 
 	req := message.RestartExistingChannelRequest(channel.ChannelID())
@@ -56,25 +66,6 @@ func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel dat
 	// send a libp2p message to the other peer asking to send a "restart pull request"
 	if err := m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req); err != nil {
 		return xerrors.Errorf("unable to send restart request: %w", err)
-	}
-
-	return nil
-}
-
-func (m *manager) validateRestartVoucher(channel datatransfer.ChannelState, isPull bool) error {
-	// re-validate the original voucher received for safety
-	chid := channel.ChannelID()
-
-	// recreate the request that would have led to this pull channel being created for validation
-	req, err := message.NewRequest(chid.ID, false, isPull, channel.Voucher().Type(), channel.Voucher(),
-		channel.BaseCID(), channel.Selector())
-	if err != nil {
-		return err
-	}
-
-	// revalidate the voucher by reconstructing the request that would have led to the creation of this channel
-	if _, _, err := m.validateVoucher(true, chid, channel.OtherPeer(), req, isPull, channel.BaseCID(), channel.Selector()); err != nil {
-		return err
 	}
 
 	return nil
@@ -173,7 +164,7 @@ func (m *manager) validateRestartRequest(ctx context.Context, otherPeer peer.ID,
 	}
 
 	// vouchers should match
-	reqVoucher, err := m.decodeVoucher(req, m.validatedTypes)
+	reqVoucher, err := m.decodeVoucher(req)
 	if err != nil {
 		return xerrors.Errorf("failed to decode request voucher: %w", err)
 	}

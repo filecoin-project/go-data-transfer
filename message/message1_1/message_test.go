@@ -381,7 +381,7 @@ func TestCompleteResponse(t *testing.T) {
 	assert.False(t, response.IsNew())
 	assert.False(t, response.IsUpdate())
 	assert.True(t, response.IsPaused())
-	assert.True(t, response.IsVoucherResult())
+	assert.True(t, response.IsValidationResult())
 	assert.True(t, response.EmptyVoucherResult())
 	assert.True(t, response.IsComplete())
 	assert.False(t, response.IsRequest())

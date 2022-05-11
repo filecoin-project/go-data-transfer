@@ -144,6 +144,14 @@ type ChannelState interface {
 	// Queued returns the number of bytes read from the node and queued for sending
 	Queued() uint64
 
+	// DataLimit is the maximum data that can be transferred on this channel before
+	// revalidation. 0 indicates no limit.
+	DataLimit() uint64
+
+	// RequiresFinalization indicates at the end of the transfer, the channel should
+	// be left open for a final settlement
+	RequiresFinalization() bool
+
 	// Stages returns the timeline of events this data transfer has gone through,
 	// for observability purposes.
 	//
