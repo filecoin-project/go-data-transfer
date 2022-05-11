@@ -462,7 +462,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the push request received above and validate it
-				h.voucherValidator.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
+				h.voucherValidator.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
 				require.NoError(t, h.dt.RestartDataTransferChannel(ctx, chid))
 				require.Len(t, h.voucherValidator.RevalidationsReceived, 1)
@@ -503,8 +503,8 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the pull request received above
-				h.voucherValidator.ExpectSuccessRevalidation()
-				h.voucherValidator.StubRevalidationResult(datatransfer.ValidationResult{Accepted: true})
+				h.voucherValidator.ExpectSuccessValidateRestart()
+				h.voucherValidator.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pullRequest.TransferID()}
 				require.NoError(t, h.dt.RestartDataTransferChannel(ctx, chid))
 				require.Len(t, h.transport.OpenedChannels, 0)
@@ -544,8 +544,8 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the pull request received above
-				h.voucherValidator.ExpectSuccessRevalidation()
-				h.voucherValidator.StubRevalidationResult(datatransfer.ValidationResult{Accepted: false})
+				h.voucherValidator.ExpectSuccessValidateRestart()
+				h.voucherValidator.StubRestartResult(datatransfer.ValidationResult{Accepted: false})
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pullRequest.TransferID()}
 				require.EqualError(t, h.dt.RestartDataTransferChannel(ctx, chid), datatransfer.ErrRejected.Error())
 			},
@@ -566,8 +566,8 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the pull request received above
-				h.voucherValidator.ExpectSuccessRevalidation()
-				h.voucherValidator.StubRevalidationResult(datatransfer.ValidationResult{Accepted: false})
+				h.voucherValidator.ExpectSuccessValidateRestart()
+				h.voucherValidator.StubRestartResult(datatransfer.ValidationResult{Accepted: false})
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
 				require.EqualError(t, h.dt.RestartDataTransferChannel(ctx, chid), datatransfer.ErrRejected.Error())
 			},

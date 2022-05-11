@@ -32,7 +32,7 @@ const (
 )
 
 func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel datatransfer.ChannelState) error {
-	result, err := m.revalidate(channel)
+	result, err := m.validateRestart(channel)
 	if err != nil {
 		return xerrors.Errorf("failed to restart channel, validation error: %w", err)
 	}
@@ -52,7 +52,7 @@ func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel dat
 }
 
 func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel datatransfer.ChannelState) error {
-	result, err := m.revalidate(channel)
+	result, err := m.validateRestart(channel)
 	if err != nil {
 		return xerrors.Errorf("failed to restart channel, validation error: %w", err)
 	}
