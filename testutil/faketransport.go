@@ -3,21 +3,13 @@ package testutil
 import (
 	"context"
 
-	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
 // OpenedChannel records a call to open a channel
 type OpenedChannel struct {
-	DataSender peer.ID
-	ChannelID  datatransfer.ChannelID
-	Root       ipld.Link
-	Selector   datamodel.Node
-	Channel    datatransfer.ChannelState
-	Message    datatransfer.Message
+	Channel datatransfer.Channel
+	Message datatransfer.Message
 }
 
 // ResumedChannel records a call to resume a channel
@@ -58,8 +50,8 @@ func NewFakeTransport() *FakeTransport {
 // Note: from a data transfer symantic standpoint, it doesn't matter if the
 // request is push or pull -- OpenChannel is called by the party that is
 // intending to receive data
-func (ft *FakeTransport) OpenChannel(ctx context.Context, dataSender peer.ID, channelID datatransfer.ChannelID, root ipld.Link, stor datamodel.Node, channel datatransfer.ChannelState, msg datatransfer.Message) error {
-	ft.OpenedChannels = append(ft.OpenedChannels, OpenedChannel{dataSender, channelID, root, stor, channel, msg})
+func (ft *FakeTransport) OpenChannel(ctx context.Context, channel datatransfer.Channel, msg datatransfer.Message) error {
+	ft.OpenedChannels = append(ft.OpenedChannels, OpenedChannel{channel, msg})
 	return ft.OpenChannelErr
 }
 

@@ -3,21 +3,21 @@ package graphsync
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/network"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/helpers/actionrecorders"
 	"github.com/ipfs/go-graphsync"
-	"github.com/ipfs/go-graphsync/donotsendfirstblocks"
 	logging "github.com/ipfs/go-log/v2"
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
-
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
 var log = logging.Logger("dt_graphsync")
@@ -71,6 +71,7 @@ func RegisterCompletedResponseListener(l func(channelID datatransfer.ChannelID))
 type Transport struct {
 	events datatransfer.EventsHandler
 	gs     graphsync.GraphExchange
+	dtNet  network.DataTransferNetwork
 	peerID peer.ID
 
 	supportedExtensions       []graphsync.ExtensionName
@@ -88,9 +89,10 @@ type Transport struct {
 }
 
 // NewTransport makes a new hooks manager with the given hook events interface
-func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, options ...Option) *Transport {
+func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, dtNet network.DataTransferNetwork, options ...Option) *Transport {
 	t := &Transport{
 		gs:                   gs,
+		dtNet:                dtNet,
 		peerID:               peerID,
 		supportedExtensions:  defaultSupportedExtensions,
 		dtChannels:           make(map[datatransfer.ChannelID]*dtChannel),
@@ -102,18 +104,67 @@ func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, options ...Option)
 	return t
 }
 
-// OpenChannel initiates an outgoing request for the other peer to send data
-// to us on this channel
-// Note: from a data transfer symantic standpoint, it doesn't matter if the
-// request is push or pull -- OpenChannel is called by the party that is
-// intending to receive data
+func (t *Transport) Capabilities() datatransfer.TransportCapabilities {
+	return datatransfer.TransportCapabilities{
+		Pausable:    true,
+		Restartable: true,
+	}
+}
+
+// OpenChannel opens a channel on a given transport to move data back and forth.
+// OpenChannel MUST ALWAYS called by the initiator.
 func (t *Transport) OpenChannel(
+	ctx context.Context,
+	channel datatransfer.Channel,
+	req datatransfer.Request) error {
+	t.dtNet.Protect(channel.OtherPeer(), channel.ChannelID().String())
+	if channel.IsPull() {
+		return t.openRequest(ctx,
+			channel.Sender(),
+			channel.ChannelID(),
+			cidlink.Link{Cid: channel.BaseCID()},
+			channel.Selector(),
+			req)
+	}
+	return t.dtNet.SendMessage(ctx, channel.OtherPeer(), req)
+}
+
+// RestartChannel restarts a channel on the initiator side
+// RestartChannel MUST ALWAYS called by the initiator
+func (t *Transport) RestartChannel(
+	ctx context.Context,
+	channelState datatransfer.ChannelState,
+	req datatransfer.Request) error {
+	log.Debugf("%s: re-establishing connection to %s", channelState.ChannelID(), channelState.OtherPeer())
+	start := time.Now()
+	err := t.dtNet.ConnectWithRetry(ctx, channelState.OtherPeer())
+	if err != nil {
+		return xerrors.Errorf("%s: failed to reconnect to peer %s after %s: %w",
+			channelState.ChannelID(), channelState.OtherPeer(), time.Since(start), err)
+	}
+	log.Debugf("%s: re-established connection to %s in %s", channelState.ChannelID(), channelState.OtherPeer(), time.Since(start))
+
+	t.dtNet.Protect(channelState.OtherPeer(), channelState.ChannelID().String())
+
+	ch := t.trackDTChannel(channelState.ChannelID())
+	ch.updateReceivedCidsIfGreater(channelState.ReceivedCidsTotal())
+	if channelState.IsPull() {
+		return t.openRequest(ctx,
+			channelState.Sender(),
+			channelState.ChannelID(),
+			cidlink.Link{Cid: channelState.BaseCID()},
+			channelState.Selector(),
+			req)
+	}
+	return t.dtNet.SendMessage(ctx, channelState.OtherPeer(), req)
+}
+
+func (t *Transport) openRequest(
 	ctx context.Context,
 	dataSender peer.ID,
 	channelID datatransfer.ChannelID,
 	root ipld.Link,
 	stor datamodel.Node,
-	channel datatransfer.ChannelState,
 	msg datatransfer.Message,
 ) error {
 	if t.events == nil {
@@ -124,20 +175,12 @@ func (t *Transport) OpenChannel(
 	if err != nil {
 		return err
 	}
-	// If this is a restart request, the client can indicate the blocks that
-	// it has already received, so that the provider knows not to resend
-	// those blocks
-	restartExts, err := t.getRestartExtension(ctx, dataSender, channel)
-	if err != nil {
-		return err
-	}
-	exts = append(exts, restartExts...)
 
 	// Start tracking the data-transfer channel
 	ch := t.trackDTChannel(channelID)
 
 	// Open a graphsync request to the remote peer
-	req, err := ch.open(ctx, channelID, dataSender, root, stor, channel, exts)
+	req, err := ch.open(ctx, channelID, dataSender, root, stor, exts)
 	if err != nil {
 		return err
 	}
@@ -146,25 +189,6 @@ func (t *Transport) OpenChannel(
 	go t.executeGsRequest(req)
 
 	return nil
-}
-
-// Get the extension data for sending a Restart message, depending on the
-// protocol version of the peer
-func (t *Transport) getRestartExtension(ctx context.Context, p peer.ID, channel datatransfer.ChannelState) ([]graphsync.ExtensionData, error) {
-	if channel == nil {
-		return nil, nil
-	}
-	return getDoNotSendFirstBlocksExtension(channel)
-}
-
-// Skip the first N blocks because they were already received
-func getDoNotSendFirstBlocksExtension(channel datatransfer.ChannelState) ([]graphsync.ExtensionData, error) {
-	skipBlockCount := channel.ReceivedCidsTotal()
-	data := donotsendfirstblocks.EncodeDoNotSendFirstBlocks(skipBlockCount)
-	return []graphsync.ExtensionData{{
-		Name: graphsync.ExtensionsDoNotSendFirstBlocks,
-		Data: data,
-	}}, nil
 }
 
 // Read from the graphsync response and error channels until they are closed,
@@ -234,40 +258,56 @@ func (t *Transport) executeGsRequest(req *gsReq) {
 	}
 }
 
-// PauseChannel pauses the given data-transfer channel
-func (t *Transport) PauseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ch, err := t.getDTChannel(chid)
-	if err != nil {
-		return err
-	}
-	return ch.pause(ctx)
+type actionsrecorder struct {
+	actionrecorders.ChannelActionsRecorder
+	actionrecorders.PauseActionsRecorder
 }
 
-// ResumeChannel resumes the given data-transfer channel and sends the message
-// if there is one
-func (t *Transport) ResumeChannel(
-	ctx context.Context,
-	msg datatransfer.Message,
-	chid datatransfer.ChannelID,
-) error {
-	ch, err := t.getDTChannel(chid)
-	if err != nil {
-		return err
+func (ar *actionsrecorder) validate() error {
+	if ar.DoPause && ar.DoResume {
+		return errors.New("cannot pause and resume channel at the same time")
 	}
-	return ch.resume(ctx, msg)
+	if ar.DoClose && (ar.DoPause || ar.DoResume) {
+		return errors.New("when closing a channel, cannot pause, or resume channel")
+	}
+	return nil
 }
 
-// CloseChannel closes the given data-transfer channel
-func (t *Transport) CloseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ch, err := t.getDTChannel(chid)
-	if err != nil {
+// WithChannel takes action using the given command func on an open channel
+func (t *Transport) WithChannel(ctx context.Context, chid datatransfer.ChannelID, actionsFunc datatransfer.ChannelActionFunc) error {
+	actions := actionsrecorder{}
+	actionsFunc(&actions)
+
+	if err := actions.validate(); err != nil {
 		return err
 	}
 
-	err = ch.close(ctx)
+	ch, err := t.getDTChannel(chid)
 	if err != nil {
-		return xerrors.Errorf("closing channel: %w", err)
+		if actions.MessageSent != nil && !actions.DoResume && !actions.DoClose {
+			return t.dtNet.SendMessage(ctx, t.otherPeer(chid), actions.MessageSent)
+		}
+		return err
 	}
+
+	if actions.DoResume && ch.resumable() {
+		return ch.resume(ctx, actions.MessageSent)
+	}
+
+	if actions.MessageSent != nil {
+		if err := t.dtNet.SendMessage(ctx, t.otherPeer(chid), actions.MessageSent); err != nil {
+			return err
+		}
+	}
+
+	if actions.DoClose {
+		return ch.close(ctx)
+	}
+
+	if actions.DoPause && ch.resumable() {
+		return ch.pause(ctx)
+	}
+
 	return nil
 }
 
@@ -288,6 +328,8 @@ func (t *Transport) CleanupChannel(chid datatransfer.ChannelID) {
 	if ok {
 		ch.cleanup()
 	}
+
+	t.dtNet.Unprotect(t.otherPeer(chid), chid.String())
 }
 
 // SetEventHandler sets the handler for events on channels
@@ -309,6 +351,8 @@ func (t *Transport) SetEventHandler(events datatransfer.EventsHandler) error {
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterRequestorCancelledListener(t.gsRequestorCancelledListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterNetworkErrorListener(t.gsNetworkSendErrorListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterReceiverNetworkErrorListener(t.gsNetworkReceiveErrorListener))
+
+	t.dtNet.SetDelegate(&receiver{t})
 	return nil
 }
 
@@ -938,7 +982,7 @@ func (c *dtChannel) open(
 	chid datatransfer.ChannelID,
 	dataSender peer.ID,
 	root ipld.Link,
-	stor datamodel.Node,
+	stor ipld.Node,
 	channel datatransfer.ChannelState,
 	exts []graphsync.ExtensionData,
 ) (*gsReq, error) {

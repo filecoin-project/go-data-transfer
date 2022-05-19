@@ -183,8 +183,12 @@ func (c channelState) Stages() *datatransfer.ChannelStages {
 	return c.ic.Stages
 }
 
-func fromInternalChannelState(c internal.ChannelState) datatransfer.ChannelState {
-	return channelState{ic: c}
+func fromInternalChannelState(c internal.ChannelState, voucherDecoder DecoderByTypeFunc, voucherResultDecoder DecoderByTypeFunc) datatransfer.ChannelState {
+	return channelState{
+		ic:                   c,
+		voucherResultDecoder: voucherResultDecoder,
+		voucherDecoder:       voucherDecoder,
+	}
 }
 
 var _ datatransfer.ChannelState = channelState{}
