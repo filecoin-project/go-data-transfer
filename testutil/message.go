@@ -13,18 +13,18 @@ import (
 
 // NewDTRequest makes a new DT Request message
 func NewDTRequest(t *testing.T, transferID datatransfer.TransferID) datatransfer.Request {
-	voucher := NewFakeDTType()
+	voucher := NewTestVoucher()
 	baseCid := GenerateCids(1)[0]
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
-	r, err := message.NewRequest(transferID, false, false, voucher.Type(), voucher, baseCid, selector)
+	r, err := message.NewRequest(transferID, false, false, TestVoucherType, voucher, baseCid, selector)
 	require.NoError(t, err)
 	return r
 }
 
 // NewDTResponse makes a new DT Request message
 func NewDTResponse(t *testing.T, transferID datatransfer.TransferID) datatransfer.Response {
-	vresult := NewFakeDTType()
-	r, err := message.NewResponse(transferID, false, false, vresult.Type(), vresult)
+	vresult := NewTestVoucher()
+	r, err := message.NewResponse(transferID, false, false, TestVoucherType, vresult)
 	require.NoError(t, err)
 	return r
 }

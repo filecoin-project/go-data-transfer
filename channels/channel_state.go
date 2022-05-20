@@ -11,15 +11,12 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
+	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 )
 
 // channelState is immutable channel data plus mutable state
 type channelState struct {
 	ic internal.ChannelState
-
-	// additional voucherResults
-	voucherResultDecoder DecoderByTypeFunc
-	voucherDecoder       DecoderByTypeFunc
 }
 
 // EmptyChannelState is the zero value for channel state, meaning not present
@@ -55,14 +52,20 @@ func (c channelState) Selector() ipld.Node {
 	return builder.Build()
 }
 
+func (c channelState) VoucherType() datatransfer.TypeIdentifier {
+	return c.ic.VoucherType
+}
+
+func (c channelState) VoucherResultType() datatransfer.TypeIdentifier {
+	return c.ic.VoucherResultType
+}
+
 // Voucher returns the voucher for this data transfer
-func (c channelState) Voucher() datatransfer.Voucher {
+func (c channelState) Voucher() (ipld.Node, error) {
 	if len(c.ic.Vouchers) == 0 {
-		return nil
+		return nil, nil
 	}
-	decoder, _ := c.voucherDecoder(c.ic.Vouchers[0].Type)
-	encodable, _ := decoder.DecodeFromCbor(c.ic.Vouchers[0].Voucher.Raw)
-	return encodable.(datatransfer.Voucher)
+	return ipldutils.NodeFromBytes(c.ic.Vouchers[0].Raw)
 }
 
 // ReceivedCidsTotal returns the number of (non-unique) cids received so far
@@ -108,36 +111,36 @@ func (c channelState) Message() string {
 	return c.ic.Message
 }
 
-func (c channelState) Vouchers() []datatransfer.Voucher {
-	vouchers := make([]datatransfer.Voucher, 0, len(c.ic.Vouchers))
+func (c channelState) Vouchers() ([]ipld.Node, error) {
+	vouchers := make([]ipld.Node, 0, len(c.ic.Vouchers))
 	for _, encoded := range c.ic.Vouchers {
-		decoder, _ := c.voucherDecoder(encoded.Type)
-		encodable, _ := decoder.DecodeFromCbor(encoded.Voucher.Raw)
-		vouchers = append(vouchers, encodable.(datatransfer.Voucher))
+		n, err := ipldutils.NodeFromBytes(encoded.Raw)
+		if err != nil {
+			return nil, err
+		}
+		vouchers = append(vouchers, n)
 	}
-	return vouchers
+	return vouchers, nil
 }
 
-func (c channelState) LastVoucher() datatransfer.Voucher {
-	decoder, _ := c.voucherDecoder(c.ic.Vouchers[len(c.ic.Vouchers)-1].Type)
-	encodable, _ := decoder.DecodeFromCbor(c.ic.Vouchers[len(c.ic.Vouchers)-1].Voucher.Raw)
-	return encodable.(datatransfer.Voucher)
+func (c channelState) LastVoucher() (ipld.Node, error) {
+	return ipldutils.NodeFromBytes(c.ic.Vouchers[len(c.ic.Vouchers)-1].Raw)
 }
 
-func (c channelState) LastVoucherResult() datatransfer.VoucherResult {
-	decoder, _ := c.voucherResultDecoder(c.ic.VoucherResults[len(c.ic.VoucherResults)-1].Type)
-	encodable, _ := decoder.DecodeFromCbor(c.ic.VoucherResults[len(c.ic.VoucherResults)-1].VoucherResult.Raw)
-	return encodable.(datatransfer.VoucherResult)
+func (c channelState) LastVoucherResult() (ipld.Node, error) {
+	return ipldutils.NodeFromBytes(c.ic.VoucherResults[len(c.ic.VoucherResults)-1].Raw)
 }
 
-func (c channelState) VoucherResults() []datatransfer.VoucherResult {
-	voucherResults := make([]datatransfer.VoucherResult, 0, len(c.ic.VoucherResults))
+func (c channelState) VoucherResults() ([]ipld.Node, error) {
+	voucherResults := make([]ipld.Node, 0, len(c.ic.VoucherResults))
 	for _, encoded := range c.ic.VoucherResults {
-		decoder, _ := c.voucherResultDecoder(encoded.Type)
-		encodable, _ := decoder.DecodeFromCbor(encoded.VoucherResult.Raw)
-		voucherResults = append(voucherResults, encodable.(datatransfer.VoucherResult))
+		n, err := ipldutils.NodeFromBytes(encoded.Raw)
+		if err != nil {
+			return nil, err
+		}
+		voucherResults = append(voucherResults, n)
 	}
-	return voucherResults
+	return voucherResults, nil
 }
 
 func (c channelState) SelfPeer() peer.ID {
@@ -174,12 +177,8 @@ func (c channelState) Stages() *datatransfer.ChannelStages {
 	return c.ic.Stages
 }
 
-func fromInternalChannelState(c internal.ChannelState, voucherDecoder DecoderByTypeFunc, voucherResultDecoder DecoderByTypeFunc) datatransfer.ChannelState {
-	return channelState{
-		ic:                   c,
-		voucherResultDecoder: voucherResultDecoder,
-		voucherDecoder:       voucherDecoder,
-	}
+func fromInternalChannelState(c internal.ChannelState) datatransfer.ChannelState {
+	return channelState{ic: c}
 }
 
 var _ datatransfer.ChannelState = channelState{}

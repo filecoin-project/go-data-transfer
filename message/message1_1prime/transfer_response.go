@@ -3,14 +3,14 @@ package message1_1
 import (
 	"io"
 
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/encoding"
+	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
@@ -21,7 +21,7 @@ type TransferResponse1_1 struct {
 	RequestAccepted       bool
 	Paused                bool
 	TransferId            uint64
-	VoucherResultPtr      *datamodel.Node
+	VoucherResultPtr      datamodel.Node
 	VoucherTypeIdentifier datatransfer.TypeIdentifier
 }
 
@@ -73,11 +73,11 @@ func (trsp *TransferResponse1_1) VoucherResultType() datatransfer.TypeIdentifier
 	return trsp.VoucherTypeIdentifier
 }
 
-func (trsp *TransferResponse1_1) VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error) {
+func (trsp *TransferResponse1_1) VoucherResult() (ipld.Node, error) {
 	if trsp.VoucherResultPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
-	return decoder.DecodeFromNode(*trsp.VoucherResultPtr)
+	return trsp.VoucherResultPtr, nil
 }
 
 func (trq *TransferResponse1_1) IsRestart() bool {
@@ -97,7 +97,7 @@ func (trsp *TransferResponse1_1) MessageForProtocol(targetProtocol protocol.ID) 
 	}
 }
 
-func (trsp *TransferResponse1_1) toIPLD() schema.TypedNode {
+func (trsp *TransferResponse1_1) toIPLD() (schema.TypedNode, error) {
 	msg := TransferMessage1_1{
 		IsRequest: false,
 		Request:   nil,
@@ -107,10 +107,18 @@ func (trsp *TransferResponse1_1) toIPLD() schema.TypedNode {
 }
 
 func (trsp *TransferResponse1_1) ToIPLD() (datamodel.Node, error) {
-	return trsp.toIPLD().Representation(), nil
+	msg, err := trsp.toIPLD()
+	if err != nil {
+		return nil, err
+	}
+	return msg.Representation(), nil
 }
 
 // ToNet serializes a transfer response.
 func (trsp *TransferResponse1_1) ToNet(w io.Writer) error {
-	return dagcbor.Encode(trsp.toIPLD().Representation(), w)
+	i, err := trsp.toIPLD()
+	if err != nil {
+		return err
+	}
+	return ipldutils.NodeToWriter(i, w)
 }

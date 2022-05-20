@@ -8,8 +8,6 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
-
-	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 )
 
 //go:generate cbor-gen-for ChannelID ChannelStages ChannelStage Log
@@ -20,24 +18,6 @@ type TypeIdentifier string
 
 // EmptyTypeIdentifier means there is no voucher present
 const EmptyTypeIdentifier = TypeIdentifier("")
-
-// Registerable is a type of object in a registry. It must be encodable and must
-// have a single method that uniquely identifies its type
-type Registerable interface {
-	encoding.Encodable
-	// Type is a unique string identifier for this voucher type
-	Type() TypeIdentifier
-}
-
-// Voucher is used to validate
-// a data transfer request against the underlying storage or retrieval deal
-// that precipitated it. The only requirement is a voucher can read and write
-// from bytes, and has a string identifier type
-type Voucher Registerable
-
-// VoucherResult is used to provide option additional information about a
-// voucher being rejected or accepted
-type VoucherResult Registerable
 
 // TransferID is an identifier for a data transfer, shared between
 // request/responder and unique to the requester
@@ -76,8 +56,11 @@ type Channel interface {
 	// an IPLD node)
 	Selector() ipld.Node
 
+	// VoucherType returns the type of voucher for this data transfer
+	VoucherType() TypeIdentifier
+
 	// Voucher returns the voucher for this data transfer
-	Voucher() Voucher
+	Voucher() (ipld.Node, error)
 
 	// Sender returns the peer id for the node that is sending data
 	Sender() peer.ID
@@ -118,16 +101,19 @@ type ChannelState interface {
 	Message() string
 
 	// Vouchers returns all vouchers sent on this channel
-	Vouchers() []Voucher
+	Vouchers() ([]ipld.Node, error)
+
+	// VoucherResultType returns the type of voucher results sent on the channel
+	VoucherResultType() TypeIdentifier
 
 	// VoucherResults are results of vouchers sent on the channel
-	VoucherResults() []VoucherResult
+	VoucherResults() ([]ipld.Node, error)
 
 	// LastVoucher returns the last voucher sent on the channel
-	LastVoucher() Voucher
+	LastVoucher() (ipld.Node, error)
 
 	// LastVoucherResult returns the last voucher result sent on the channel
-	LastVoucherResult() VoucherResult
+	LastVoucherResult() (ipld.Node, error)
 
 	// ReceivedCidsTotal returns the number of (non-unique) cids received so far
 	// on the channel - note that a block can exist in more than one place in the DAG

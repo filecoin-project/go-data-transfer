@@ -21,7 +21,7 @@ func NewStubbedValidator() *StubbedValidator {
 func (sv *StubbedValidator) ValidatePush(
 	chid datatransfer.ChannelID,
 	sender peer.ID,
-	voucher datatransfer.Voucher,
+	voucher ipld.Node,
 	baseCid cid.Cid,
 	selector ipld.Node) (datatransfer.ValidationResult, error) {
 	sv.didPush = true
@@ -33,7 +33,7 @@ func (sv *StubbedValidator) ValidatePush(
 func (sv *StubbedValidator) ValidatePull(
 	chid datatransfer.ChannelID,
 	receiver peer.ID,
-	voucher datatransfer.Voucher,
+	voucher ipld.Node,
 	baseCid cid.Cid,
 	selector ipld.Node) (datatransfer.ValidationResult, error) {
 	sv.didPull = true
@@ -140,7 +140,7 @@ func (sv *StubbedValidator) ExpectSuccessValidateRestart() {
 type ReceivedValidation struct {
 	IsPull   bool
 	Other    peer.ID
-	Voucher  datatransfer.Voucher
+	Voucher  ipld.Node
 	BaseCid  cid.Cid
 	Selector ipld.Node
 }

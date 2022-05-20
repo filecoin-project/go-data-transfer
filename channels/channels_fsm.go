@@ -148,15 +148,14 @@ var ChannelEvents = fsm.Events{
 	}),
 
 	fsm.Event(datatransfer.NewVoucher).FromAny().ToNoChange().
-		Action(func(chst *internal.ChannelState, vtype datatransfer.TypeIdentifier, voucherBytes []byte) error {
-			chst.Vouchers = append(chst.Vouchers, internal.EncodedVoucher{Type: vtype, Voucher: &cbg.Deferred{Raw: voucherBytes}})
+		Action(func(chst *internal.ChannelState, voucherBytes []byte) error {
+			chst.Vouchers = append(chst.Vouchers, &cbg.Deferred{Raw: voucherBytes})
 			chst.AddLog("got new voucher")
 			return nil
 		}),
 	fsm.Event(datatransfer.NewVoucherResult).FromAny().ToNoChange().
-		Action(func(chst *internal.ChannelState, vtype datatransfer.TypeIdentifier, voucherResultBytes []byte) error {
-			chst.VoucherResults = append(chst.VoucherResults,
-				internal.EncodedVoucherResult{Type: vtype, VoucherResult: &cbg.Deferred{Raw: voucherResultBytes}})
+		Action(func(chst *internal.ChannelState, voucherResultBytes []byte) error {
+			chst.VoucherResults = append(chst.VoucherResults, &cbg.Deferred{Raw: voucherResultBytes})
 			chst.AddLog("got new voucher result")
 			return nil
 		}),

@@ -153,7 +153,7 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 		// is there a voucher response in this message?
 		if !response.EmptyVoucherResult() {
 			// if so decode and save it
-			vresult, err := m.decodeVoucherResult(response)
+			vresult, err := response.VoucherResult()
 			if err != nil {
 				return err
 			}

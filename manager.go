@@ -15,7 +15,9 @@ type ValidationResult struct {
 	Accepted bool
 	// VoucherResult provides information to the other party about what happened
 	// with the voucher
-	VoucherResult
+	VoucherResult ipld.Node
+	// VoucherResultType is the type of voucher result
+	VoucherResultType TypeIdentifier
 	// ForcePause indicates whether the request should be paused, regardless
 	// of data limit and finalization status
 	ForcePause bool
@@ -56,7 +58,7 @@ type RequestValidator interface {
 	ValidatePush(
 		chid ChannelID,
 		sender peer.ID,
-		voucher Voucher,
+		voucher ipld.Node,
 		baseCid cid.Cid,
 		selector ipld.Node) (ValidationResult, error)
 	// ValidatePull validates a pull request received from the peer that will receive data
@@ -67,7 +69,7 @@ type RequestValidator interface {
 	ValidatePull(
 		chid ChannelID,
 		receiver peer.ID,
-		voucher Voucher,
+		voucher ipld.Node,
 		baseCid cid.Cid,
 		selector ipld.Node) (ValidationResult, error)
 
@@ -80,7 +82,7 @@ type RequestValidator interface {
 }
 
 // TransportConfigurer provides a mechanism to provide transport specific configuration for a given voucher type
-type TransportConfigurer func(chid ChannelID, voucher Voucher, transport Transport)
+type TransportConfigurer func(chid ChannelID, voucher ipld.Node, transport Transport)
 
 // ReadyFunc is function that gets called once when the data transfer module is ready
 type ReadyFunc func(error)
@@ -101,29 +103,29 @@ type Manager interface {
 	// RegisterVoucherType registers a validator for the given voucher type
 	// will error if voucher type does not implement voucher
 	// or if there is a voucher type registered with an identical identifier
-	RegisterVoucherType(voucherType Voucher, validator RequestValidator) error
+	RegisterVoucherType(voucherType TypeIdentifier, validator RequestValidator) error
 
 	// RegisterVoucherResultType allows deserialization of a voucher result,
 	// so that a listener can read the metadata
-	RegisterVoucherResultType(resultType VoucherResult) error
+	RegisterVoucherResultType(resultType TypeIdentifier) error
 
 	// RegisterTransportConfigurer registers the given transport configurer to be run on requests with the given voucher
 	// type
-	RegisterTransportConfigurer(voucherType Voucher, configurer TransportConfigurer) error
+	RegisterTransportConfigurer(voucherType TypeIdentifier, configurer TransportConfigurer) error
 
 	// open a data transfer that will send data to the recipient peer and
 	// transfer parts of the piece that match the selector
-	OpenPushDataChannel(ctx context.Context, to peer.ID, voucher Voucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
+	OpenPushDataChannel(ctx context.Context, to peer.ID, voucherType TypeIdentifier, voucher ipld.Node, voucherResultType TypeIdentifier, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
 
 	// open a data transfer that will request data from the sending peer and
 	// transfer parts of the piece that match the selector
-	OpenPullDataChannel(ctx context.Context, to peer.ID, voucher Voucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
+	OpenPullDataChannel(ctx context.Context, to peer.ID, voucherType TypeIdentifier, voucher ipld.Node, voucherResultType TypeIdentifier, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
 
 	// send an intermediate voucher as needed when the receiver sends a request for revalidation
-	SendVoucher(ctx context.Context, chid ChannelID, voucher Voucher) error
+	SendVoucher(ctx context.Context, chid ChannelID, voucher ipld.Node) error
 
 	// send information from the responder to update the initiator on the state of their voucher
-	SendVoucherResult(ctx context.Context, chid ChannelID, voucher VoucherResult) error
+	SendVoucherResult(ctx context.Context, chid ChannelID, voucherResult ipld.Node) error
 
 	// Update the validation status for a given channel, to change data limits, finalization, accepted status, and pause state
 	// and send new voucher results as

@@ -20,12 +20,11 @@ require (
 	github.com/ipfs/go-ipfs-delay v0.0.1
 	github.com/ipfs/go-ipfs-exchange-offline v0.1.1
 	github.com/ipfs/go-ipfs-files v0.0.8
-	github.com/ipfs/go-ipld-cbor v0.0.5
 	github.com/ipfs/go-ipld-format v0.2.0
 	github.com/ipfs/go-log/v2 v2.3.0
 	github.com/ipfs/go-merkledag v0.5.1
 	github.com/ipfs/go-unixfs v0.3.1
-	github.com/ipld/go-ipld-prime v0.16.0
+	github.com/ipld/go-ipld-prime v0.16.1-0.20220519105356-1f1151b69dba
 	github.com/jbenet/go-random v0.0.0-20190219211222-123a90aedc0c
 	github.com/jpillora/backoff v1.0.0
 	github.com/libp2p/go-libp2p v0.16.0
@@ -71,6 +70,7 @@ require (
 	github.com/ipfs/go-ipfs-posinfo v0.0.1 // indirect
 	github.com/ipfs/go-ipfs-pq v0.0.2 // indirect
 	github.com/ipfs/go-ipfs-util v0.0.2 // indirect
+	github.com/ipfs/go-ipld-cbor v0.0.5 // indirect
 	github.com/ipfs/go-ipld-legacy v0.1.0 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect

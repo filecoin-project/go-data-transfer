@@ -23,7 +23,7 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{182}); err != nil {
+	if _, err := w.Write([]byte{184, 24}); err != nil {
 		return err
 	}
 
@@ -295,7 +295,30 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Vouchers ([]internal.EncodedVoucher) (slice)
+	// t.VoucherType (datatransfer.TypeIdentifier) (string)
+	if len("VoucherType") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"VoucherType\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("VoucherType"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("VoucherType")); err != nil {
+		return err
+	}
+
+	if len(t.VoucherType) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.VoucherType was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.VoucherType))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.VoucherType)); err != nil {
+		return err
+	}
+
+	// t.Vouchers ([]*typegen.Deferred) (slice)
 	if len("Vouchers") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Vouchers\" was too long")
 	}
@@ -320,7 +343,30 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.VoucherResults ([]internal.EncodedVoucherResult) (slice)
+	// t.VoucherResultType (datatransfer.TypeIdentifier) (string)
+	if len("VoucherResultType") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"VoucherResultType\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("VoucherResultType"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("VoucherResultType")); err != nil {
+		return err
+	}
+
+	if len(t.VoucherResultType) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.VoucherResultType was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.VoucherResultType))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.VoucherResultType)); err != nil {
+		return err
+	}
+
+	// t.VoucherResults ([]*typegen.Deferred) (slice)
 	if len("VoucherResults") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"VoucherResults\" was too long")
 	}
@@ -674,7 +720,18 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 
 				t.Message = string(sval)
 			}
-			// t.Vouchers ([]internal.EncodedVoucher) (slice)
+			// t.VoucherType (datatransfer.TypeIdentifier) (string)
+		case "VoucherType":
+
+			{
+				sval, err := cbg.ReadStringBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+
+				t.VoucherType = datatransfer.TypeIdentifier(sval)
+			}
+			// t.Vouchers ([]*typegen.Deferred) (slice)
 		case "Vouchers":
 
 			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
@@ -691,20 +748,31 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 			}
 
 			if extra > 0 {
-				t.Vouchers = make([]EncodedVoucher, extra)
+				t.Vouchers = make([]*cbg.Deferred, extra)
 			}
 
 			for i := 0; i < int(extra); i++ {
 
-				var v EncodedVoucher
+				var v cbg.Deferred
 				if err := v.UnmarshalCBOR(br); err != nil {
 					return err
 				}
 
-				t.Vouchers[i] = v
+				t.Vouchers[i] = &v
 			}
 
-			// t.VoucherResults ([]internal.EncodedVoucherResult) (slice)
+			// t.VoucherResultType (datatransfer.TypeIdentifier) (string)
+		case "VoucherResultType":
+
+			{
+				sval, err := cbg.ReadStringBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+
+				t.VoucherResultType = datatransfer.TypeIdentifier(sval)
+			}
+			// t.VoucherResults ([]*typegen.Deferred) (slice)
 		case "VoucherResults":
 
 			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
@@ -721,17 +789,17 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 			}
 
 			if extra > 0 {
-				t.VoucherResults = make([]EncodedVoucherResult, extra)
+				t.VoucherResults = make([]*cbg.Deferred, extra)
 			}
 
 			for i := 0; i < int(extra); i++ {
 
-				var v EncodedVoucherResult
+				var v cbg.Deferred
 				if err := v.UnmarshalCBOR(br); err != nil {
 					return err
 				}
 
-				t.VoucherResults[i] = v
+				t.VoucherResults[i] = &v
 			}
 
 			// t.ReceivedBlocksTotal (int64) (int64)
@@ -864,238 +932,6 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 					}
 				}
 
-			}
-
-		default:
-			// Field doesn't exist on this type, so ignore it
-			cbg.ScanForLinks(r, func(cid.Cid) {})
-		}
-	}
-
-	return nil
-}
-func (t *EncodedVoucher) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write([]byte{162}); err != nil {
-		return err
-	}
-
-	scratch := make([]byte, 9)
-
-	// t.Type (datatransfer.TypeIdentifier) (string)
-	if len("Type") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"Type\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Type"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("Type")); err != nil {
-		return err
-	}
-
-	if len(t.Type) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Type was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Type))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Type)); err != nil {
-		return err
-	}
-
-	// t.Voucher (typegen.Deferred) (struct)
-	if len("Voucher") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"Voucher\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Voucher"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("Voucher")); err != nil {
-		return err
-	}
-
-	if err := t.Voucher.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *EncodedVoucher) UnmarshalCBOR(r io.Reader) error {
-	*t = EncodedVoucher{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajMap {
-		return fmt.Errorf("cbor input should be of type map")
-	}
-
-	if extra > cbg.MaxLength {
-		return fmt.Errorf("EncodedVoucher: map struct too large (%d)", extra)
-	}
-
-	var name string
-	n := extra
-
-	for i := uint64(0); i < n; i++ {
-
-		{
-			sval, err := cbg.ReadStringBuf(br, scratch)
-			if err != nil {
-				return err
-			}
-
-			name = string(sval)
-		}
-
-		switch name {
-		// t.Type (datatransfer.TypeIdentifier) (string)
-		case "Type":
-
-			{
-				sval, err := cbg.ReadStringBuf(br, scratch)
-				if err != nil {
-					return err
-				}
-
-				t.Type = datatransfer.TypeIdentifier(sval)
-			}
-			// t.Voucher (typegen.Deferred) (struct)
-		case "Voucher":
-
-			{
-
-				t.Voucher = new(cbg.Deferred)
-
-				if err := t.Voucher.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("failed to read deferred field: %w", err)
-				}
-			}
-
-		default:
-			// Field doesn't exist on this type, so ignore it
-			cbg.ScanForLinks(r, func(cid.Cid) {})
-		}
-	}
-
-	return nil
-}
-func (t *EncodedVoucherResult) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write([]byte{162}); err != nil {
-		return err
-	}
-
-	scratch := make([]byte, 9)
-
-	// t.Type (datatransfer.TypeIdentifier) (string)
-	if len("Type") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"Type\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Type"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("Type")); err != nil {
-		return err
-	}
-
-	if len(t.Type) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Type was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Type))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Type)); err != nil {
-		return err
-	}
-
-	// t.VoucherResult (typegen.Deferred) (struct)
-	if len("VoucherResult") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"VoucherResult\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("VoucherResult"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("VoucherResult")); err != nil {
-		return err
-	}
-
-	if err := t.VoucherResult.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *EncodedVoucherResult) UnmarshalCBOR(r io.Reader) error {
-	*t = EncodedVoucherResult{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajMap {
-		return fmt.Errorf("cbor input should be of type map")
-	}
-
-	if extra > cbg.MaxLength {
-		return fmt.Errorf("EncodedVoucherResult: map struct too large (%d)", extra)
-	}
-
-	var name string
-	n := extra
-
-	for i := uint64(0); i < n; i++ {
-
-		{
-			sval, err := cbg.ReadStringBuf(br, scratch)
-			if err != nil {
-				return err
-			}
-
-			name = string(sval)
-		}
-
-		switch name {
-		// t.Type (datatransfer.TypeIdentifier) (string)
-		case "Type":
-
-			{
-				sval, err := cbg.ReadStringBuf(br, scratch)
-				if err != nil {
-					return err
-				}
-
-				t.Type = datatransfer.TypeIdentifier(sval)
-			}
-			// t.VoucherResult (typegen.Deferred) (struct)
-		case "VoucherResult":
-
-			{
-
-				t.VoucherResult = new(cbg.Deferred)
-
-				if err := t.VoucherResult.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("failed to read deferred field: %w", err)
-				}
 			}
 
 		default:

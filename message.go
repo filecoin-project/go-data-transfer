@@ -7,8 +7,6 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/protocol"
-
-	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 )
 
 var (
@@ -38,7 +36,7 @@ type Request interface {
 	IsPull() bool
 	IsVoucher() bool
 	VoucherType() TypeIdentifier
-	Voucher(decoder encoding.Decoder) (encoding.Encodable, error)
+	Voucher() (ipld.Node, error)
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
 	IsRestartExistingChannelRequest() bool
@@ -52,6 +50,6 @@ type Response interface {
 	IsComplete() bool
 	Accepted() bool
 	VoucherResultType() TypeIdentifier
-	VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error)
+	VoucherResult() (ipld.Node, error)
 	EmptyVoucherResult() bool
 }

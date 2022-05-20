@@ -5,24 +5,16 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/encoding"
+	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
-	vnode, err := encoding.EncodeToNode(voucher)
-	if err != nil {
-		return nil, xerrors.Errorf("Creating request: %w", err)
-	}
-
+func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype datatransfer.TypeIdentifier, voucher ipld.Node, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
 	if baseCid == cid.Undef {
 		return nil, xerrors.Errorf("base CID must be defined")
 	}
@@ -37,8 +29,8 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 	return &TransferRequest1_1{
 		MessageType:           typ,
 		Pull:                  isPull,
-		VoucherPtr:            &vnode,
-		SelectorPtr:           &selector,
+		VoucherPtr:            voucher,
+		SelectorPtr:           selector,
 		BaseCidPtr:            &baseCid,
 		VoucherTypeIdentifier: vtype,
 		TransferId:            uint64(id),
@@ -71,32 +63,24 @@ func UpdateRequest(id datatransfer.TransferID, isPaused bool) datatransfer.Reque
 }
 
 // VoucherRequest generates a new request for the data transfer protocol
-func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifier, voucher encoding.Encodable) (datatransfer.Request, error) {
-	vnode, err := encoding.EncodeToNode(voucher)
-	if err != nil {
-		return nil, xerrors.Errorf("Creating request: %w", err)
-	}
+func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifier, voucher ipld.Node) (datatransfer.Request, error) {
 	return &TransferRequest1_1{
 		MessageType:           uint64(types.VoucherMessage),
-		VoucherPtr:            &vnode,
+		VoucherPtr:            voucher,
 		VoucherTypeIdentifier: vtype,
 		TransferId:            uint64(id),
 	}, nil
 }
 
 // RestartResponse builds a new Data Transfer response
-func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
-	vnode, err := encoding.EncodeToNode(voucherResult)
-	if err != nil {
-		return nil, xerrors.Errorf("Creating request: %w", err)
-	}
+func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult ipld.Node) (datatransfer.Response, error) {
 	return &TransferResponse1_1{
 		RequestAccepted:       accepted,
 		MessageType:           uint64(types.RestartMessage),
 		Paused:                isPaused,
 		TransferId:            uint64(id),
 		VoucherTypeIdentifier: voucherResultType,
-		VoucherResultPtr:      &vnode,
+		VoucherResultPtr:      voucherResult,
 	}, nil
 }
 
@@ -108,13 +92,10 @@ func ValidationResultResponse(
 	validationResult datatransfer.ValidationResult,
 	validationErr error,
 	paused bool) (datatransfer.Response, error) {
+
 	voucherResultType := datatransfer.EmptyTypeIdentifier
-	if validationResult.VoucherResult != nil {
-		voucherResultType = validationResult.VoucherResult.Type()
-	}
-	vnode, err := encoding.EncodeToNode(validationResult.VoucherResult)
-	if err != nil {
-		return nil, xerrors.Errorf("Creating request: %w", err)
+	if validationResult.VoucherResult != nil && validationResult.VoucherResultType != "" {
+		voucherResultType = validationResult.VoucherResultType
 	}
 	return &TransferResponse1_1{
 		// TODO: when we area able to change the protocol, it would be helpful to record
@@ -124,39 +105,31 @@ func ValidationResultResponse(
 		Paused:                paused,
 		TransferId:            uint64(id),
 		VoucherTypeIdentifier: voucherResultType,
-		VoucherResultPtr:      &vnode,
+		VoucherResultPtr:      validationResult.VoucherResult,
 	}, nil
 }
 
 // NewResponse builds a new Data Transfer response
-func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
-	vnode, err := encoding.EncodeToNode(voucherResult)
-	if err != nil {
-		return nil, xerrors.Errorf("Creating request: %w", err)
-	}
+func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult ipld.Node) (datatransfer.Response, error) {
 	return &TransferResponse1_1{
 		RequestAccepted:       accepted,
 		MessageType:           uint64(types.NewMessage),
 		Paused:                isPaused,
 		TransferId:            uint64(id),
 		VoucherTypeIdentifier: voucherResultType,
-		VoucherResultPtr:      &vnode,
+		VoucherResultPtr:      voucherResult,
 	}, nil
 }
 
 // VoucherResultResponse builds a new response for a voucher result
-func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
-	vnode, err := encoding.EncodeToNode(voucherResult)
-	if err != nil {
-		return nil, xerrors.Errorf("Creating request: %w", err)
-	}
+func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult ipld.Node) (datatransfer.Response, error) {
 	return &TransferResponse1_1{
 		RequestAccepted:       accepted,
 		MessageType:           uint64(types.VoucherResultMessage),
 		Paused:                isPaused,
 		TransferId:            uint64(id),
 		VoucherTypeIdentifier: voucherResultType,
-		VoucherResultPtr:      &vnode,
+		VoucherResultPtr:      voucherResult,
 	}, nil
 }
 
@@ -178,30 +151,24 @@ func CancelResponse(id datatransfer.TransferID) datatransfer.Response {
 }
 
 // CompleteResponse returns a new complete response message
-func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult encoding.Encodable) (datatransfer.Response, error) {
-	vnode, err := encoding.EncodeToNode(voucherResult)
-	if err != nil {
-		return nil, xerrors.Errorf("Creating request: %w", err)
-	}
+func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult ipld.Node) (datatransfer.Response, error) {
 	return &TransferResponse1_1{
 		MessageType:           uint64(types.CompleteMessage),
 		RequestAccepted:       isAccepted,
 		Paused:                isPaused,
 		VoucherTypeIdentifier: voucherResultType,
-		VoucherResultPtr:      &vnode,
+		VoucherResultPtr:      voucherResult,
 		TransferId:            uint64(id),
 	}, nil
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
 func FromNet(r io.Reader) (datatransfer.Message, error) {
-	builder := Prototype.TransferMessage.Representation().NewBuilder()
-	err := dagcbor.Decode(builder, r)
+	tm, err := ipldutils.FromReader(r, &TransferMessage1_1{})
 	if err != nil {
 		return nil, err
 	}
-	node := builder.Build()
-	tresp := bindnode.Unwrap(node).(*TransferMessage1_1)
+	tresp := tm.(*TransferMessage1_1)
 
 	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
 		return nil, xerrors.Errorf("invalid/malformed message")
@@ -214,16 +181,16 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
-func FromIPLD(node datamodel.Node) (datatransfer.Message, error) {
+func FromIPLD(node ipld.Node) (datatransfer.Message, error) {
 	if tn, ok := node.(schema.TypedNode); ok { // shouldn't need this if from Graphsync
 		node = tn.Representation()
 	}
-	builder := Prototype.TransferMessage.Representation().NewBuilder()
-	err := builder.AssignNode(node)
+	tm, err := ipldutils.FromNode(node, &TransferMessage1_1{})
 	if err != nil {
 		return nil, err
 	}
-	tresp := bindnode.Unwrap(builder.Build()).(*TransferMessage1_1)
+	tresp := tm.(*TransferMessage1_1)
+
 	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
 		return nil, xerrors.Errorf("invalid/malformed message")
 	}

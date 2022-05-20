@@ -102,8 +102,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
-		voucher := testutil.NewFakeDTType()
-		request, err := message.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+		voucher := testutil.NewTestVoucher()
+		request, err := message.NewRequest(id, false, isPull, testutil.TestVoucherType, voucher, baseCid, selector)
 		require.NoError(t, err)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 
@@ -124,15 +124,16 @@ func TestMessageSendAndReceive(t *testing.T) {
 		assert.Equal(t, request.IsPull(), receivedRequest.IsPull())
 		assert.Equal(t, request.IsRequest(), receivedRequest.IsRequest())
 		assert.True(t, receivedRequest.BaseCid().Equals(request.BaseCid()))
-		testutil.AssertEqualFakeDTVoucher(t, request, receivedRequest)
+		testutil.AssertEqualTestVoucher(t, request, receivedRequest)
 		testutil.AssertEqualSelector(t, request, receivedRequest)
 	})
 
 	t.Run("Send Response", func(t *testing.T) {
 		accepted := false
 		id := datatransfer.TransferID(rand.Int31())
-		voucherResult := testutil.NewFakeDTType()
-		response, err := message.ValidationResultResponse(types.NewMessage, id, datatransfer.ValidationResult{Accepted: accepted, VoucherResult: voucherResult}, nil, false)
+		voucherResult := testutil.NewTestVoucher()
+		voucherResultType := testutil.TestVoucherType
+		response, err := message.ValidationResultResponse(types.NewMessage, id, datatransfer.ValidationResult{Accepted: accepted, VoucherResult: voucherResult, VoucherResultType: voucherResultType}, nil, false)
 		require.NoError(t, err)
 		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), response))
 
@@ -151,7 +152,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		assert.Equal(t, response.TransferID(), receivedResponse.TransferID())
 		assert.Equal(t, response.Accepted(), receivedResponse.Accepted())
 		assert.Equal(t, response.IsRequest(), receivedResponse.IsRequest())
-		testutil.AssertEqualFakeDTVoucherResult(t, response, receivedResponse)
+		testutil.AssertEqualTestVoucherResult(t, response, receivedResponse)
 	})
 
 	t.Run("Send Restart Request", func(t *testing.T) {
@@ -273,8 +274,8 @@ func TestSendMessageRetry(t *testing.T) {
 			selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 			isPull := false
 			id := datatransfer.TransferID(rand.Int31())
-			voucher := testutil.NewFakeDTType()
-			request, err := message.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+			voucher := testutil.NewTestVoucher()
+			request, err := message.NewRequest(id, false, isPull, testutil.TestVoucherType, voucher, baseCid, selector)
 			require.NoError(t, err)
 
 			err = dtnet1.SendMessage(ctx, host2.ID(), request)

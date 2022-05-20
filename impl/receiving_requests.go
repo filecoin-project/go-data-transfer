@@ -41,13 +41,18 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 		return datatransfer.ValidationResult{}, err
 	}
 
-	voucher, err := m.decodeVoucher(incoming)
+	voucher, err := incoming.Voucher()
 	if err != nil {
 		return datatransfer.ValidationResult{}, err
 	}
+	voucherType := incoming.VoucherType()
 
-	var validatorFunc func(datatransfer.ChannelID, peer.ID, datatransfer.Voucher, cid.Cid, ipld.Node) (datatransfer.ValidationResult, error)
-	processor, _ := m.validatedTypes.Processor(voucher.Type())
+	processor, ok := m.validatedTypes.Processor(voucherType)
+	if !ok {
+		return datatransfer.ValidationResult{}, xerrors.Errorf("unknown voucher type: %s", voucherType)
+	}
+
+	var validatorFunc func(datatransfer.ChannelID, peer.ID, ipld.Node, cid.Cid, ipld.Node) (datatransfer.ValidationResult, error)
 	validator := processor.(datatransfer.RequestValidator)
 	if incoming.IsPull() {
 		validatorFunc = validator.ValidatePull
@@ -73,7 +78,7 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 	}
 
 	log.Infow("data-transfer request validated, will create & start tracking channel", "channelID", chid, "payloadCid", incoming.BaseCid())
-	_, err = m.channels.CreateNew(m.peerID, incoming.TransferID(), incoming.BaseCid(), stor, voucher, chid.Initiator, dataSender, dataReceiver)
+	_, err = m.channels.CreateNew(m.peerID, incoming.TransferID(), incoming.BaseCid(), stor, voucherType, voucher, result.VoucherResultType, chid.Initiator, dataSender, dataReceiver)
 	if err != nil {
 		log.Errorw("failed to create and start tracking channel", "channelID", chid, "err", err)
 		return result, err
@@ -97,7 +102,7 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 	}
 
 	// configure the transport
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	processor, has := m.transportConfigurers.Processor(voucherType)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -173,11 +178,12 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 	}
 
 	// configure the transport
-	voucher, err := m.decodeVoucher(incoming)
+	voucher, err := incoming.Voucher()
 	if err != nil {
 		return stayPaused, result, err
 	}
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	voucherType := incoming.VoucherType()
+	processor, has := m.transportConfigurers.Processor(voucherType)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -189,7 +195,7 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 // processUpdateVoucher handles an incoming request message with an updated voucher
 func (m *manager) processUpdateVoucher(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
 	// decode the voucher and save it on the channel
-	vouch, err := m.decodeVoucher(request)
+	vouch, err := request.Voucher()
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +302,7 @@ func (m *manager) recordAcceptedValidationEvents(chst datatransfer.ChannelState,
 
 // validateRestart looks up the appropriate validator and validates a restart
 func (m *manager) validateRestart(chst datatransfer.ChannelState) (datatransfer.ValidationResult, error) {
-	processor, _ := m.validatedTypes.Processor(chst.Voucher().Type())
+	processor, _ := m.validatedTypes.Processor(chst.VoucherType())
 	validator := processor.(datatransfer.RequestValidator)
 
 	return validator.ValidateRestart(chst.ChannelID(), chst)
