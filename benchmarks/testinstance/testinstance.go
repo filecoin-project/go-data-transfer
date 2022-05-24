@@ -164,8 +164,8 @@ func NewInstance(ctx context.Context, net tn.Network, tempDir string, diskBasedD
 
 	linkSystem := storeutil.LinkSystemForBlockstore(bstore)
 	gs := gsimpl.New(ctx, gsNet, linkSystem, gsimpl.RejectAllRequestsByDefault())
-	transport := gstransport.NewTransport(p, gs)
-	dt, err := dtimpl.NewDataTransfer(namespace.Wrap(dstore, datastore.NewKey("/data-transfers/transfers")), dtNet, transport)
+	transport := gstransport.NewTransport(p, gs, dtNet)
+	dt, err := dtimpl.NewDataTransfer(namespace.Wrap(dstore, datastore.NewKey("/data-transfers/transfers")), p, transport)
 	if err != nil {
 		return Instance{}, err
 	}

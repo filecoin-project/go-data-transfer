@@ -13,7 +13,6 @@ func (t *Transport) newDTChannel(chid datatransfer.ChannelID) *dtChannel {
 	return &dtChannel{
 		t:         t,
 		channelID: chid,
-		opened:    make(chan graphsync.RequestID, 1),
 	}
 }
 

@@ -77,6 +77,7 @@ func (t *Transport) gsIncomingBlockHook(p peer.ID, response graphsync.ResponseDa
 	}
 
 	if err == datatransfer.ErrPause {
+		ch.markPaused()
 		hookActions.PauseRequest()
 	}
 }
@@ -116,6 +117,12 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 		return
 	}
 
+	ch, err := t.getDTChannel(chid)
+	if err != nil {
+		hookActions.TerminateWithError(err)
+		return
+	}
+
 	// OnDataQueued is called when a block is queued to be sent to the remote
 	// peer. It can return ErrPause to pause the response (eg if payment is
 	// required) and it can return a message that will be sent with the block
@@ -127,6 +134,7 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 	}
 
 	if err == datatransfer.ErrPause {
+		ch.markPaused()
 		hookActions.PauseResponse()
 	}
 
@@ -208,18 +216,12 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 	//   local node receives that request for data
 	var chid datatransfer.ChannelID
 	var responseMessage datatransfer.Message
-	var ch *dtChannel
 	if msg.IsRequest() {
 		// when a data transfer request comes in on graphsync, the remote peer
 		// initiated a pull
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}
 
 		log.Debugf("%s: received request for data (pull), req_id=%d", chid, request.ID())
-
-		// Lock the channel for the duration of this method
-		ch = t.trackDTChannel(chid)
-		ch.lk.Lock()
-		defer ch.lk.Unlock()
 
 		request := msg.(datatransfer.Request)
 		responseMessage, err = t.events.OnRequestReceived(chid, request)
@@ -230,11 +232,6 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID, Responder: p}
 
 		log.Debugf("%s: received request for data (push), req_id=%d", chid, request.ID())
-
-		// Lock the channel for the duration of this method
-		ch = t.trackDTChannel(chid)
-		ch.lk.Lock()
-		defer ch.lk.Unlock()
 
 		response := msg.(datatransfer.Response)
 		err = t.events.OnResponseReceived(chid, response)
@@ -269,23 +266,8 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		paused = true
 		hookActions.PauseResponse()
 	}
-
-	// If this is a restart request, and the data transfer still hasn't got
-	// out of the paused state (eg because we're still unsealing), start this
-	// graphsync response in the paused state.
-	if ch.isOpen && !ch.xferStarted && !paused {
-		log.Debugf("%s: pausing graphsync response after restart", chid)
-
-		paused = true
-		hookActions.PauseResponse()
-	}
-
-	// If the transfer is not paused, record that the transfer has started
-	if !paused {
-		ch.xferStarted = true
-	}
-
-	ch.gsDataRequestRcvd(request.ID(), hookActions)
+	ch := t.trackDTChannel(chid)
+	ch.gsDataRequestRcvd(request.ID(), paused, hookActions)
 
 	hookActions.ValidateRequest()
 }
@@ -356,7 +338,6 @@ func (t *Transport) gsIncomingResponseHook(p peer.ID, response graphsync.Respons
 	if !ok {
 		return
 	}
-
 	responseMessage, err := t.processExtension(chid, response, p, incomingReqExtensions)
 
 	if responseMessage != nil {

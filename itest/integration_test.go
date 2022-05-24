@@ -1307,8 +1307,8 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 	for testCase, config := range testCases {
 		t.Run(testCase, func(t *testing.T) {
 			ctx, collectTracing := testutil.SetupTracing(ctx)
-			//ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
-			//defer cancel()
+			ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+			defer cancel()
 
 			gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
 			host1 := gsData.Host1 // initiator, data sender

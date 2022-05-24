@@ -357,7 +357,8 @@ func TestRestartPull(t *testing.T) {
 				// initiator: initial outgoing gs request terminates
 				"transfer(0)->request(0)->terminateRequest(0)",
 				// initiator: respond to restart request and send second GS request
-				"transfer(0)->receiveRequest(0)->request(0)",
+				"transfer(0)->receiveRequest(0)",
+				"transfer(0)->request(1)->executeTask(0)",
 				// initiator: receive completion message from responder that they sent all the data
 				"transfer(0)->receiveResponse(0)",
 				// responder: receive GS request and execute response

@@ -180,82 +180,8 @@ func (t *Transport) openRequest(
 	ch := t.trackDTChannel(channelID)
 
 	// Open a graphsync request to the remote peer
-	req, err := ch.open(ctx, channelID, dataSender, root, stor, exts)
-	if err != nil {
-		return err
-	}
+	return ch.open(ctx, channelID, dataSender, root, stor, exts)
 
-	// Process incoming data
-	go t.executeGsRequest(req)
-
-	return nil
-}
-
-// Read from the graphsync response and error channels until they are closed,
-// and return the last error on the error channel
-func (t *Transport) consumeResponses(req *gsReq) error {
-	var lastError error
-	for range req.responseChan {
-	}
-	log.Infof("channel %s: finished consuming graphsync response channel", req.channelID)
-
-	for err := range req.errChan {
-		lastError = err
-	}
-	log.Infof("channel %s: finished consuming graphsync error channel", req.channelID)
-
-	return lastError
-}
-
-// Read from the graphsync response and error channels until they are closed
-// or there is an error, then call the channel completed callback
-func (t *Transport) executeGsRequest(req *gsReq) {
-	// Make sure to call the onComplete callback before returning
-	defer func() {
-		log.Infow("gs request complete for channel", "chid", req.channelID)
-		req.onComplete()
-	}()
-
-	// Consume the response and error channels for the graphsync request
-	lastError := t.consumeResponses(req)
-
-	// Request cancelled by client
-	if _, ok := lastError.(graphsync.RequestClientCancelledErr); ok {
-		terr := xerrors.Errorf("graphsync request cancelled")
-		log.Warnf("channel %s: %s", req.channelID, terr)
-		if err := t.events.OnRequestCancelled(req.channelID, terr); err != nil {
-			log.Error(err)
-		}
-		return
-	}
-
-	// Request cancelled by responder
-	if _, ok := lastError.(graphsync.RequestCancelledErr); ok {
-		log.Infof("channel %s: graphsync request cancelled by responder", req.channelID)
-		// TODO Should we do anything for RequestCancelledErr ?
-		return
-	}
-
-	if lastError != nil {
-		log.Warnf("channel %s: graphsync error: %s", req.channelID, lastError)
-	}
-
-	log.Debugf("channel %s: finished executing graphsync request", req.channelID)
-
-	var completeErr error
-	if lastError != nil {
-		completeErr = xerrors.Errorf("channel %s: graphsync request failed to complete: %w", req.channelID, lastError)
-	}
-
-	// Used by the tests to listen for when a request completes
-	if t.completedRequestListener != nil {
-		t.completedRequestListener(req.channelID)
-	}
-
-	err := t.events.OnChannelCompleted(req.channelID, completeErr)
-	if err != nil {
-		log.Errorf("channel %s: processing OnChannelCompleted: %s", req.channelID, err)
-	}
 }
 
 type actionsrecorder struct {
@@ -290,7 +216,7 @@ func (t *Transport) WithChannel(ctx context.Context, chid datatransfer.ChannelID
 		return err
 	}
 
-	if actions.DoResume && ch.resumable() {
+	if actions.DoResume && ch.paused() {
 		return ch.resume(ctx, actions.MessageSent)
 	}
 
@@ -304,7 +230,7 @@ func (t *Transport) WithChannel(ctx context.Context, chid datatransfer.ChannelID
 		return ch.close(ctx)
 	}
 
-	if actions.DoPause && ch.resumable() {
+	if actions.DoPause {
 		return ch.pause(ctx)
 	}
 
@@ -369,7 +295,7 @@ func (t *Transport) Shutdown(ctx context.Context) error {
 	for _, ch := range t.dtChannels {
 		ch := ch
 		eg.Go(func() error {
-			return ch.shutdown(ctx)
+			return ch.close(ctx)
 		})
 	}
 

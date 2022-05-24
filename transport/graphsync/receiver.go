@@ -2,7 +2,6 @@ package graphsync
 
 import (
 	"context"
-	"fmt"
 
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -42,25 +41,25 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 		attribute.Bool("isPaused", incoming.IsPaused()),
 	))
 	defer span.End()
-	fmt.Printf("%+v\n", incoming)
 	response, receiveErr := r.transport.events.OnRequestReceived(chid, incoming)
 	ch, err := r.transport.getDTChannel(chid)
+	initiateGraphsyncRequest := (response != nil) && (response.IsNew() || response.IsRestart()) && response.Accepted() && !incoming.IsPull()
 	if err != nil {
-		if response == nil {
+		if !initiateGraphsyncRequest {
+			if response != nil {
+				return r.transport.dtNet.SendMessage(ctx, initiator, response)
+			}
 			return receiveErr
-		}
-		if (!response.IsNew() && !response.IsRestart()) || !response.Accepted() || incoming.IsPull() {
-			return r.transport.dtNet.SendMessage(ctx, initiator, response)
 		}
 		ch = r.transport.trackDTChannel(chid)
 	}
 
-	if receiveErr == datatransfer.ErrResume && ch.resumable() {
+	if receiveErr == datatransfer.ErrResume && ch.paused() {
 		return ch.resume(ctx, response)
 	}
 
 	if response != nil {
-		if (response.IsNew() || response.IsRestart()) && response.Accepted() && !incoming.IsPull() {
+		if initiateGraphsyncRequest {
 			stor, _ := incoming.Selector()
 			if response.IsRestart() {
 				channel, err := r.transport.events.ChannelState(ctx, chid)
@@ -144,7 +143,6 @@ func (r *receiver) ReceiveError(err error) {
 func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
 	sender peer.ID,
 	incoming datatransfer.Request) {
-	fmt.Printf("%+v\n", incoming)
 
 	ch, err := incoming.RestartChannelId()
 	if err != nil {
