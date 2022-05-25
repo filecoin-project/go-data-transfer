@@ -18,25 +18,25 @@ type EventsHandler interface {
 
 // Executor handles consuming channels on an outgoing GraphSync request
 type Executor struct {
-	events                   EventsHandler
-	completedRequestListener func(channelID datatransfer.ChannelID)
-	channelID                datatransfer.ChannelID
-	responseChan             <-chan graphsync.ResponseProgress
-	errChan                  <-chan error
+	channelID    datatransfer.ChannelID
+	responseChan <-chan graphsync.ResponseProgress
+	errChan      <-chan error
+	onComplete   func()
 }
 
 // NewExecutor sets up a new executor to consume a graphsync request
-func NewExecutor(events EventsHandler,
-	completedRequestListener func(channelID datatransfer.ChannelID),
+func NewExecutor(
 	channelID datatransfer.ChannelID,
 	responseChan <-chan graphsync.ResponseProgress,
-	errChan <-chan error) *Executor {
-	return &Executor{events, completedRequestListener, channelID, responseChan, errChan}
+	errChan <-chan error,
+	onComplete func()) *Executor {
+	return &Executor{channelID, responseChan, errChan, onComplete}
 }
 
 // Start initiates consumption of a graphsync request
-func (e *Executor) Start(onComplete func()) {
-	go e.executeRequest(onComplete)
+func (e *Executor) Start(events EventsHandler,
+	completedRequestListener func(channelID datatransfer.ChannelID)) {
+	go e.executeRequest(events, completedRequestListener)
 }
 
 // Read from the graphsync response and error channels until they are closed,
@@ -57,11 +57,13 @@ func (e *Executor) consumeResponses() error {
 
 // Read from the graphsync response and error channels until they are closed
 // or there is an error, then call the channel completed callback
-func (e *Executor) executeRequest(onComplete func()) {
+func (e *Executor) executeRequest(
+	events EventsHandler,
+	completedRequestListener func(channelID datatransfer.ChannelID)) {
 	// Make sure to call the onComplete callback before returning
 	defer func() {
 		log.Infow("gs request complete for channel", "chid", e.channelID)
-		onComplete()
+		e.onComplete()
 	}()
 
 	// Consume the response and error channels for the graphsync request
@@ -71,7 +73,7 @@ func (e *Executor) executeRequest(onComplete func()) {
 	if _, ok := lastError.(graphsync.RequestClientCancelledErr); ok {
 		terr := fmt.Errorf("graphsync request cancelled")
 		log.Warnf("channel %s: %s", e.channelID, terr)
-		if err := e.events.OnRequestCancelled(e.channelID, terr); err != nil {
+		if err := events.OnRequestCancelled(e.channelID, terr); err != nil {
 			log.Error(err)
 		}
 		return
@@ -96,10 +98,10 @@ func (e *Executor) executeRequest(onComplete func()) {
 	}
 
 	// Used by the tests to listen for when a request completes
-	if e.completedRequestListener != nil {
-		e.completedRequestListener(e.channelID)
+	if completedRequestListener != nil {
+		completedRequestListener(e.channelID)
 	}
-	err := e.events.OnChannelCompleted(e.channelID, completeErr)
+	err := events.OnChannelCompleted(e.channelID, completeErr)
 	if err != nil {
 		log.Errorf("channel %s: processing OnChannelCompleted: %s", e.channelID, err)
 	}

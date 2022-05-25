@@ -3,6 +3,7 @@ package graphsync
 import (
 	"context"
 
+	"github.com/ipfs/go-graphsync"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"go.opentelemetry.io/otel"
@@ -10,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
 type receiver struct {
@@ -54,8 +56,18 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 		ch = r.transport.trackDTChannel(chid)
 	}
 
-	if receiveErr == datatransfer.ErrResume && ch.paused() {
-		return ch.resume(ctx, response)
+	if receiveErr == datatransfer.ErrResume && ch.Paused() {
+
+		var extensions []graphsync.ExtensionData
+		if response != nil {
+			var err error
+			extensions, err = extension.ToExtensionData(response, r.transport.supportedExtensions)
+			if err != nil {
+				return err
+			}
+		}
+
+		return ch.Resume(ctx, extensions)
 	}
 
 	if response != nil {
@@ -66,7 +78,7 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 				if err != nil {
 					return err
 				}
-				ch.updateReceivedCidsIfGreater(channel.ReceivedCidsTotal())
+				ch.UpdateReceivedCidsIfGreater(channel.ReceivedCidsTotal())
 			}
 			if err := r.transport.openRequest(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, response); err != nil {
 				return err
@@ -79,11 +91,11 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 	}
 
 	if receiveErr == datatransfer.ErrPause {
-		return ch.pause(ctx)
+		return ch.Pause(ctx)
 	}
 
 	if receiveErr != nil {
-		_ = ch.close(ctx)
+		_ = ch.Close(ctx)
 		return receiveErr
 	}
 
@@ -124,13 +136,13 @@ func (r *receiver) receiveResponse(
 		return err
 	}
 	if receiveErr == datatransfer.ErrPause {
-		return ch.pause(ctx)
+		return ch.Pause(ctx)
 	}
 	if receiveErr != nil {
 		log.Warnf("closing channel %s after getting error processing response from %s: %s",
 			chid, sender, err)
 
-		_ = ch.close(ctx)
+		_ = ch.Close(ctx)
 		return receiveErr
 	}
 	return nil

@@ -4,32 +4,26 @@ import (
 	"sync"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/dtchannel"
 	"github.com/ipfs/go-graphsync"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
 )
 
-func (t *Transport) newDTChannel(chid datatransfer.ChannelID) *dtChannel {
-	return &dtChannel{
-		t:         t,
-		channelID: chid,
-	}
-}
-
-func (t *Transport) trackDTChannel(chid datatransfer.ChannelID) *dtChannel {
+func (t *Transport) trackDTChannel(chid datatransfer.ChannelID) *dtchannel.Channel {
 	t.dtChannelsLk.Lock()
 	defer t.dtChannelsLk.Unlock()
 
 	ch, ok := t.dtChannels[chid]
 	if !ok {
-		ch = t.newDTChannel(chid)
+		ch = dtchannel.NewChannel(chid, t.gs)
 		t.dtChannels[chid] = ch
 	}
 
 	return ch
 }
 
-func (t *Transport) getDTChannel(chid datatransfer.ChannelID) (*dtChannel, error) {
+func (t *Transport) getDTChannel(chid datatransfer.ChannelID) (*dtchannel.Channel, error) {
 	if t.events == nil {
 		return nil, datatransfer.ErrHandlerNotSet
 	}

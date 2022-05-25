@@ -52,7 +52,7 @@ func (t *Transport) gsOutgoingRequestHook(p peer.ID, request graphsync.RequestDa
 	ch := t.trackDTChannel(chid)
 
 	// Signal that the channel has been opened
-	ch.gsReqOpened(request.ID(), hookActions)
+	ch.GsReqOpened(p, request.ID(), hookActions)
 }
 
 // gsIncomingBlockHook is called when a block is received
@@ -68,7 +68,7 @@ func (t *Transport) gsIncomingBlockHook(p peer.ID, response graphsync.ResponseDa
 		return
 	}
 
-	ch.updateReceivedCidsIfGreater(block.Index())
+	ch.UpdateReceivedCidsIfGreater(block.Index())
 
 	err = t.events.OnDataReceived(chid, block.Link(), block.BlockSize(), block.Index(), block.BlockSizeOnWire() != 0)
 	if err != nil && err != datatransfer.ErrPause {
@@ -77,7 +77,7 @@ func (t *Transport) gsIncomingBlockHook(p peer.ID, response graphsync.ResponseDa
 	}
 
 	if err == datatransfer.ErrPause {
-		ch.markPaused()
+		ch.MarkPaused()
 		hookActions.PauseRequest()
 	}
 }
@@ -134,7 +134,7 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 	}
 
 	if err == datatransfer.ErrPause {
-		ch.markPaused()
+		ch.MarkPaused()
 		hookActions.PauseResponse()
 	}
 
@@ -267,7 +267,9 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		hookActions.PauseResponse()
 	}
 	ch := t.trackDTChannel(chid)
-	ch.gsDataRequestRcvd(request.ID(), paused, hookActions)
+	t.requestIDToChannelID.set(request.ID(), true, chid)
+
+	ch.GsDataRequestRcvd(p, request.ID(), paused, hookActions)
 
 	hookActions.ValidateRequest()
 }
@@ -288,7 +290,7 @@ func (t *Transport) gsCompletedResponseListener(p peer.ID, request graphsync.Req
 	if err != nil {
 		return
 	}
-	ch.markTransferComplete()
+	ch.MarkTransferComplete()
 
 	var completeErr error
 	if status != graphsync.RequestCompletedFull {
@@ -412,7 +414,7 @@ func (t *Transport) gsRequestorCancelledListener(p peer.ID, request graphsync.Re
 	}
 
 	log.Debugf("%s: requester cancelled data-transfer", chid)
-	ch.onRequesterCancelled()
+	ch.OnRequesterCancelled()
 }
 
 // Called when there is a graphsync error sending data

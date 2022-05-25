@@ -6,7 +6,7 @@ import (
 	ipld "github.com/ipld/go-ipld-prime"
 )
 
-// EventsHandler are semantic data transfer events that happen as a result of graphsync hooks
+// EventsHandler are semantic data transfer events that happen as a result of transport events
 type EventsHandler interface {
 	// ChannelState queries for the current channel state
 	ChannelState(ctx context.Context, chid ChannelID) (ChannelState, error)

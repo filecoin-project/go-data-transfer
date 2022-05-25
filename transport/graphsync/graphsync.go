@@ -8,6 +8,7 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/network"
+	dtchannel "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/dtchannel"
 	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 	"github.com/filecoin-project/go-data-transfer/v2/transport/helpers/actionrecorders"
 	"github.com/ipfs/go-graphsync"
@@ -26,7 +27,6 @@ var log = logging.Logger("dt_graphsync")
 // before opening a new one.
 // This constant defines the maximum time to wait for the request to be
 // cancelled.
-const maxGSCancelWait = time.Second
 
 var defaultSupportedExtensions = []graphsync.ExtensionName{
 	extension.ExtensionDataTransfer1_1,
@@ -81,7 +81,7 @@ type Transport struct {
 
 	// Map from data transfer channel ID to information about that channel
 	dtChannelsLk sync.RWMutex
-	dtChannels   map[datatransfer.ChannelID]*dtChannel
+	dtChannels   map[datatransfer.ChannelID]*dtchannel.Channel
 
 	// Used in graphsync callbacks to map from graphsync request to the
 	// associated data-transfer channel ID.
@@ -95,7 +95,7 @@ func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, dtNet network.Data
 		dtNet:                dtNet,
 		peerID:               peerID,
 		supportedExtensions:  defaultSupportedExtensions,
-		dtChannels:           make(map[datatransfer.ChannelID]*dtChannel),
+		dtChannels:           make(map[datatransfer.ChannelID]*dtchannel.Channel),
 		requestIDToChannelID: newRequestIDToChannelIDMap(),
 	}
 	for _, option := range options {
@@ -147,7 +147,7 @@ func (t *Transport) RestartChannel(
 	t.dtNet.Protect(channelState.OtherPeer(), channelState.ChannelID().String())
 
 	ch := t.trackDTChannel(channelState.ChannelID())
-	ch.updateReceivedCidsIfGreater(channelState.ReceivedCidsTotal())
+	ch.UpdateReceivedCidsIfGreater(channelState.ReceivedCidsTotal())
 	if channelState.IsPull() {
 		return t.openRequest(ctx,
 			channelState.Sender(),
@@ -179,9 +179,18 @@ func (t *Transport) openRequest(
 	// Start tracking the data-transfer channel
 	ch := t.trackDTChannel(channelID)
 
-	// Open a graphsync request to the remote peer
-	return ch.open(ctx, channelID, dataSender, root, stor, exts)
+	requestID := graphsync.NewRequestID()
+	t.requestIDToChannelID.set(requestID, false, channelID)
 
+	// Open a graphsync request to the remote peer
+	execetor, err := ch.Open(ctx, requestID, dataSender, root, stor, exts)
+
+	if err != nil {
+		return err
+	}
+
+	execetor.Start(t.events, t.completedRequestListener)
+	return nil
 }
 
 type actionsrecorder struct {
@@ -216,8 +225,18 @@ func (t *Transport) WithChannel(ctx context.Context, chid datatransfer.ChannelID
 		return err
 	}
 
-	if actions.DoResume && ch.paused() {
-		return ch.resume(ctx, actions.MessageSent)
+	if actions.DoResume && ch.Paused() {
+
+		var extensions []graphsync.ExtensionData
+		if actions.MessageSent != nil {
+			var err error
+			extensions, err = extension.ToExtensionData(actions.MessageSent, t.supportedExtensions)
+			if err != nil {
+				return err
+			}
+		}
+
+		return ch.Resume(ctx, extensions)
 	}
 
 	if actions.MessageSent != nil {
@@ -227,11 +246,11 @@ func (t *Transport) WithChannel(ctx context.Context, chid datatransfer.ChannelID
 	}
 
 	if actions.DoClose {
-		return ch.close(ctx)
+		return ch.Close(ctx)
 	}
 
 	if actions.DoPause {
-		return ch.pause(ctx)
+		return ch.Pause(ctx)
 	}
 
 	return nil
@@ -250,9 +269,12 @@ func (t *Transport) CleanupChannel(chid datatransfer.ChannelID) {
 
 	t.dtChannelsLk.Unlock()
 
+	// Clean up mapping from gs key to channel ID
+	t.requestIDToChannelID.deleteRefs(chid)
+
 	// Clean up the channel
 	if ok {
-		ch.cleanup()
+		ch.Cleanup()
 	}
 
 	t.dtNet.Unprotect(t.otherPeer(chid), chid.String())
@@ -295,7 +317,7 @@ func (t *Transport) Shutdown(ctx context.Context) error {
 	for _, ch := range t.dtChannels {
 		ch := ch
 		eg.Go(func() error {
-			return ch.close(ctx)
+			return ch.Close(ctx)
 		})
 	}
 
@@ -309,7 +331,7 @@ func (t *Transport) Shutdown(ctx context.Context) error {
 // UseStore tells the graphsync transport to use the given loader and storer for this channelID
 func (t *Transport) UseStore(channelID datatransfer.ChannelID, lsys ipld.LinkSystem) error {
 	ch := t.trackDTChannel(channelID)
-	return ch.useStore(lsys)
+	return ch.UseStore(lsys)
 }
 
 // ChannelGraphsyncRequests describes any graphsync request IDs associated with a given channel
@@ -357,7 +379,7 @@ func (t *Transport) ChannelsForPeer(p peer.ID) ChannelsForPeer {
 			channelGraphsyncRequests := collection[chid]
 			// finally, determine if the request key matches the current GraphSync key we're tracking for
 			// this channel, indicating it's the current graphsync request
-			if t.dtChannels[chid] != nil && t.dtChannels[chid].requestID != nil && (*t.dtChannels[chid].requestID) == requestID {
+			if t.dtChannels[chid] != nil && t.dtChannels[chid].IsCurrentRequest(requestID) {
 				channelGraphsyncRequests.Current = requestID
 			} else {
 				// otherwise this id was a previous graphsync request on a channel that was restarted

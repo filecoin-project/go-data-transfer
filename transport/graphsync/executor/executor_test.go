@@ -61,20 +61,21 @@ func TestExecutor(t *testing.T) {
 			errChan := make(chan error)
 			events := &fakeEvents{}
 			fcrl := &fakeCompletedRequestListener{}
-			var e *executor.Executor
-			if data.hasCompletedRequestHandler {
-				e = executor.NewExecutor(events, fcrl.complete, chid, responseChan, errChan)
-			} else {
-				e = executor.NewExecutor(events, nil, chid, responseChan, errChan)
-			}
+
 			completed := make(chan struct{})
 			var onCompleteOnce sync.Once
 
-			e.Start(func() {
+			onComplete := func() {
 				onCompleteOnce.Do(func() {
 					close(completed)
 				})
-			})
+			}
+			e := executor.NewExecutor(chid, responseChan, errChan, onComplete)
+			if data.hasCompletedRequestHandler {
+				e.Start(events, fcrl.complete)
+			} else {
+				e.Start(events, nil)
+			}
 
 			for _, progress := range data.responseProgresses {
 				select {
