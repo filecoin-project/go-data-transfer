@@ -4,16 +4,23 @@ import (
 	"context"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/helpers/actionrecorders"
 )
 
 // OpenedChannel records a call to open a channel
 type OpenedChannel struct {
 	Channel datatransfer.Channel
-	Message datatransfer.Message
+	Message datatransfer.Request
 }
 
-// ResumedChannel records a call to resume a channel
-type ResumedChannel struct {
+// RestartedChannel records a call to restart a channel
+type RestartedChannel struct {
+	Channel datatransfer.ChannelState
+	Message datatransfer.Request
+}
+
+// Records a message sent
+type MessageSent struct {
 	ChannelID datatransfer.ChannelID
 	Message   datatransfer.Message
 }
@@ -24,16 +31,19 @@ type CustomizedTransfer struct {
 	Voucher   datatransfer.TypedVoucher
 }
 
+var _ datatransfer.Transport = &FakeTransport{}
+
 // FakeTransport is a fake transport with mocked results
 type FakeTransport struct {
 	OpenedChannels      []OpenedChannel
 	OpenChannelErr      error
+	RestartedChannels   []RestartedChannel
+	RestartChannelErr   error
 	ClosedChannels      []datatransfer.ChannelID
-	CloseChannelErr     error
 	PausedChannels      []datatransfer.ChannelID
-	PauseChannelErr     error
-	ResumedChannels     []ResumedChannel
-	ResumeChannelErr    error
+	ResumedChannels     []datatransfer.ChannelID
+	MessagesSent        []MessageSent
+	WithActionsError    error
 	CleanedUpChannels   []datatransfer.ChannelID
 	CustomizedTransfers []CustomizedTransfer
 	EventHandler        datatransfer.EventsHandler
@@ -45,20 +55,53 @@ func NewFakeTransport() *FakeTransport {
 	return &FakeTransport{}
 }
 
+// Capabilities tells datatransfer what kinds of capabilities this transport supports
+func (ft *FakeTransport) Capabilities() datatransfer.TransportCapabilities {
+	return datatransfer.TransportCapabilities{
+		Restartable: true,
+		Pausable:    true,
+	}
+}
+
 // OpenChannel initiates an outgoing request for the other peer to send data
 // to us on this channel
 // Note: from a data transfer symantic standpoint, it doesn't matter if the
 // request is push or pull -- OpenChannel is called by the party that is
 // intending to receive data
-func (ft *FakeTransport) OpenChannel(ctx context.Context, channel datatransfer.Channel, msg datatransfer.Message) error {
+func (ft *FakeTransport) OpenChannel(ctx context.Context, channel datatransfer.Channel, msg datatransfer.Request) error {
 	ft.OpenedChannels = append(ft.OpenedChannels, OpenedChannel{channel, msg})
 	return ft.OpenChannelErr
 }
 
-// CloseChannel closes the given channel
-func (ft *FakeTransport) CloseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ft.ClosedChannels = append(ft.ClosedChannels, chid)
-	return ft.CloseChannelErr
+// RestartChannel restarts a channel
+func (ft *FakeTransport) RestartChannel(ctx context.Context, channelState datatransfer.ChannelState, msg datatransfer.Request) error {
+	ft.RestartedChannels = append(ft.RestartedChannels, RestartedChannel{channelState, msg})
+	return ft.RestartChannelErr
+}
+
+// WithChannel takes actions on a channel
+func (ft *FakeTransport) WithChannel(ctx context.Context, chid datatransfer.ChannelID, actionsFunc datatransfer.ChannelActionFunc) error {
+	actions := struct {
+		actionrecorders.ChannelActionsRecorder
+		actionrecorders.PauseActionsRecorder
+	}{}
+	actionsFunc(&actions)
+
+	if actions.DoResume {
+		ft.ResumedChannels = append(ft.ResumedChannels, chid)
+	}
+
+	if actions.DoClose {
+		ft.ClosedChannels = append(ft.ClosedChannels, chid)
+	}
+	if actions.DoPause {
+		ft.PausedChannels = append(ft.PausedChannels, chid)
+	}
+
+	if actions.MessageSent != nil {
+		ft.MessagesSent = append(ft.MessagesSent, MessageSent{chid, actions.MessageSent})
+	}
+	return ft.WithActionsError
 }
 
 // SetEventHandler sets the handler for events on channels
@@ -67,20 +110,9 @@ func (ft *FakeTransport) SetEventHandler(events datatransfer.EventsHandler) erro
 	return ft.SetEventHandlerErr
 }
 
+// Shutdownc loses a this transport
 func (ft *FakeTransport) Shutdown(ctx context.Context) error {
 	return nil
-}
-
-// PauseChannel paused the given channel ID
-func (ft *FakeTransport) PauseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ft.PausedChannels = append(ft.PausedChannels, chid)
-	return ft.PauseChannelErr
-}
-
-// ResumeChannel resumes the given channel
-func (ft *FakeTransport) ResumeChannel(ctx context.Context, msg datatransfer.Message, chid datatransfer.ChannelID) error {
-	ft.ResumedChannels = append(ft.ResumedChannels, ResumedChannel{chid, msg})
-	return ft.ResumeChannelErr
 }
 
 // CleanupChannel cleans up the given channel

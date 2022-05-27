@@ -1,5 +1,6 @@
 package graphsync_test
 
+/*
 import (
 	"context"
 	"errors"
@@ -1363,3 +1364,4 @@ func assertHasExtensionMessage(t *testing.T, name graphsync.ExtensionName, exten
 		require.Fail(t, "extension not found")
 	}
 }
+*/

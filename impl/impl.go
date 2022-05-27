@@ -235,6 +235,13 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 
 // SendVoucher sends an intermediate voucher as needed when the receiver sends a request for revalidation
 func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.ChannelID, voucher datatransfer.TypedVoucher) error {
+	has, err := m.channels.HasChannel(channelID)
+	if !has {
+		return datatransfer.ErrChannelNotFound
+	}
+	if err != nil {
+		return err
+	}
 	ctx, _ = m.spansIndex.SpanForChannel(ctx, channelID)
 	ctx, span := otel.Tracer("data-transfer").Start(ctx, "sendVoucher", trace.WithAttributes(
 		attribute.String("channelID", channelID.String()),

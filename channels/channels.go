@@ -25,19 +25,6 @@ import (
 
 type Notifier func(datatransfer.Event, datatransfer.ChannelState)
 
-// ErrNotFound is returned when a channel cannot be found with a given channel ID
-type ErrNotFound struct {
-	ChannelID datatransfer.ChannelID
-}
-
-func (e *ErrNotFound) Error() string {
-	return "No channel for channel ID " + e.ChannelID.String()
-}
-
-func NewErrNotFound(chid datatransfer.ChannelID) error {
-	return &ErrNotFound{ChannelID: chid}
-}
-
 // ErrWrongType is returned when a caller attempts to change the type of implementation data after setting it
 var ErrWrongType = errors.New("Cannot change type of implementation specific data after setting it")
 
@@ -175,7 +162,7 @@ func (c *Channels) GetByID(ctx context.Context, chid datatransfer.ChannelID) (da
 	var internalChannel internal.ChannelState
 	err := c.stateMachines.GetSync(ctx, chid, &internalChannel)
 	if err != nil {
-		return nil, NewErrNotFound(chid)
+		return nil, datatransfer.ErrChannelNotFound
 	}
 	return c.fromInternalChannelState(internalChannel), nil
 }
@@ -467,7 +454,7 @@ func (c *Channels) checkChannelExists(chid datatransfer.ChannelID, code datatran
 	}
 	if !has {
 		return xerrors.Errorf("cannot send FSM event %s to data-transfer channel %s: %w",
-			datatransfer.Events[code], chid, NewErrNotFound(chid))
+			datatransfer.Events[code], chid, datatransfer.ErrChannelNotFound)
 	}
 	return nil
 }

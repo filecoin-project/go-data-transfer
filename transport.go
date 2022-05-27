@@ -94,6 +94,7 @@ and send messages. Beyond that, additional actions you can take with a transport
 entirely based on the ChannelActions interface, which may have different
 traits exposing different actions. */
 type Transport interface {
+	// Capabilities tells datatransfer what kinds of capabilities this transport supports
 	Capabilities() TransportCapabilities
 	// OpenChannel opens a channel on a given transport to move data back and forth.
 	// OpenChannel MUST ALWAYS called by the initiator.
