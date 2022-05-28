@@ -30,6 +30,16 @@ type ValidationResult struct {
 	RequiresFinalization bool
 }
 
+// Equals checks the deep equality of two ValidationResult values
+func (vr ValidationResult) Equals(vr2 ValidationResult) bool {
+	return vr.Accepted == vr2.Accepted &&
+		vr.VoucherResultType == vr2.VoucherResultType &&
+		vr.ForcePause == vr2.ForcePause &&
+		vr.DataLimit == vr2.DataLimit &&
+		vr.RequiresFinalization == vr2.RequiresFinalization &&
+		ipld.DeepEqual(vr.VoucherResult, vr2.VoucherResult)
+}
+
 // LeaveRequestPaused indicates whether all conditions are met to resume a request
 func (vr ValidationResult) LeaveRequestPaused(chst ChannelState) bool {
 	if vr.ForcePause {
