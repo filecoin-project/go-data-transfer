@@ -91,7 +91,6 @@ require (
 	github.com/libp2p/go-libp2p-nat v0.1.0 // indirect
 	github.com/libp2p/go-libp2p-netutil v0.1.0 // indirect
 	github.com/libp2p/go-libp2p-peerstore v0.4.0 // indirect
-	github.com/libp2p/go-libp2p-record v0.1.1 // indirect
 	github.com/libp2p/go-libp2p-testing v0.5.0 // indirect
 	github.com/libp2p/go-msgio v0.1.0 // indirect
 	github.com/libp2p/go-nat v0.1.0 // indirect

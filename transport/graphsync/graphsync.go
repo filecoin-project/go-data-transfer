@@ -242,39 +242,6 @@ func (t *Transport) SendMessage(ctx context.Context, chid datatransfer.ChannelID
 	return t.dtNet.SendMessage(ctx, t.otherPeer(chid), msg)
 }
 
-// PauseChannel pauses a channel
-func (t *Transport) PauseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ch, err := t.getDTChannel(chid)
-	if err != nil {
-		return err
-	}
-	if ch.Paused() {
-		return nil
-	}
-	return ch.Pause(ctx)
-}
-
-// ResumeChannel resumes a channel
-func (t *Transport) ResumeChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ch, err := t.getDTChannel(chid)
-	if err != nil {
-		return err
-	}
-	if !ch.Paused() {
-		return nil
-	}
-	return ch.Resume(ctx, []graphsync.ExtensionData{})
-}
-
-// CloseChannel ends the transfer of data on a channel
-func (t *Transport) CloseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ch, err := t.getDTChannel(chid)
-	if err != nil {
-		return err
-	}
-	return ch.Close(ctx)
-}
-
 // CleanupChannel is called on the otherside of a cancel - removes any associated
 // data for the channel
 func (t *Transport) CleanupChannel(chid datatransfer.ChannelID) {

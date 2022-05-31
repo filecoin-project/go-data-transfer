@@ -116,24 +116,14 @@ type Transport interface {
 	CleanupChannel(chid ChannelID)
 	// SendMessage sends a data transfer message over the channel to the other peer
 	SendMessage(ctx context.Context, chid ChannelID, msg Message) error
+	// Shutdown unregisters the current EventHandler and ends all active data transfers
+	Shutdown(ctx context.Context) error
 
 	// Optional Methods: Some channels may not support these
 
 	// Restart restarts a channel on the initiator side
 	// RestartChannel MUST ALWAYS called by the initiator
 	RestartChannel(ctx context.Context, channel ChannelState, req Request) error
-
-	// PauseChannel pauses a channel
-	PauseChannel(ctx context.Context, chid ChannelID) error
-
-	// ResumeChannel resumes a channel
-	ResumeChannel(ctx context.Context, chid ChannelID) error
-
-	// CloseChannel ends the transfer of data on a channel
-	CloseChannel(ctx context.Context, chid ChannelID) error
-
-	// Shutdown unregisters the current EventHandler and ends all active data transfers
-	Shutdown(ctx context.Context) error
 }
 
 // TransportCapabilities describes additional capabilities supported by ChannelActions

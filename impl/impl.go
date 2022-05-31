@@ -390,7 +390,10 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 	))
 	defer span.End()
 	// Close the channel on the local transport
-	err = m.transport.CloseChannel(ctx, chid)
+	err = m.transport.UpdateChannel(ctx, chid, datatransfer.ChannelUpdate{
+		Paused: chst.Status().IsResponderPaused(),
+		Closed: true,
+	})
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())

@@ -105,31 +105,13 @@ func (ft *FakeTransport) SendMessage(ctx context.Context, chid datatransfer.Chan
 	return ft.UpdateError
 }
 
-// PauseChannel pauses a channel
-func (ft *FakeTransport) PauseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ft.PausedChannels = append(ft.PausedChannels, chid)
-	return ft.UpdateError
-}
-
-// ResumeChannel resumes a channel
-func (ft *FakeTransport) ResumeChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ft.ResumedChannels = append(ft.ResumedChannels, chid)
-	return ft.UpdateError
-}
-
-// CloseChannel ends the transfer of data on a channel
-func (ft *FakeTransport) CloseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ft.ClosedChannels = append(ft.ClosedChannels, chid)
-	return ft.UpdateError
-}
-
 // SetEventHandler sets the handler for events on channels
 func (ft *FakeTransport) SetEventHandler(events datatransfer.EventsHandler) error {
 	ft.EventHandler = events
 	return ft.SetEventHandlerErr
 }
 
-// Shutdownc loses a this transport
+// Shutdown close this transport
 func (ft *FakeTransport) Shutdown(ctx context.Context) error {
 	return nil
 }
