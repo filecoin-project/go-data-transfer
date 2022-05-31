@@ -7,11 +7,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ipfs/go-graphsync"
+	"github.com/stretchr/testify/require"
+
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/executor"
-	"github.com/ipfs/go-graphsync"
-	"github.com/stretchr/testify/require"
 )
 
 func TestExecutor(t *testing.T) {

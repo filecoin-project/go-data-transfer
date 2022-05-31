@@ -3,11 +3,12 @@ package graphsync
 import (
 	"sync"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/dtchannel"
 	"github.com/ipfs/go-graphsync"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/dtchannel"
 )
 
 func (t *Transport) trackDTChannel(chid datatransfer.ChannelID) *dtchannel.Channel {

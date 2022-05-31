@@ -3,9 +3,10 @@ package executor
 import (
 	"fmt"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/ipfs/go-graphsync"
 	logging "github.com/ipfs/go-log/v2"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
 var log = logging.Logger("dt_graphsync")
