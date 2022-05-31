@@ -30,7 +30,7 @@ func (m *manager) restartManagerPeerReceive(ctx context.Context, channel datatra
 	// send a libp2p message to the other peer asking to send a "restart push request"
 	req := message.RestartExistingChannelRequest(channel.ChannelID())
 
-	if err := m.sendMessage(ctx, channel.ChannelID(), req); err != nil {
+	if err := m.transport.SendMessage(ctx, channel.ChannelID(), req); err != nil {
 		return xerrors.Errorf("unable to send restart request: %w", err)
 	}
 	return nil
@@ -63,7 +63,7 @@ func (m *manager) openRestartChannel(ctx context.Context, channel datatransfer.C
 	// Monitor the state of the connection for the channel
 	monitoredChan := m.channelMonitor.AddChannel(chid, channel.IsPull())
 	log.Infof("sending push restart channel to %s for channel %s", requestTo, chid)
-	err = m.transport.(datatransfer.RestartableTransport).RestartChannel(ctx, channel, req)
+	err = m.transport.RestartChannel(ctx, channel, req)
 	if err != nil {
 		// If pull channel monitoring is enabled, shutdown the monitor as it
 		// wasn't possible to start the data transfer

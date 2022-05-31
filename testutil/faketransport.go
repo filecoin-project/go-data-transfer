@@ -4,7 +4,6 @@ import (
 	"context"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/transport/helpers/actionrecorders"
 )
 
 // OpenedChannel records a call to open a channel
@@ -43,7 +42,7 @@ type FakeTransport struct {
 	PausedChannels      []datatransfer.ChannelID
 	ResumedChannels     []datatransfer.ChannelID
 	MessagesSent        []MessageSent
-	WithActionsError    error
+	UpdateError         error
 	CleanedUpChannels   []datatransfer.ChannelID
 	CustomizedTransfers []CustomizedTransfer
 	EventHandler        datatransfer.EventsHandler
@@ -80,28 +79,48 @@ func (ft *FakeTransport) RestartChannel(ctx context.Context, channelState datatr
 }
 
 // WithChannel takes actions on a channel
-func (ft *FakeTransport) WithChannel(ctx context.Context, chid datatransfer.ChannelID, actionsFunc datatransfer.ChannelActionFunc) error {
-	actions := struct {
-		actionrecorders.ChannelActionsRecorder
-		actionrecorders.PauseActionsRecorder
-	}{}
-	actionsFunc(&actions)
+func (ft *FakeTransport) UpdateChannel(ctx context.Context, chid datatransfer.ChannelID, update datatransfer.ChannelUpdate) error {
 
-	if actions.DoResume {
-		ft.ResumedChannels = append(ft.ResumedChannels, chid)
+	if update.SendMessage != nil {
+		ft.MessagesSent = append(ft.MessagesSent, MessageSent{chid, update.SendMessage})
 	}
 
-	if actions.DoClose {
+	if update.Closed {
 		ft.ClosedChannels = append(ft.ClosedChannels, chid)
+		return ft.UpdateError
 	}
-	if actions.DoPause {
+
+	if !update.Paused {
+		ft.ResumedChannels = append(ft.ResumedChannels, chid)
+	} else {
 		ft.PausedChannels = append(ft.PausedChannels, chid)
 	}
 
-	if actions.MessageSent != nil {
-		ft.MessagesSent = append(ft.MessagesSent, MessageSent{chid, actions.MessageSent})
-	}
-	return ft.WithActionsError
+	return ft.UpdateError
+}
+
+// SendMessage sends a data transfer message over the channel to the other peer
+func (ft *FakeTransport) SendMessage(ctx context.Context, chid datatransfer.ChannelID, msg datatransfer.Message) error {
+	ft.MessagesSent = append(ft.MessagesSent, MessageSent{chid, msg})
+	return ft.UpdateError
+}
+
+// PauseChannel pauses a channel
+func (ft *FakeTransport) PauseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	ft.PausedChannels = append(ft.PausedChannels, chid)
+	return ft.UpdateError
+}
+
+// ResumeChannel resumes a channel
+func (ft *FakeTransport) ResumeChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	ft.ResumedChannels = append(ft.ResumedChannels, chid)
+	return ft.UpdateError
+}
+
+// CloseChannel ends the transfer of data on a channel
+func (ft *FakeTransport) CloseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	ft.ClosedChannels = append(ft.ClosedChannels, chid)
+	return ft.UpdateError
 }
 
 // SetEventHandler sets the handler for events on channels

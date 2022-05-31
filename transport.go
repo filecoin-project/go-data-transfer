@@ -90,9 +90,9 @@ data protocol.
 
 Transport is the minimum interface that must be satisfied to serve as a datatransfer
 transport layer. Transports must be able to open and close channels, set at an event handler,
-and send messages. Beyond that, additional actions you can take with a transport is
-entirely based on the ChannelActions interface, which may have different
-traits exposing different actions. */
+and send messages. Beyond that, additional commands may or may not be supported.
+Whether a command is supported can be determined ahead by calling Capabilities().
+*/
 type Transport interface {
 	// Capabilities tells datatransfer what kinds of capabilities this transport supports
 	Capabilities() TransportCapabilities
@@ -103,12 +103,36 @@ type Transport interface {
 		channel Channel,
 		req Request,
 	) error
-	// WithChannel takes action using the given command func on an open channel
-	WithChannel(ctx context.Context, chid ChannelID, actions ChannelActionFunc) error
+
+	// UpdateChannel sends one or more updates the transport channel at once,
+	// such as pausing/resuming, closing the transfer, or sending additional
+	// messages over the channel. Grouping the commands allows the transport
+	// the ability to plan how to execute these updates based on the capabilities
+	// and API of the underlying transport protocol and library
+	UpdateChannel(ctx context.Context, chid ChannelID, update ChannelUpdate) error
 	// SetEventHandler sets the handler for events on channels
 	SetEventHandler(events EventsHandler) error
 	// CleanupChannel removes any associated data on a closed channel
 	CleanupChannel(chid ChannelID)
+	// SendMessage sends a data transfer message over the channel to the other peer
+	SendMessage(ctx context.Context, chid ChannelID, msg Message) error
+
+	// Optional Methods: Some channels may not support these
+
+	// Restart restarts a channel on the initiator side
+	// RestartChannel MUST ALWAYS called by the initiator
+	RestartChannel(ctx context.Context, channel ChannelState, req Request) error
+
+	// PauseChannel pauses a channel
+	PauseChannel(ctx context.Context, chid ChannelID) error
+
+	// ResumeChannel resumes a channel
+	ResumeChannel(ctx context.Context, chid ChannelID) error
+
+	// CloseChannel ends the transfer of data on a channel
+	CloseChannel(ctx context.Context, chid ChannelID) error
+
+	// Shutdown unregisters the current EventHandler and ends all active data transfers
 	Shutdown(ctx context.Context) error
 }
 
@@ -120,40 +144,13 @@ type TransportCapabilities struct {
 	Pausable bool
 }
 
-// ChannelActionFunc is a function that takes actions on a channel
-type ChannelActionFunc func(ChannelActions)
-
-// ChannelActions are default actions that can be taken on a channel
-type ChannelActions interface {
-	CloseActions
-	SendMessageActions
-}
-
-// SendMessageActions is a trait that allows sending messages
-// directly
-type SendMessageActions interface {
-	// SendMessage sends an arbitrary message over a transport
-	SendMessage(message Message)
-}
-
-// CloseActions is a trait that allows closing a channel
-type CloseActions interface {
-	// CloseChannel close this channel and effectively closes it to further
-	// action
-	CloseChannel()
-}
-
-// RestartableTransport is a transport that allows restarting of channels
-type RestartableTransport interface {
-	// Restart restarts a channel on the initiator side
-	// RestartChannel MUST ALWAYS called by the initiator
-	RestartChannel(ctx context.Context, channel ChannelState, req Request) error
-}
-
-// PauseActions a trait that allows pausing and resuming a channel
-type PauseActions interface {
-	// PauseChannel paused the given channel ID
-	PauseChannel()
-	// ResumeChannel resumes the given channel
-	ResumeChannel()
+// ChannelUpdate describes updates to a channel - changing it's paused status, closing the transfer,
+// and additional messages to send
+type ChannelUpdate struct {
+	// Paused sets the paused status of the channel. If pause/resumes are not supported, this is a no op
+	Paused bool
+	// Closed sets whether the channel is closed
+	Closed bool
+	// SendMessage sends an additional message
+	SendMessage Message
 }

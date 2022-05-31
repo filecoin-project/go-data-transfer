@@ -53,7 +53,7 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 	if err == datatransfer.ErrPause {
 		msg := message.UpdateResponse(chid.ID, true)
 		ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-		if err := m.sendMessage(ctx, chid, msg); err != nil {
+		if err := m.transport.SendMessage(ctx, chid, msg); err != nil {
 			return err
 		}
 	}
@@ -279,7 +279,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	}
 	log.Infow("sending completion message to initiator", "chid", chid)
 	ctx, _ := m.spansIndex.SpanForChannel(context.Background(), chid)
-	if err := m.sendMessage(ctx, chid, msg); err != nil {
+	if err := m.transport.SendMessage(ctx, chid, msg); err != nil {
 		err := xerrors.Errorf("channel %s: failed to send completion message to initiator: %w", chid, err)
 		log.Warnw("failed to send completion message to initiator", "chid", chid, "err", err)
 		return m.OnRequestDisconnected(chid, err)

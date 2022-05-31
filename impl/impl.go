@@ -259,7 +259,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	if err := m.sendMessage(ctx, channelID, updateRequest); err != nil {
+	if err := m.transport.SendMessage(ctx, channelID, updateRequest); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.OnRequestDisconnected(channelID, err)
 		span.RecordError(err)
@@ -298,7 +298,7 @@ func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	if err := m.sendMessage(ctx, channelID, updateResponse); err != nil {
+	if err := m.transport.SendMessage(ctx, channelID, updateResponse); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
 		_ = m.OnRequestDisconnected(channelID, err)
 		span.RecordError(err)
@@ -336,29 +336,10 @@ func (m *manager) updateValidationStatus(ctx context.Context, chid datatransfer.
 	chst, response, err := m.processValidationUpdate(ctx, chid, result)
 
 	// dispatch transport updates
-	return m.transport.WithChannel(ctx, chid, func(actions datatransfer.ChannelActions) {
-		pauseRequest := result.LeaveRequestPaused(chst)
-
-		// send a response message
-		if response != nil {
-			actions.SendMessage(response)
-		}
-
-		// close the channel as needed
-		if err != nil || !result.Accepted {
-			actions.CloseChannel()
-			return
-		}
-
-		// resume channel as needed
-		if pauseRequest && !chst.Status().IsResponderPaused() {
-			actions.(datatransfer.PauseActions).PauseChannel()
-		}
-
-		// pause channel as needed
-		if !pauseRequest && chst.Status().IsResponderPaused() {
-			actions.(datatransfer.PauseActions).ResumeChannel()
-		}
+	return m.transport.UpdateChannel(ctx, chid, datatransfer.ChannelUpdate{
+		Paused:      result.LeaveRequestPaused(chst),
+		Closed:      err != nil || !result.Accepted,
+		SendMessage: response,
 	})
 }
 
@@ -409,7 +390,7 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 	))
 	defer span.End()
 	// Close the channel on the local transport
-	err = m.transport.WithChannel(ctx, chid, func(actions datatransfer.ChannelActions) { actions.CloseChannel() })
+	err = m.transport.CloseChannel(ctx, chid)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -421,7 +402,7 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 		sctx, cancel := context.WithTimeout(context.Background(), cancelSendTimeout)
 		defer cancel()
 		log.Infof("%s: sending cancel channel to %s for channel %s", m.peerID, chst.OtherPeer(), chid)
-		err = m.sendMessage(sctx, chid, m.cancelMessage(chid))
+		err = m.transport.SendMessage(sctx, chid, m.cancelMessage(chid))
 		if err != nil {
 			err = fmt.Errorf("unable to send cancel message for channel %s to peer %s: %w",
 				chid, m.peerID, err)
@@ -458,9 +439,10 @@ func (m *manager) CloseDataTransferChannelWithError(ctx context.Context, chid da
 	// the channel is already in an error state, which is probably because of
 	// connection issues, so if we cant send the message just log a warning.
 	log.Infof("%s: sending cancel channel to %s for channel %s", m.peerID, chst.OtherPeer(), chid)
-	err = m.transport.WithChannel(ctx, chid, func(actions datatransfer.ChannelActions) {
-		actions.CloseChannel()
-		actions.SendMessage(m.cancelMessage(chid))
+	err = m.transport.UpdateChannel(ctx, chid, datatransfer.ChannelUpdate{
+		Paused:      chst.Status().IsResponderPaused(),
+		Closed:      true,
+		SendMessage: m.cancelMessage(chid),
 	})
 	if err != nil {
 		// Just log a warning here because it's important that we fire the
@@ -488,9 +470,9 @@ func (m *manager) PauseDataTransferChannel(ctx context.Context, chid datatransfe
 
 	ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
 
-	err := m.transport.WithChannel(ctx, chid, func(actions datatransfer.ChannelActions) {
-		actions.(datatransfer.PauseActions).PauseChannel()
-		actions.SendMessage(m.pauseMessage(chid))
+	err := m.transport.UpdateChannel(ctx, chid, datatransfer.ChannelUpdate{
+		Paused:      true,
+		SendMessage: m.pauseMessage(chid),
 	})
 	if err != nil {
 		log.Warnf("Error attempting to pause at transport level: %s", err.Error())
@@ -509,9 +491,9 @@ func (m *manager) ResumeDataTransferChannel(ctx context.Context, chid datatransf
 
 	ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
 
-	err := m.transport.WithChannel(ctx, chid, func(actions datatransfer.ChannelActions) {
-		actions.(datatransfer.PauseActions).ResumeChannel()
-		actions.SendMessage(m.resumeMessage(chid))
+	err := m.transport.UpdateChannel(ctx, chid, datatransfer.ChannelUpdate{
+		Paused:      false,
+		SendMessage: m.resumeMessage(chid),
 	})
 	if err != nil {
 		log.Warnf("Error attempting to resume at transport level: %s", err.Error())

@@ -84,8 +84,3 @@ func (m *manager) cancelMessage(chid datatransfer.ChannelID) datatransfer.Messag
 	return message.CancelResponse(chid.ID)
 }
 
-func (m *manager) sendMessage(ctx context.Context, chid datatransfer.ChannelID, message datatransfer.Message) error {
-	return m.transport.WithChannel(ctx, chid, func(actions datatransfer.ChannelActions) {
-		actions.SendMessage(message)
-	})
-}
