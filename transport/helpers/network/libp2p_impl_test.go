@@ -21,8 +21,8 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
-	"github.com/filecoin-project/go-data-transfer/v2/network"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/helpers/network"
 )
 
 // Receiver is an interface for receiving messages from the DataTransferNetwork.

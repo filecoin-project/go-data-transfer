@@ -14,6 +14,10 @@ import (
 	"testing"
 	"time"
 
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/benchmarks/testinstance"
+	tn "github.com/filecoin-project/go-data-transfer/v2/benchmarks/testnet"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -24,16 +28,9 @@ import (
 	"github.com/ipfs/go-merkledag"
 	"github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
-	basicnode "github.com/ipld/go-ipld-prime/node/basic"
-	ipldselector "github.com/ipld/go-ipld-prime/traversal/selector"
-	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
-
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/benchmarks/testinstance"
-	tn "github.com/filecoin-project/go-data-transfer/v2/benchmarks/testnet"
-	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 const stdBlockSize = 8000
@@ -77,10 +74,6 @@ func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc,
 		thisCids := df(ctx, b, instances[:1])
 		allCids = append(allCids, thisCids...)
 	}
-	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
-
-	allSelector := ssb.ExploreRecursive(ipldselector.RecursionLimitNone(),
-		ssb.ExploreAll(ssb.ExploreRecursiveEdge())).Node()
 
 	runtime.GC()
 	b.ResetTimer()
@@ -105,7 +98,7 @@ func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc,
 		timer := time.NewTimer(30 * time.Second)
 		start := time.Now()
 		for j := 0; j < numfiles; j++ {
-			_, err := pusher.Manager.OpenPushDataChannel(ctx, receiver.Peer, testutil.NewTestTypedVoucher(), allCids[j], allSelector)
+			_, err := pusher.Manager.OpenPushDataChannel(ctx, receiver.Peer, testutil.NewTestTypedVoucher(), allCids[j], selectorparse.CommonSelector_ExploreAllRecursively)
 			if err != nil {
 				b.Fatalf("received error on request: %s", err.Error())
 			}

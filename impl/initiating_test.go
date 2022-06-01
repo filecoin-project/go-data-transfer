@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	. "github.com/filecoin-project/go-data-transfer/v2/impl"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	dss "github.com/ipfs/go-datastore/sync"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
-
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	. "github.com/filecoin-project/go-data-transfer/v2/impl"
-	"github.com/filecoin-project/go-data-transfer/v2/message"
-	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 func TestDataTransferInitiating(t *testing.T) {
@@ -333,7 +333,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				events:         make(chan datatransfer.EventCode, len(verify.expectedEvents)),
 			}
 			ev.setup(t, dt)
-			h.stor = testutil.AllSelector()
+			h.stor = 			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
 			h.voucher = testutil.NewTestTypedVoucher()
 			h.voucherResult = testutil.NewTestTypedVoucher()
 			require.NoError(t, err)
@@ -581,9 +581,10 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 
 			// setup voucher processing
 			h.stor = testutil.AllSelector()
-			h.voucher = testutil.NewTestTypedVoucher()
-			require.NoError(t, h.dt.RegisterVoucherType(h.voucher.Type, h.voucherValidator))
-			h.voucherResult = testutil.NewTestTypedVoucher()
+			h.voucher = testutil.NewFakeDTType()
+			require.NoError(t, h.dt.RegisterVoucherType(h.voucher, h.voucherValidator))
+			h.voucherResult = testutil.NewFakeDTType()
+			err = h.dt.RegisterVoucherResultType(h.voucherResult)
 			require.NoError(t, err)
 			h.baseCid = testutil.GenerateCids(1)[0]
 

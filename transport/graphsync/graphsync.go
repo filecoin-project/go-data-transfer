@@ -15,9 +15,9 @@ import (
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/network"
 	dtchannel "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/dtchannel"
 	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/helpers/network"
 )
 
 var log = logging.Logger("dt_graphsync")
