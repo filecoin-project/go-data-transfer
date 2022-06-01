@@ -10,6 +10,7 @@ import (
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
+	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
 type typeWithBindnodeSchema interface {
@@ -166,4 +167,16 @@ func TypeToWriter(ptrValue interface{}, w io.Writer) error {
 		return err
 	}
 	return ipld.EncodeStreaming(w, node, dagcbor.Encode)
+}
+
+func NodeToDeferred(node ipld.Node) (*cbg.Deferred, error) {
+	byts, err := NodeToBytes(node)
+	if err != nil {
+		return nil, err
+	}
+	return &cbg.Deferred{Raw: byts}, nil
+}
+
+func DeferredToNode(def *cbg.Deferred) (ipld.Node, error) {
+	return NodeFromBytes(def.Raw)
 }

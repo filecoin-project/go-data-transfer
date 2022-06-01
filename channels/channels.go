@@ -111,7 +111,7 @@ func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 
 // CreateNew creates a new channel id and channel state and saves to channels.
 // returns error if the channel exists already.
-func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector ipld.Node, voucherType datatransfer.TypeIdentifier, voucher ipld.Node, voucherResultType datatransfer.TypeIdentifier, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
+func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector ipld.Node, voucher datatransfer.TypedVoucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
 	var responder peer.ID
 	if dataSender == initiator {
 		responder = dataReceiver
@@ -119,30 +119,31 @@ func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, base
 		responder = dataSender
 	}
 	chid := datatransfer.ChannelID{Initiator: initiator, Responder: responder, ID: tid}
+	initialVoucher, err := ipldutils.NodeToDeferred(voucher.Voucher)
+	if err != nil {
+		return datatransfer.ChannelID{}, err
+	}
 	selBytes, err := ipldutils.NodeToBytes(selector)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
-	voucherBytes, err := ipldutils.NodeToBytes(voucher)
-	if err != nil {
-		return datatransfer.ChannelID{}, err
-	}
 	err = c.stateMachines.Begin(chid, &internal.ChannelState{
-		SelfPeer:    selfPeer,
-		TransferID:  tid,
-		Initiator:   initiator,
-		Responder:   responder,
-		BaseCid:     baseCid,
-		Selector:    &cbg.Deferred{Raw: selBytes},
-		Sender:      dataSender,
-		Recipient:   dataReceiver,
-		Stages:      &datatransfer.ChannelStages{},
-		VoucherType: voucherType,
-		Vouchers: []*cbg.Deferred{{
-			Raw: voucherBytes,
-		}},
-		VoucherResultType: voucherResultType,
-		Status:            datatransfer.Requested,
+		SelfPeer:   selfPeer,
+		TransferID: tid,
+		Initiator:  initiator,
+		Responder:  responder,
+		BaseCid:    baseCid,
+		Selector:   &cbg.Deferred{Raw: selBytes},
+		Sender:     dataSender,
+		Recipient:  dataReceiver,
+		Stages:     &datatransfer.ChannelStages{},
+		Vouchers: []internal.EncodedVoucher{
+			{
+				Type:    voucher.Type,
+				Voucher: initialVoucher,
+			},
+		},
+		Status: datatransfer.Requested,
 	})
 	if err != nil {
 		log.Errorw("failed to create new tracking channel for data-transfer", "channelID", chid, "err", err)
@@ -276,21 +277,21 @@ func (c *Channels) ResumeResponder(chid datatransfer.ChannelID) error {
 }
 
 // NewVoucher records a new voucher for this channel
-func (c *Channels) NewVoucher(chid datatransfer.ChannelID, voucher ipld.Node) error {
-	voucherBytes, err := ipldutils.NodeToBytes(voucher)
+func (c *Channels) NewVoucher(chid datatransfer.ChannelID, voucher datatransfer.TypedVoucher) error {
+	voucherBytes, err := ipldutils.NodeToBytes(voucher.Voucher)
 	if err != nil {
 		return err
 	}
-	return c.send(chid, datatransfer.NewVoucher, voucherBytes)
+	return c.send(chid, datatransfer.NewVoucher, voucher.Type, voucherBytes)
 }
 
 // NewVoucherResult records a new voucher result for this channel
-func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResult ipld.Node) error {
-	voucherResultBytes, err := ipldutils.NodeToBytes(voucherResult)
+func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResult datatransfer.TypedVoucher) error {
+	voucherResultBytes, err := ipldutils.NodeToBytes(voucherResult.Voucher)
 	if err != nil {
 		return err
 	}
-	return c.send(chid, datatransfer.NewVoucherResult, voucherResultBytes)
+	return c.send(chid, datatransfer.NewVoucherResult, voucherResult.Type, voucherResultBytes)
 }
 
 // Complete indicates responder has completed sending/receiving data

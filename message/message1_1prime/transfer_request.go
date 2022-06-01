@@ -98,6 +98,17 @@ func (trq *TransferRequest1_1) Voucher() (ipld.Node, error) {
 	return trq.VoucherPtr, nil
 }
 
+// TypedVoucher is a convenience method that returns the voucher and its typed
+// as a TypedVoucher object
+// TODO(rvagg): tests for this
+func (trq *TransferRequest1_1) TypedVoucher() (datatransfer.TypedVoucher, error) {
+	voucher, err := trq.Voucher()
+	if err != nil {
+		return datatransfer.TypedVoucher{}, err
+	}
+	return datatransfer.TypedVoucher{Voucher: voucher, Type: trq.VoucherType()}, nil
+}
+
 func (trq *TransferRequest1_1) EmptyVoucher() bool {
 	return trq.VoucherTypeIdentifier == datatransfer.EmptyTypeIdentifier
 }

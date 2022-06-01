@@ -37,6 +37,7 @@ type Request interface {
 	IsVoucher() bool
 	VoucherType() TypeIdentifier
 	Voucher() (ipld.Node, error)
+	TypedVoucher() (TypedVoucher, error)
 	BaseCid() cid.Cid
 	Selector() (ipld.Node, error)
 	IsRestartExistingChannelRequest() bool

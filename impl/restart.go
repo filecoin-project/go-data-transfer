@@ -76,17 +76,16 @@ func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransf
 	if err != nil {
 		return err
 	}
-	voucherType := channel.VoucherType()
 	baseCid := channel.BaseCID()
 	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
 
-	req, err := message.NewRequest(chid.ID, true, false, voucherType, voucher, baseCid, selector)
+	req, err := message.NewRequest(chid.ID, true, false, &voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}
 
-	processor, has := m.transportConfigurers.Processor(voucherType)
+	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -115,17 +114,16 @@ func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransf
 	if err != nil {
 		return err
 	}
-	voucherType := channel.VoucherType()
 	baseCid := channel.BaseCID()
 	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
 
-	req, err := message.NewRequest(chid.ID, true, true, voucherType, voucher, baseCid, selector)
+	req, err := message.NewRequest(chid.ID, true, true, &voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}
 
-	processor, has := m.transportConfigurers.Processor(voucherType)
+	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -175,16 +173,15 @@ func (m *manager) validateRestartRequest(ctx context.Context, otherPeer peer.ID,
 	if err != nil {
 		return xerrors.Errorf("failed to fetch request voucher: %w", err)
 	}
-	if req.VoucherType() != channel.VoucherType() {
+	channelVoucher, err := channel.Voucher()
+	if err != nil {
+		return xerrors.Errorf("failed to fetch channel voucher: %w", err)
+	}
+	if req.VoucherType() != channelVoucher.Type {
 		return xerrors.New("channel and request voucher types do not match")
 	}
 
-	channelVoucher, err := channel.Voucher()
-	if err != nil {
-		return xerrors.New("failed to fetch channel voucher")
-	}
-
-	if !ipld.DeepEqual(reqVoucher, channelVoucher) {
+	if !ipld.DeepEqual(reqVoucher, channelVoucher.Voucher) {
 		return xerrors.New("channel and request vouchers do not match")
 	}
 

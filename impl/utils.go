@@ -29,10 +29,10 @@ var resumeTransportStatesResponder = statusList{
 }
 
 // newRequest encapsulates message creation
-func (m *manager) newRequest(ctx context.Context, selector ipld.Node, isPull bool, voucherType datatransfer.TypeIdentifier, voucher ipld.Node, baseCid cid.Cid, to peer.ID) (datatransfer.Request, error) {
+func (m *manager) newRequest(ctx context.Context, selector ipld.Node, isPull bool, voucher datatransfer.TypedVoucher, baseCid cid.Cid, to peer.ID) (datatransfer.Request, error) {
 	// Generate a new transfer ID for the request
 	tid := datatransfer.TransferID(m.transferIDGen.next())
-	return message.NewRequest(tid, false, isPull, voucherType, voucher, baseCid, selector)
+	return message.NewRequest(tid, false, isPull, &voucher, baseCid, selector)
 }
 
 func (m *manager) resume(chid datatransfer.ChannelID) error {

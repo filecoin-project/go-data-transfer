@@ -52,20 +52,16 @@ func (c channelState) Selector() ipld.Node {
 	return builder.Build()
 }
 
-func (c channelState) VoucherType() datatransfer.TypeIdentifier {
-	return c.ic.VoucherType
-}
-
-func (c channelState) VoucherResultType() datatransfer.TypeIdentifier {
-	return c.ic.VoucherResultType
-}
-
 // Voucher returns the voucher for this data transfer
-func (c channelState) Voucher() (ipld.Node, error) {
+func (c channelState) Voucher() (datatransfer.TypedVoucher, error) {
 	if len(c.ic.Vouchers) == 0 {
-		return nil, nil
+		return datatransfer.TypedVoucher{}, nil
 	}
-	return ipldutils.NodeFromBytes(c.ic.Vouchers[0].Raw)
+	node, err := ipldutils.DeferredToNode(c.ic.Vouchers[0].Voucher)
+	if err != nil {
+		return datatransfer.TypedVoucher{}, err
+	}
+	return datatransfer.TypedVoucher{Voucher: node, Type: c.ic.Vouchers[0].Type}, nil
 }
 
 // ReceivedCidsTotal returns the number of (non-unique) cids received so far
@@ -111,34 +107,44 @@ func (c channelState) Message() string {
 	return c.ic.Message
 }
 
-func (c channelState) Vouchers() ([]ipld.Node, error) {
-	vouchers := make([]ipld.Node, 0, len(c.ic.Vouchers))
+func (c channelState) Vouchers() ([]datatransfer.TypedVoucher, error) {
+	vouchers := make([]datatransfer.TypedVoucher, 0, len(c.ic.Vouchers))
 	for _, encoded := range c.ic.Vouchers {
-		n, err := ipldutils.NodeFromBytes(encoded.Raw)
+		node, err := ipldutils.DeferredToNode(encoded.Voucher)
 		if err != nil {
 			return nil, err
 		}
-		vouchers = append(vouchers, n)
+		vouchers = append(vouchers, datatransfer.TypedVoucher{Voucher: node, Type: encoded.Type})
 	}
 	return vouchers, nil
 }
 
-func (c channelState) LastVoucher() (ipld.Node, error) {
-	return ipldutils.NodeFromBytes(c.ic.Vouchers[len(c.ic.Vouchers)-1].Raw)
+func (c channelState) LastVoucher() (datatransfer.TypedVoucher, error) {
+	ev := c.ic.Vouchers[len(c.ic.Vouchers)-1]
+	node, err := ipldutils.DeferredToNode(ev.Voucher)
+	if err != nil {
+		return datatransfer.TypedVoucher{}, err
+	}
+	return datatransfer.TypedVoucher{Voucher: node, Type: ev.Type}, nil
 }
 
-func (c channelState) LastVoucherResult() (ipld.Node, error) {
-	return ipldutils.NodeFromBytes(c.ic.VoucherResults[len(c.ic.VoucherResults)-1].Raw)
+func (c channelState) LastVoucherResult() (datatransfer.TypedVoucher, error) {
+	evr := c.ic.VoucherResults[len(c.ic.VoucherResults)-1]
+	node, err := ipldutils.DeferredToNode(evr.VoucherResult)
+	if err != nil {
+		return datatransfer.TypedVoucher{}, err
+	}
+	return datatransfer.TypedVoucher{Voucher: node, Type: evr.Type}, nil
 }
 
-func (c channelState) VoucherResults() ([]ipld.Node, error) {
-	voucherResults := make([]ipld.Node, 0, len(c.ic.VoucherResults))
+func (c channelState) VoucherResults() ([]datatransfer.TypedVoucher, error) {
+	voucherResults := make([]datatransfer.TypedVoucher, 0, len(c.ic.VoucherResults))
 	for _, encoded := range c.ic.VoucherResults {
-		n, err := ipldutils.NodeFromBytes(encoded.Raw)
+		node, err := ipldutils.DeferredToNode(encoded.VoucherResult)
 		if err != nil {
 			return nil, err
 		}
-		voucherResults = append(voucherResults, n)
+		voucherResults = append(voucherResults, datatransfer.TypedVoucher{Voucher: node, Type: encoded.Type})
 	}
 	return voucherResults, nil
 }

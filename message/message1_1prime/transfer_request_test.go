@@ -18,10 +18,10 @@ func TestRequestMessageForProtocol(t *testing.T) {
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	isPull := true
 	id := datatransfer.TransferID(rand.Int31())
-	voucher := testutil.NewTestVoucher()
+	voucher := testutil.NewTestTypedVoucher()
 
 	// for the new protocols
-	request, err := message1_1.NewRequest(id, false, isPull, testutil.TestVoucherType, voucher, baseCid, selector)
+	request, err := message1_1.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 	require.NoError(t, err)
 
 	out12, err := request.MessageForProtocol(datatransfer.ProtocolDataTransfer1_2)

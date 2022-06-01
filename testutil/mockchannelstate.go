@@ -109,11 +109,7 @@ func (m *MockChannelState) Selector() ipld.Node {
 	panic("implement me")
 }
 
-func (m *MockChannelState) Voucher() (ipld.Node, error) {
-	panic("implement me")
-}
-
-func (m *MockChannelState) VoucherType() datatransfer.TypeIdentifier {
+func (m *MockChannelState) Voucher() (datatransfer.TypedVoucher, error) {
 	panic("implement me")
 }
 
@@ -145,23 +141,19 @@ func (m *MockChannelState) Message() string {
 	panic("implement me")
 }
 
-func (m *MockChannelState) Vouchers() ([]ipld.Node, error) {
+func (m *MockChannelState) Vouchers() ([]datatransfer.TypedVoucher, error) {
 	panic("implement me")
 }
 
-func (m *MockChannelState) VoucherResultType() datatransfer.TypeIdentifier {
+func (m *MockChannelState) VoucherResults() ([]datatransfer.TypedVoucher, error) {
 	panic("implement me")
 }
 
-func (m *MockChannelState) VoucherResults() ([]ipld.Node, error) {
+func (m *MockChannelState) LastVoucher() (datatransfer.TypedVoucher, error) {
 	panic("implement me")
 }
 
-func (m *MockChannelState) LastVoucher() (ipld.Node, error) {
-	panic("implement me")
-}
-
-func (m *MockChannelState) LastVoucherResult() (ipld.Node, error) {
+func (m *MockChannelState) LastVoucherResult() (datatransfer.TypedVoucher, error) {
 	panic("implement me")
 }
 

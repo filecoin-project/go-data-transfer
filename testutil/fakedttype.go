@@ -15,11 +15,11 @@ import (
 const TestVoucherType = datatransfer.TypeIdentifier("TestVoucher")
 
 // AssertTestVoucher asserts that a data transfer requests contains the expected fake data transfer voucher type
-func AssertTestVoucher(t *testing.T, request datatransfer.Request, expected ipld.Node) {
-	require.Equal(t, TestVoucherType, request.VoucherType())
+func AssertTestVoucher(t *testing.T, request datatransfer.Request, expected datatransfer.TypedVoucher) {
+	require.Equal(t, expected.Type, request.VoucherType())
 	voucher, err := request.Voucher()
 	require.NoError(t, err)
-	require.True(t, ipld.DeepEqual(expected, voucher))
+	require.True(t, ipld.DeepEqual(expected.Voucher, voucher))
 }
 
 // AssertEqualTestVoucher asserts that two requests have the same fake data transfer voucher
@@ -34,11 +34,11 @@ func AssertEqualTestVoucher(t *testing.T, expectedRequest datatransfer.Request, 
 }
 
 // AssertTestVoucherResult asserts that a data transfer response contains the expected fake data transfer voucher result type
-func AssertTestVoucherResult(t *testing.T, response datatransfer.Response, expected ipld.Node) {
-	require.Equal(t, TestVoucherType, response.VoucherResultType())
+func AssertTestVoucherResult(t *testing.T, response datatransfer.Response, expected datatransfer.TypedVoucher) {
+	require.Equal(t, expected.Type, response.VoucherResultType())
 	voucherResult, err := response.VoucherResult()
 	require.NoError(t, err)
-	require.True(t, ipld.DeepEqual(expected, voucherResult))
+	require.True(t, ipld.DeepEqual(expected.Voucher, voucherResult))
 }
 
 // AssertEqualTestVoucherResult asserts that two responses have the same fake data transfer voucher result
@@ -62,6 +62,10 @@ func NewTestVoucher() ipld.Node {
 	return n
 }
 
+func NewTestTypedVoucher() datatransfer.TypedVoucher {
+	return datatransfer.TypedVoucher{Voucher: NewTestVoucher(), Type: TestVoucherType}
+}
+
 // NewTestVoucher returns a fake voucher with random data
 func NewTestVoucherWith(data string) ipld.Node {
 	n, err := qp.BuildList(basicnode.Prototype.Any, 1, func(ma datamodel.ListAssembler) {
@@ -71,4 +75,8 @@ func NewTestVoucherWith(data string) ipld.Node {
 		panic(err)
 	}
 	return n
+}
+
+func NewTestTypedVoucherWith(data string) datatransfer.TypedVoucher {
+	return datatransfer.TypedVoucher{Voucher: NewTestVoucherWith(data), Type: TestVoucherType}
 }

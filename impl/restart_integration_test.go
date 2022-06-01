@@ -41,8 +41,8 @@ func TestRestartPush(t *testing.T) {
 		"Restart peer create push": {
 			stopAt: 20,
 			openPushF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.NewTestVoucherWith("applesauce")
-				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, testutil.TestVoucherType, voucher, testutil.TestVoucherType, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, rh.gsData.AllSelector)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -83,8 +83,8 @@ func TestRestartPush(t *testing.T) {
 		"Restart peer receive push": {
 			stopAt: 20,
 			openPushF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.NewTestVoucherWith("applesauce")
-				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, testutil.TestVoucherType, voucher, testutil.TestVoucherType, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, rh.gsData.AllSelector)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -294,8 +294,8 @@ func TestRestartPull(t *testing.T) {
 		"Restart peer create pull": {
 			stopAt: 40,
 			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.NewTestVoucherWith("applesauce")
-				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, testutil.TestVoucherType, voucher, testutil.TestVoucherType, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, rh.gsData.AllSelector)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -333,8 +333,8 @@ func TestRestartPull(t *testing.T) {
 		"Restart peer receive pull": {
 			stopAt: 40,
 			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.NewTestVoucherWith("applesauce")
-				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, testutil.TestVoucherType, voucher, testutil.TestVoucherType, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, rh.gsData.AllSelector)
 				require.NoError(rh.t, err)
 				return chid
 			},

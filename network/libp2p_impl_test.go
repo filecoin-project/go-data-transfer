@@ -102,8 +102,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
-		voucher := testutil.NewTestVoucher()
-		request, err := message.NewRequest(id, false, isPull, testutil.TestVoucherType, voucher, baseCid, selector)
+		voucher := testutil.NewTestTypedVoucher()
+		request, err := message.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 		require.NoError(t, err)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 
@@ -131,9 +131,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 	t.Run("Send Response", func(t *testing.T) {
 		accepted := false
 		id := datatransfer.TransferID(rand.Int31())
-		voucherResult := testutil.NewTestVoucher()
-		voucherResultType := testutil.TestVoucherType
-		response, err := message.ValidationResultResponse(types.NewMessage, id, datatransfer.ValidationResult{Accepted: accepted, VoucherResult: voucherResult, VoucherResultType: voucherResultType}, nil, false)
+		voucherResult := testutil.NewTestTypedVoucher()
+		response, err := message.ValidationResultResponse(types.NewMessage, id, datatransfer.ValidationResult{Accepted: accepted, VoucherResult: &voucherResult}, nil, false)
 		require.NoError(t, err)
 		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), response))
 
@@ -274,8 +273,8 @@ func TestSendMessageRetry(t *testing.T) {
 			selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 			isPull := false
 			id := datatransfer.TransferID(rand.Int31())
-			voucher := testutil.NewTestVoucher()
-			request, err := message.NewRequest(id, false, isPull, testutil.TestVoucherType, voucher, baseCid, selector)
+			voucher := testutil.NewTestTypedVoucher()
+			request, err := message.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 			require.NoError(t, err)
 
 			err = dtnet1.SendMessage(ctx, host2.ID(), request)

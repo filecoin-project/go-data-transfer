@@ -180,7 +180,7 @@ func TestRoundTrip(t *testing.T) {
 				}
 				dt1.SubscribeToEvents(subscriber)
 				dt2.SubscribeToEvents(subscriber)
-				voucher := testutil.NewTestVoucherWith("applesauce")
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
 				sv := testutil.NewStubbedValidator()
 				sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 
@@ -190,8 +190,8 @@ func TestRoundTrip(t *testing.T) {
 					bs := bstore.NewBlockstore(namespace.Wrap(ds, datastore.NewKey("blockstore")))
 					lsys := storeutil.LinkSystemForBlockstore(bs)
 					sourceDagService = merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
-					err := dt1.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher ipld.Node, transport datatransfer.Transport) {
-						if ipld.DeepEqual(testVoucher, voucher) {
+					err := dt1.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher, transport datatransfer.Transport) {
+						if testVoucher.Equals(voucher) {
 							gsTransport, ok := transport.(*tp.Transport)
 							if ok {
 								err := gsTransport.UseStore(channelID, lsys)
@@ -212,8 +212,8 @@ func TestRoundTrip(t *testing.T) {
 					bs := bstore.NewBlockstore(namespace.Wrap(ds, datastore.NewKey("blockstore")))
 					lsys := storeutil.LinkSystemForBlockstore(bs)
 					destDagService = merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
-					err := dt2.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher ipld.Node, transport datatransfer.Transport) {
-						if ipld.DeepEqual(testVoucher, voucher) {
+					err := dt2.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher, transport datatransfer.Transport) {
+						if testVoucher.Equals(voucher) {
 							gsTransport, ok := transport.(*tp.Transport)
 							if ok {
 								err := gsTransport.UseStore(channelID, lsys)
@@ -230,11 +230,11 @@ func TestRoundTrip(t *testing.T) {
 				if data.isPull {
 					sv.ExpectSuccessPull()
 					require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
-					chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+					chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
 				} else {
 					sv.ExpectSuccessPush()
 					require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
-					chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+					chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, gsData.AllSelector)
 				}
 				require.NoError(t, err)
 				opens := 0
@@ -322,9 +322,9 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 			}
 			dt1.SubscribeToEvents(subscriber)
 			dt2.SubscribeToEvents(subscriber)
-			vouchers := make([]ipld.Node, 0, data.requestCount)
+			vouchers := make([]datatransfer.TypedVoucher, 0, data.requestCount)
 			for i := 0; i < data.requestCount; i++ {
-				vouchers = append(vouchers, testutil.NewTestVoucher())
+				vouchers = append(vouchers, testutil.NewTestTypedVoucher())
 			}
 			sv := testutil.NewStubbedValidator()
 			sv.StubResult(datatransfer.ValidationResult{Accepted: true})
@@ -344,9 +344,9 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 				linkSystems = append(linkSystems, lsys)
 			}
 
-			err = dt2.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher ipld.Node, transport datatransfer.Transport) {
+			err = dt2.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher, transport datatransfer.Transport) {
 				for i, voucher := range vouchers {
-					if ipld.DeepEqual(testVoucher, voucher) {
+					if testVoucher.Equals(voucher) {
 						gsTransport, ok := transport.(*tp.Transport)
 						if ok {
 							err := gsTransport.UseStore(channelID, linkSystems[i])
@@ -361,14 +361,14 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 				for i := 0; i < data.requestCount; i++ {
-					_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), testutil.TestVoucherType, vouchers[i], testutil.TestVoucherType, rootCid, gsData.AllSelector)
+					_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), vouchers[i], rootCid, gsData.AllSelector)
 					require.NoError(t, err)
 				}
 			} else {
 				sv.ExpectSuccessPush()
 				require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
 				for i := 0; i < data.requestCount; i++ {
-					_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), testutil.TestVoucherType, vouchers[i], testutil.TestVoucherType, rootCid, gsData.AllSelector)
+					_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), vouchers[i], rootCid, gsData.AllSelector)
 					require.NoError(t, err)
 				}
 			}
@@ -447,7 +447,7 @@ func TestManyReceiversAtOnce(t *testing.T) {
 				err = receiver.Start(gsData.Ctx)
 				require.NoError(t, err)
 
-				err = receiver.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher ipld.Node, transport datatransfer.Transport) {
+				err = receiver.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher, transport datatransfer.Transport) {
 					gsTransport, isGs := transport.(*tp.Transport)
 					if isGs {
 						err := gsTransport.UseStore(channelID, altLinkSystem)
@@ -481,9 +481,9 @@ func TestManyReceiversAtOnce(t *testing.T) {
 			for _, receiver := range receivers {
 				receiver.SubscribeToEvents(subscriber)
 			}
-			vouchers := make([]ipld.Node, 0, data.receiverCount)
+			vouchers := make([]datatransfer.TypedVoucher, 0, data.receiverCount)
 			for i := 0; i < data.receiverCount; i++ {
-				vouchers = append(vouchers, testutil.NewTestVoucher())
+				vouchers = append(vouchers, testutil.NewTestTypedVoucher())
 			}
 			sv := testutil.NewStubbedValidator()
 			sv.StubResult(datatransfer.ValidationResult{Accepted: true})
@@ -495,14 +495,14 @@ func TestManyReceiversAtOnce(t *testing.T) {
 				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 				for i, receiver := range receivers {
-					_, err = receiver.OpenPullDataChannel(ctx, host1.ID(), testutil.TestVoucherType, vouchers[i], testutil.TestVoucherType, rootCid, gsData.AllSelector)
+					_, err = receiver.OpenPullDataChannel(ctx, host1.ID(), vouchers[i], rootCid, gsData.AllSelector)
 					require.NoError(t, err)
 				}
 			} else {
 				sv.ExpectSuccessPush()
 				for i, receiver := range receivers {
 					require.NoError(t, receiver.RegisterVoucherType(testutil.TestVoucherType, sv))
-					_, err = dt1.OpenPushDataChannel(ctx, hosts[i].ID(), testutil.TestVoucherType, vouchers[i], testutil.TestVoucherType, rootCid, gsData.AllSelector)
+					_, err = dt1.OpenPushDataChannel(ctx, hosts[i].ID(), vouchers[i], rootCid, gsData.AllSelector)
 					require.NoError(t, err)
 				}
 			}
@@ -729,7 +729,7 @@ func TestAutoRestart(t *testing.T) {
 				}
 				initiator.SubscribeToEvents(subscriber)
 				responder.SubscribeToEvents(subscriber)
-				voucher := testutil.NewTestVoucherWith("applesauce")
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
 				sv := testutil.NewStubbedValidator()
 				sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 				sv.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
@@ -768,10 +768,10 @@ func TestAutoRestart(t *testing.T) {
 				var chid datatransfer.ChannelID
 				if tc.isPush {
 					// Open a push channel
-					chid, err = initiator.OpenPushDataChannel(ctx, responderHost.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+					chid, err = initiator.OpenPushDataChannel(ctx, responderHost.ID(), voucher, rootCid, gsData.AllSelector)
 				} else {
 					// Open a pull channel
-					chid, err = initiator.OpenPullDataChannel(ctx, responderHost.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+					chid, err = initiator.OpenPullDataChannel(ctx, responderHost.ID(), voucher, rootCid, gsData.AllSelector)
 				}
 				require.NoError(t, err)
 
@@ -922,7 +922,7 @@ func TestAutoRestartAfterBouncingInitiator(t *testing.T) {
 		}
 		dataReceived := onDataReceivedChan(dataReceiver)
 
-		voucher := testutil.NewTestVoucherWith("applesauce")
+		voucher := testutil.NewTestTypedVoucherWith("applesauce")
 		sv := testutil.NewStubbedValidator()
 		sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 		sv.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
@@ -945,10 +945,10 @@ func TestAutoRestartAfterBouncingInitiator(t *testing.T) {
 		var chid datatransfer.ChannelID
 		if isPush {
 			// Open a push channel
-			chid, err = initiator.OpenPushDataChannel(ctx, responderHost.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+			chid, err = initiator.OpenPushDataChannel(ctx, responderHost.ID(), voucher, rootCid, gsData.AllSelector)
 		} else {
 			// Open a pull channel
-			chid, err = initiator.OpenPullDataChannel(ctx, responderHost.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+			chid, err = initiator.OpenPullDataChannel(ctx, responderHost.ID(), voucher, rootCid, gsData.AllSelector)
 		}
 		require.NoError(t, err)
 
@@ -1120,7 +1120,7 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 			}
 			dt1.SubscribeToEvents(subscriber)
 			dt2.SubscribeToEvents(subscriber)
-			voucher := testutil.NewTestVoucherWith("applesauce")
+			voucher := testutil.NewTestTypedVoucherWith("applesauce")
 			sv := testutil.NewStubbedValidator()
 			root, _ := testutil.LoadUnixFSFile(ctx, t, gsData.DagService1, loremFile)
 			rootCid := root.(cidlink.Link).Cid
@@ -1130,12 +1130,12 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 				sv.ExpectSuccessPull()
 				sv.StubResult(datatransfer.ValidationResult{Accepted: true, ForcePause: true})
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
-				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
 			} else {
 				sv.ExpectSuccessPush()
 				sv.StubResult(datatransfer.ValidationResult{Accepted: true, ForcePause: true})
 				require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
-				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, gsData.AllSelector)
 			}
 			require.NoError(t, err)
 			opens := 0
@@ -1177,12 +1177,11 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 
 type retrievalRevalidator struct {
 	*testutil.StubbedValidator
-	providerPausePoint       int
-	pausePoints              []uint64
-	leavePausedInitially     bool
-	initialVoucherResult     ipld.Node
-	initialVoucherResultType datatransfer.TypeIdentifier
-	requiresFinalization     bool
+	providerPausePoint   int
+	pausePoints          []uint64
+	leavePausedInitially bool
+	initialVoucherResult *datatransfer.TypedVoucher
+	requiresFinalization bool
 }
 
 func (r *retrievalRevalidator) ValidatePush(
@@ -1195,8 +1194,9 @@ func (r *retrievalRevalidator) ValidatePush(
 		Accepted:             true,
 		RequiresFinalization: r.requiresFinalization,
 		ForcePause:           r.leavePausedInitially,
-		VoucherResult:        r.initialVoucherResult,
-		VoucherResultType:    r.initialVoucherResultType,
+	}
+	if r.initialVoucherResult != nil {
+		vr.VoucherResult = r.initialVoucherResult
 	}
 	if len(r.pausePoints) > r.providerPausePoint {
 		vr.DataLimit = r.pausePoints[r.providerPausePoint]
@@ -1216,8 +1216,9 @@ func (r *retrievalRevalidator) ValidatePull(
 		Accepted:             true,
 		RequiresFinalization: r.requiresFinalization,
 		ForcePause:           r.leavePausedInitially,
-		VoucherResult:        r.initialVoucherResult,
-		VoucherResultType:    r.initialVoucherResultType,
+	}
+	if r.initialVoucherResult != nil {
+		vr.VoucherResult = r.initialVoucherResult
 	}
 	if len(r.pausePoints) > r.providerPausePoint {
 		vr.DataLimit = r.pausePoints[r.providerPausePoint]
@@ -1325,7 +1326,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			errChan := make(chan struct{}, 2)
 			clientPausePoint := 0
 			clientFinished := make(chan struct{}, 1)
-			finalVoucherResult := testutil.NewTestVoucher()
+			finalVoucherResult := testutil.NewTestTypedVoucher()
 			require.NoError(t, err)
 			var clientSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 				if event.Code == datatransfer.Error {
@@ -1334,15 +1335,15 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 				if event.Code == datatransfer.NewVoucherResult {
 					lastVoucherResult, err := channelState.LastVoucherResult()
 					require.NoError(t, err)
-					if ipld.DeepEqual(lastVoucherResult, finalVoucherResult) {
-						_ = dt2.SendVoucher(ctx, chid, testutil.NewTestVoucher())
+					if lastVoucherResult.Equals(finalVoucherResult) {
+						_ = dt2.SendVoucher(ctx, chid, testutil.NewTestTypedVoucher())
 					}
 				}
 
 				if event.Code == datatransfer.DataReceived &&
 					clientPausePoint < len(config.pausePoints) &&
 					channelState.Received() > config.pausePoints[clientPausePoint] {
-					_ = dt2.SendVoucher(ctx, chid, testutil.NewTestVoucher())
+					_ = dt2.SendVoucher(ctx, chid, testutil.NewTestTypedVoucher())
 					clientPausePoint++
 				}
 				if channelState.Status() == datatransfer.Completed {
@@ -1352,11 +1353,10 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			dt2.SubscribeToEvents(clientSubscriber)
 
 			sv := &retrievalRevalidator{
-				StubbedValidator:         testutil.NewStubbedValidator(),
-				pausePoints:              config.pausePoints,
-				requiresFinalization:     true,
-				leavePausedInitially:     true,
-				initialVoucherResultType: testutil.TestVoucherType,
+				StubbedValidator:     testutil.NewStubbedValidator(),
+				pausePoints:          config.pausePoints,
+				requiresFinalization: true,
+				leavePausedInitially: true,
 			}
 			providerFinished := make(chan struct{}, 1)
 			var providerSubscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
@@ -1371,7 +1371,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					dt1.UpdateValidationStatus(ctx, chid, sv.nextStatus())
 				}
 				if event.Code == datatransfer.DataLimitExceeded {
-					dt1.SendVoucherResult(ctx, chid, testutil.NewTestVoucher())
+					dt1.SendVoucherResult(ctx, chid, testutil.NewTestTypedVoucher())
 				}
 				if event.Code == datatransfer.BeginFinalizing {
 					sv.requiresFinalization = false
@@ -1385,12 +1385,12 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 				}
 			}
 			dt1.SubscribeToEvents(providerSubscriber)
-			voucher := testutil.NewTestVoucherWith("applesauce")
+			voucher := testutil.NewTestTypedVoucherWith("applesauce")
 
 			require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 
 			require.NoError(t, dt2.RegisterVoucherResultType(testutil.TestVoucherType))
-			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
 			require.NoError(t, err)
 
 			for providerFinished != nil || clientFinished != nil {
@@ -1490,7 +1490,7 @@ func TestPauseAndResume(t *testing.T) {
 			}
 			dt1.SubscribeToEvents(subscriber)
 			dt2.SubscribeToEvents(subscriber)
-			voucher := testutil.NewTestVoucherWith("applesauce")
+			voucher := testutil.NewTestTypedVoucherWith("applesauce")
 			sv := testutil.NewStubbedValidator()
 			sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 			sv.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
@@ -1499,11 +1499,11 @@ func TestPauseAndResume(t *testing.T) {
 			if isPull {
 				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
-				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
 			} else {
 				sv.ExpectSuccessPush()
 				require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
-				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, gsData.AllSelector)
 			}
 			require.NoError(t, err)
 			opens := 0
@@ -1601,15 +1601,15 @@ func TestUnrecognizedVoucherRoundTrip(t *testing.T) {
 			}
 			dt1.SubscribeToEvents(subscriber)
 			dt2.SubscribeToEvents(subscriber)
-			voucher := testutil.NewTestVoucherWith("applesauce")
+			voucher := testutil.NewTestTypedVoucherWith("applesauce")
 
 			root, _ := testutil.LoadUnixFSFile(ctx, t, gsData.DagService1, loremFile)
 			rootCid := root.(cidlink.Link).Cid
 
 			if isPull {
-				_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+				_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
 			} else {
-				_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+				_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, gsData.AllSelector)
 			}
 			require.NoError(t, err)
 			opens := 0
@@ -1652,7 +1652,7 @@ func TestDataTransferSubscribing(t *testing.T) {
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt2)
 	require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
-	voucher := testutil.NewTestVoucherWith("applesauce")
+	voucher := testutil.NewTestTypedVoucherWith("applesauce")
 	baseCid := testutil.GenerateCids(1)[0]
 
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1)
@@ -1672,7 +1672,7 @@ func TestDataTransferSubscribing(t *testing.T) {
 	}
 	unsub1 := dt1.SubscribeToEvents(subscribe1)
 	unsub2 := dt1.SubscribeToEvents(subscribe2)
-	_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, baseCid, gsData.AllSelector)
+	_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, baseCid, gsData.AllSelector)
 	require.NoError(t, err)
 	select {
 	case <-ctx.Done():
@@ -1701,7 +1701,7 @@ func TestDataTransferSubscribing(t *testing.T) {
 	}
 	unsub3 := dt1.SubscribeToEvents(subscribe3)
 	unsub4 := dt1.SubscribeToEvents(subscribe4)
-	_, err = dt1.OpenPullDataChannel(ctx, host2.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, baseCid, gsData.AllSelector)
+	_, err = dt1.OpenPullDataChannel(ctx, host2.ID(), voucher, baseCid, gsData.AllSelector)
 	require.NoError(t, err)
 	select {
 	case <-ctx.Done():
@@ -1771,7 +1771,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
 	host1 := gsData.Host1 // initiator and data sender
 	host2 := gsData.Host2 // data recipient, makes graphsync request for data
-	voucher := testutil.NewTestVoucher()
+	voucher := testutil.NewTestTypedVoucher()
 	link := gsData.LoadUnixFSFile(t, false)
 
 	// setup receiving peer to just record message coming in
@@ -1790,12 +1790,12 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt1)
-	voucherResult := testutil.NewTestVoucher()
+	voucherResult := testutil.NewTestTypedVoucher()
 	err = dt1.RegisterVoucherResultType(testutil.TestVoucherType)
 	require.NoError(t, err)
 
 	t.Run("when request is initiated", func(t *testing.T) {
-		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, link.(cidlink.Link).Cid, gsData.AllSelector)
+		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, link.(cidlink.Link).Cid, gsData.AllSelector)
 		require.NoError(t, err)
 
 		var messageReceived receivedMessage
@@ -1806,7 +1806,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		}
 		requestReceived := messageReceived.message.(datatransfer.Request)
 
-		response, err := message.NewResponse(requestReceived.TransferID(), true, false, testutil.TestVoucherType, voucherResult)
+		response, err := message.NewResponse(requestReceived.TransferID(), true, false, &voucherResult)
 		require.NoError(t, err)
 		nd, err := response.ToIPLD()
 		require.NoError(t, err)
@@ -1825,7 +1825,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	})
 
 	t.Run("when no request is initiated", func(t *testing.T) {
-		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint32()), true, false, testutil.TestVoucherType, voucher)
+		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint32()), true, false, &voucher)
 		require.NoError(t, err)
 		nd, err := response.ToIPLD()
 		require.NoError(t, err)
@@ -1852,7 +1852,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
 	host1 := gsData.Host1 // initiator and data sender
 	host2 := gsData.Host2 // data recipient, makes graphsync request for data
-	voucher := testutil.NewTestVoucherWith("applesauce")
+	voucher := testutil.NewTestTypedVoucherWith("applesauce")
 	link := gsData.LoadUnixFSFile(t, false)
 
 	// setup receiving peer to just record message coming in
@@ -1880,7 +1880,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 		}
 		gs1.RegisterIncomingRequestHook(validateHook)
 
-		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, link.(cidlink.Link).Cid, gsData.AllSelector)
+		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, link.(cidlink.Link).Cid, gsData.AllSelector)
 		require.NoError(t, err)
 
 		select {
@@ -1918,8 +1918,8 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				testutil.StartAndWaitForReady(ctx, t, dt1)
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 
-				voucher := testutil.NewTestVoucher()
-				request, err := message.NewRequest(id, false, true, testutil.TestVoucherType, voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucher()
+				request, err := message.NewRequest(id, false, true, &voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
 				nd, err := request.ToIPLD()
 				gsRequest := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
@@ -1945,8 +1945,8 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				require.NoError(t, err)
 				testutil.StartAndWaitForReady(ctx, t, dt1)
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
-				voucher := testutil.NewTestVoucher()
-				dtRequest, err := message.NewRequest(id, false, true, testutil.TestVoucherType, voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucher()
+				dtRequest, err := message.NewRequest(id, false, true, &voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
 
 				nd, err := dtRequest.ToIPLD()
@@ -2028,21 +2028,20 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	// In this retrieval flow we expect 2 voucher results:
 	// The first one is sent as a response from the initial request telling the client
 	// the provider has accepted the request and is starting to send blocks
-	respVoucher := testutil.NewTestVoucher()
-	respVoucherType := testutil.TestVoucherType
+	respVoucher := testutil.NewTestTypedVoucher()
 
 	// voucher results are sent by the providers to request payment while pausing until a voucher is sent
 	// to revalidate
-	voucherResults := []ipld.Node{
-		testutil.NewTestVoucherWith("one"),
-		testutil.NewTestVoucherWith("two"),
-		testutil.NewTestVoucherWith("thr"),
-		testutil.NewTestVoucherWith("for"),
-		testutil.NewTestVoucherWith("fiv"),
+	voucherResults := []datatransfer.TypedVoucher{
+		testutil.NewTestTypedVoucherWith("one"),
+		testutil.NewTestTypedVoucherWith("two"),
+		testutil.NewTestTypedVoucherWith("thr"),
+		testutil.NewTestTypedVoucherWith("for"),
+		testutil.NewTestTypedVoucherWith("fiv"),
 	}
 
 	// The final voucher result is sent by the provider to request a last payment voucher
-	finalVoucherResult := testutil.NewTestVoucher()
+	finalVoucherResult := testutil.NewTestTypedVoucher()
 
 	dt2.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 		if event.Code == datatransfer.Error {
@@ -2055,7 +2054,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 
 			// If this voucher result is the response voucher no action is needed
 			// we just know that the provider has accepted the transfer and is sending blocks
-			if ipld.DeepEqual(voucherResult, respVoucher) {
+			if voucherResult.Equals(respVoucher) {
 				// The test will fail if no response voucher is received
 				clientGotResponse <- struct{}{}
 			}
@@ -2063,16 +2062,16 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 			// If this voucher is a revalidation request we need to send a new voucher
 			// to revalidate and unpause the transfer
 			if clientPausePoint < 5 {
-				if ipld.DeepEqual(voucherResult, voucherResults[clientPausePoint]) {
-					_ = dt2.SendVoucher(ctx, chid, testutil.NewTestVoucher())
+				if voucherResult.Equals(voucherResults[clientPausePoint]) {
+					_ = dt2.SendVoucher(ctx, chid, testutil.NewTestTypedVoucher())
 					clientPausePoint++
 				}
 			}
 
 			// If this voucher result is the final voucher result we need
 			// to send a new voucher to unpause the provider and complete the transfer
-			if ipld.DeepEqual(voucherResult, finalVoucherResult) {
-				_ = dt2.SendVoucher(ctx, chid, testutil.NewTestVoucher())
+			if voucherResult.Equals(finalVoucherResult) {
+				_ = dt2.SendVoucher(ctx, chid, testutil.NewTestTypedVoucher())
 			}
 		}
 
@@ -2084,11 +2083,10 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	providerFinished := make(chan struct{}, 1)
 	nextVoucherResult := 0
 	sv := &retrievalRevalidator{
-		StubbedValidator:         testutil.NewStubbedValidator(),
-		pausePoints:              pausePoints,
-		requiresFinalization:     true,
-		initialVoucherResult:     respVoucher,
-		initialVoucherResultType: respVoucherType,
+		StubbedValidator:     testutil.NewStubbedValidator(),
+		pausePoints:          pausePoints,
+		requiresFinalization: true,
+		initialVoucherResult: &respVoucher,
 	}
 	dt1.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 		if event.Code == datatransfer.Error {
@@ -2116,8 +2114,8 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 
 	require.NoError(t, dt2.RegisterVoucherResultType(testutil.TestVoucherType))
 
-	voucher := testutil.NewTestVoucherWith("applesauce")
-	chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+	voucher := testutil.NewTestTypedVoucherWith("applesauce")
+	chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
 	require.NoError(t, err)
 
 	// Expect the client to receive a response voucher, the provider to complete the transfer and
@@ -2164,18 +2162,16 @@ func TestMultipleParallelTransfers(t *testing.T) {
 	// In this retrieval flow we expect 2 voucher results:
 	// The first one is sent as a response from the initial request telling the client
 	// the provider has accepted the request and is starting to send blocks
-	respVoucher := testutil.NewTestVoucher()
-	respVoucherType := testutil.TestVoucherType
+	respVoucher := testutil.NewTestTypedVoucher()
 	require.NoError(t, err)
 
 	// The final voucher result is sent by the provider to let the client know the deal is completed
-	finalVoucherResult := testutil.NewTestVoucher()
+	finalVoucherResult := testutil.NewTestTypedVoucher()
 	require.NoError(t, err)
 
 	sv := &retrievalRevalidator{
-		StubbedValidator:         testutil.NewStubbedValidator(),
-		initialVoucherResult:     respVoucher,
-		initialVoucherResultType: respVoucherType,
+		StubbedValidator:     testutil.NewStubbedValidator(),
+		initialVoucherResult: &respVoucher,
 	}
 	require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 
@@ -2213,15 +2209,15 @@ func TestMultipleParallelTransfers(t *testing.T) {
 
 					// If this voucher result is the response voucher no action is needed
 					// we just know that the provider has accepted the transfer and is sending blocks
-					if ipld.DeepEqual(voucherResult, respVoucher) {
+					if voucherResult.Equals(respVoucher) {
 						// The test will fail if no response voucher is received
 						clientGotResponse <- struct{}{}
 					}
 
 					// If this voucher result is the final voucher result we need
 					// to send a new voucher to unpause the provider and complete the transfer
-					if ipld.DeepEqual(voucherResult, finalVoucherResult) {
-						_ = dt2.SendVoucher(ctx, chid, testutil.NewTestVoucher())
+					if voucherResult.Equals(finalVoucherResult) {
+						_ = dt2.SendVoucher(ctx, chid, testutil.NewTestTypedVoucher())
 					}
 				}
 
@@ -2250,8 +2246,8 @@ func TestMultipleParallelTransfers(t *testing.T) {
 			root, origBytes := LoadRandomData(ctx, t, gsData.DagService1, size)
 			rootCid := root.(cidlink.Link).Cid
 
-			voucher := testutil.NewTestVoucher()
-			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), testutil.TestVoucherType, voucher, testutil.TestVoucherType, rootCid, gsData.AllSelector)
+			voucher := testutil.NewTestTypedVoucher()
+			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
 			require.NoError(t, err)
 			close(chidReceived)
 			// Expect the client to receive a response voucher, the provider to complete the transfer and

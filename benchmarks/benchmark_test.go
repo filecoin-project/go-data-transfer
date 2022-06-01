@@ -105,7 +105,7 @@ func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc,
 		timer := time.NewTimer(30 * time.Second)
 		start := time.Now()
 		for j := 0; j < numfiles; j++ {
-			_, err := pusher.Manager.OpenPushDataChannel(ctx, receiver.Peer, testutil.TestVoucherType, testutil.NewTestVoucher(), testutil.TestVoucherType, allCids[j], allSelector)
+			_, err := pusher.Manager.OpenPushDataChannel(ctx, receiver.Peer, testutil.NewTestTypedVoucher(), allCids[j], allSelector)
 			if err != nil {
 				b.Fatalf("received error on request: %s", err.Error())
 			}

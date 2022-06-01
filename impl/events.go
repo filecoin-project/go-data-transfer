@@ -157,7 +157,7 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 			if err != nil {
 				return err
 			}
-			err = m.channels.NewVoucherResult(chid, vresult)
+			err = m.channels.NewVoucherResult(chid, datatransfer.TypedVoucher{Voucher: vresult, Type: response.VoucherResultType()})
 			if err != nil {
 				return err
 			}
@@ -271,7 +271,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	log.Infow("received OnChannelCompleted, will send completion message to initiator", "chid", chid)
 
 	// generate and send the final status message
-	msg, err := message.CompleteResponse(chst.TransferID(), true, chst.RequiresFinalization(), datatransfer.EmptyTypeIdentifier, nil)
+	msg, err := message.CompleteResponse(chst.TransferID(), true, chst.RequiresFinalization(), nil)
 	if err != nil {
 		return err
 	}

@@ -10,7 +10,23 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
-//go:generate cbor-gen-for --map-encoding ChannelState
+//go:generate cbor-gen-for --map-encoding ChannelState EncodedVoucher EncodedVoucherResult
+
+// EncodedVoucher is how the voucher is stored on disk
+type EncodedVoucher struct {
+	// Vouchers identifier for decoding
+	Type datatransfer.TypeIdentifier
+	// used to verify this channel
+	Voucher *cbg.Deferred
+}
+
+// EncodedVoucherResult is how the voucher result is stored on disk
+type EncodedVoucherResult struct {
+	// Vouchers identifier for decoding
+	Type datatransfer.TypeIdentifier
+	// used to verify this channel
+	VoucherResult *cbg.Deferred
+}
 
 // ChannelState is the internal representation on disk for the channel fsm
 type ChannelState struct {
@@ -41,11 +57,9 @@ type ChannelState struct {
 	// total bytes received by this node (0 if sender)
 	Received uint64
 	// more informative status on a channel
-	Message           string
-	VoucherType       datatransfer.TypeIdentifier
-	Vouchers          []*cbg.Deferred
-	VoucherResultType datatransfer.TypeIdentifier
-	VoucherResults    []*cbg.Deferred
+	Message        string
+	Vouchers       []EncodedVoucher
+	VoucherResults []EncodedVoucherResult
 	// Number of blocks that have been received, including blocks that are
 	// present in more than one place in the DAG
 	ReceivedBlocksTotal int64

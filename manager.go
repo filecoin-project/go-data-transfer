@@ -15,9 +15,7 @@ type ValidationResult struct {
 	Accepted bool
 	// VoucherResult provides information to the other party about what happened
 	// with the voucher
-	VoucherResult ipld.Node
-	// VoucherResultType is the type of voucher result
-	VoucherResultType TypeIdentifier
+	VoucherResult *TypedVoucher
 	// ForcePause indicates whether the request should be paused, regardless
 	// of data limit and finalization status
 	ForcePause bool
@@ -33,11 +31,11 @@ type ValidationResult struct {
 // Equals checks the deep equality of two ValidationResult values
 func (vr ValidationResult) Equals(vr2 ValidationResult) bool {
 	return vr.Accepted == vr2.Accepted &&
-		vr.VoucherResultType == vr2.VoucherResultType &&
 		vr.ForcePause == vr2.ForcePause &&
 		vr.DataLimit == vr2.DataLimit &&
 		vr.RequiresFinalization == vr2.RequiresFinalization &&
-		ipld.DeepEqual(vr.VoucherResult, vr2.VoucherResult)
+		(vr.VoucherResult == nil) == (vr2.VoucherResult == nil) &&
+		(vr.VoucherResult == nil || vr.VoucherResult.Equals(*vr2.VoucherResult))
 }
 
 // LeaveRequestPaused indicates whether all conditions are met to resume a request
@@ -92,7 +90,7 @@ type RequestValidator interface {
 }
 
 // TransportConfigurer provides a mechanism to provide transport specific configuration for a given voucher type
-type TransportConfigurer func(chid ChannelID, voucher ipld.Node, transport Transport)
+type TransportConfigurer func(chid ChannelID, voucher TypedVoucher, transport Transport)
 
 // ReadyFunc is function that gets called once when the data transfer module is ready
 type ReadyFunc func(error)
@@ -125,17 +123,17 @@ type Manager interface {
 
 	// open a data transfer that will send data to the recipient peer and
 	// transfer parts of the piece that match the selector
-	OpenPushDataChannel(ctx context.Context, to peer.ID, voucherType TypeIdentifier, voucher ipld.Node, voucherResultType TypeIdentifier, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
+	OpenPushDataChannel(ctx context.Context, to peer.ID, voucher TypedVoucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
 
 	// open a data transfer that will request data from the sending peer and
 	// transfer parts of the piece that match the selector
-	OpenPullDataChannel(ctx context.Context, to peer.ID, voucherType TypeIdentifier, voucher ipld.Node, voucherResultType TypeIdentifier, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
+	OpenPullDataChannel(ctx context.Context, to peer.ID, voucher TypedVoucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
 
 	// send an intermediate voucher as needed when the receiver sends a request for revalidation
-	SendVoucher(ctx context.Context, chid ChannelID, voucher ipld.Node) error
+	SendVoucher(ctx context.Context, chid ChannelID, voucher TypedVoucher) error
 
 	// send information from the responder to update the initiator on the state of their voucher
-	SendVoucherResult(ctx context.Context, chid ChannelID, voucherResult ipld.Node) error
+	SendVoucherResult(ctx context.Context, chid ChannelID, voucherResult TypedVoucher) error
 
 	// Update the validation status for a given channel, to change data limits, finalization, accepted status, and pause state
 	// and send new voucher results as

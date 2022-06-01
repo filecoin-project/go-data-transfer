@@ -24,8 +24,8 @@ func TestNewRequest(t *testing.T) {
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	isPull := true
 	id := datatransfer.TransferID(rand.Int31())
-	voucher := testutil.NewTestVoucher()
-	request, err := message1_1.NewRequest(id, false, isPull, testutil.TestVoucherType, voucher, baseCid, selector)
+	voucher := testutil.NewTestTypedVoucher()
+	request, err := message1_1.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 	require.NoError(t, err)
 	assert.Equal(t, id, request.TransferID())
 	assert.False(t, request.IsCancel())
@@ -52,8 +52,8 @@ func TestRestartRequest(t *testing.T) {
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	isPull := true
 	id := datatransfer.TransferID(rand.Int31())
-	voucher := testutil.NewTestVoucher()
-	request, err := message1_1.NewRequest(id, true, isPull, testutil.TestVoucherType, voucher, baseCid, selector)
+	voucher := testutil.NewTestTypedVoucher()
+	request, err := message1_1.NewRequest(id, true, isPull, &voucher, baseCid, selector)
 	require.NoError(t, err)
 	assert.Equal(t, id, request.TransferID())
 	assert.False(t, request.IsCancel())
@@ -158,8 +158,8 @@ func TestTransferRequest_UnmarshalCBOR(t *testing.T) {
 
 func TestResponses(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	voucherResult := testutil.NewTestVoucher()
-	response, err := message1_1.NewResponse(id, false, true, testutil.TestVoucherType, voucherResult) // not accepted
+	voucherResult := testutil.NewTestTypedVoucher()
+	response, err := message1_1.NewResponse(id, false, true, &voucherResult) // not accepted
 	require.NoError(t, err)
 	assert.Equal(t, response.TransferID(), id)
 	assert.False(t, response.Accepted())
@@ -181,8 +181,8 @@ func TestResponses(t *testing.T) {
 
 func TestTransferResponse_MarshalCBOR(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	voucherResult := testutil.NewTestVoucher()
-	response, err := message1_1.NewResponse(id, true, false, testutil.TestVoucherType, voucherResult) // accepted
+	voucherResult := testutil.NewTestTypedVoucher()
+	response, err := message1_1.NewResponse(id, true, false, &voucherResult) // accepted
 	require.NoError(t, err)
 
 	// sanity check that we can marshal data
@@ -194,8 +194,8 @@ func TestTransferResponse_MarshalCBOR(t *testing.T) {
 func TestTransferResponse_UnmarshalCBOR(t *testing.T) {
 	t.Run("round-trip", func(t *testing.T) {
 		id := datatransfer.TransferID(rand.Int31())
-		voucherResult := testutil.NewTestVoucher()
-		response, err := message1_1.NewResponse(id, true, false, testutil.TestVoucherType, voucherResult) // accepted
+		voucherResult := testutil.NewTestTypedVoucher()
+		response, err := message1_1.NewResponse(id, true, false, &voucherResult) // accepted
 		require.NoError(t, err)
 
 		wbuf := new(bytes.Buffer)
@@ -219,7 +219,7 @@ func TestTransferResponse_UnmarshalCBOR(t *testing.T) {
 		testutil.AssertTestVoucherResult(t, desResp, voucherResult)
 	})
 	t.Run("cbor-gen compat", func(t *testing.T) {
-		voucherResult := testutil.NewTestVoucherWith("\xf5_\xf8\xf1%\b\xb6>\xf2\xbf\xec\xa7Uz\xe9\r\xf61\x1a^\xc1c\x1bJ\x1f\xa8C1\v\xd9ç\x10\xea\xac塽\xd7*п\xe0Iw\x1c\x11\xe7V3\x8b\xd98e\xe6E\xf1\xad웜\x99\xef@\u007f\xbdOƅ\x9ey\x04ŭ}ɽ\x10\xa5\xcc\x16\x97=[(\xec\x1am\xd4=\x9f\x82\xf9\xf1\x8c=\x03A\x8e5")
+		voucherResult := testutil.NewTestTypedVoucherWith("\xf5_\xf8\xf1%\b\xb6>\xf2\xbf\xec\xa7Uz\xe9\r\xf61\x1a^\xc1c\x1bJ\x1f\xa8C1\v\xd9ç\x10\xea\xac塽\xd7*п\xe0Iw\x1c\x11\xe7V3\x8b\xd98e\xe6E\xf1\xad웜\x99\xef@\u007f\xbdOƅ\x9ey\x04ŭ}ɽ\x10\xa5\xcc\x16\x97=[(\xec\x1am\xd4=\x9f\x82\xf9\xf1\x8c=\x03A\x8e5")
 		msg, _ := hex.DecodeString("a36449735271f46752657175657374f668526573706f6e7365a66454797065006441637074f56450617573f4665866657249441a4d6582216456526573817864f55ff8f12508b63ef2bfeca7557ae90df6311a5ec1631b4a1fa843310bd9c3a710eaace5a1bdd72ad0bfe049771c11e756338bd93865e645f1adec9b9c99ef407fbd4fc6859e7904c5ad7dc9bd10a5cc16973d5b28ec1a6dd43d9f82f9f18c3d03418e3564565479706b54657374566f7563686572")
 		desMsg, err := message1_1.FromNet(bytes.NewReader(msg))
 		require.NoError(t, err)
@@ -366,7 +366,7 @@ func TestCancelResponse(t *testing.T) {
 
 func TestCompleteResponse(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	response, err := message1_1.CompleteResponse(id, true, true, datatransfer.EmptyTypeIdentifier, nil)
+	response, err := message1_1.CompleteResponse(id, true, true, nil)
 	require.NoError(t, err)
 	assert.Equal(t, response.TransferID(), id)
 	assert.False(t, response.IsNew())
@@ -392,9 +392,9 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
 		accepted := false
-		voucher := testutil.NewTestVoucher()
-		voucherResult := testutil.NewTestVoucher()
-		request, err := message1_1.NewRequest(id, false, isPull, testutil.TestVoucherType, voucher, baseCid, selector)
+		voucher := testutil.NewTestTypedVoucher()
+		voucherResult := testutil.NewTestTypedVoucher()
+		request, err := message1_1.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 		require.NoError(t, err)
 		buf := new(bytes.Buffer)
 		err = request.ToNet(buf)
@@ -414,7 +414,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		testutil.AssertEqualTestVoucher(t, request, deserializedRequest)
 		testutil.AssertEqualSelector(t, request, deserializedRequest)
 
-		response, err := message1_1.NewResponse(id, accepted, false, testutil.TestVoucherType, voucherResult)
+		response, err := message1_1.NewResponse(id, accepted, false, &voucherResult)
 		require.NoError(t, err)
 		err = response.ToNet(buf)
 		require.NoError(t, err)
@@ -451,10 +451,10 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		id := datatransfer.TransferID(1298498081)
 		accepted := false
 		vouchByts, _ := hex.DecodeString("f55ff8f12508b63ef2bfeca7557ae90df6311a5ec1631b4a1fa843310bd9c3a710eaace5a1bdd72ad0bfe049771c11e756338bd93865e645f1adec9b9c99ef407fbd4fc6859e7904c5ad7dc9bd10a5cc16973d5b28ec1a6dd43d9f82f9f18c3d03418e35")
-		voucher := testutil.NewTestVoucherWith(string(vouchByts))
+		voucher := testutil.NewTestTypedVoucherWith(string(vouchByts))
 		vouchResultByts, _ := hex.DecodeString("4204cb9a1e34c5f08e9b20aa76090e70020bb56c0ca3d3af7296cd1058a5112890fed218488f084d8df9e4835fb54ad045ffd936e3bf7261b0426c51352a097816ed74482bb9084b4a7ed8adc517f3371e0e0434b511625cd1a41792243dccdcfe88094b")
-		voucherResult := testutil.NewTestVoucherWith(string(vouchResultByts))
-		request, err := message1_1.NewRequest(id, false, isPull, testutil.TestVoucherType, voucher, baseCid, selector)
+		voucherResult := testutil.NewTestTypedVoucherWith(string(vouchResultByts))
+		request, err := message1_1.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 		require.NoError(t, err)
 		buf := new(bytes.Buffer)
 		err = request.ToNet(buf)
@@ -476,7 +476,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		testutil.AssertEqualTestVoucher(t, request, deserializedRequest)
 		testutil.AssertEqualSelector(t, request, deserializedRequest)
 
-		response, err := message1_1.NewResponse(id, accepted, false, testutil.TestVoucherType, voucherResult)
+		response, err := message1_1.NewResponse(id, accepted, false, &voucherResult)
 		require.NoError(t, err)
 		err = response.ToNet(buf)
 		require.NoError(t, err)
@@ -529,8 +529,8 @@ func NewTestTransferRequest(data string) (message1_1.TransferRequest1_1, error) 
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	isPull := false
 	id := datatransfer.TransferID(rand.Int31())
-	voucher := testutil.NewTestVoucherWith(data)
-	req, err := message1_1.NewRequest(id, false, isPull, testutil.TestVoucherType, voucher, bcid, selector)
+	voucher := testutil.NewTestTypedVoucherWith(data)
+	req, err := message1_1.NewRequest(id, false, isPull, &voucher, bcid, selector)
 	if err != nil {
 		return message1_1.TransferRequest1_1{}, err
 	}

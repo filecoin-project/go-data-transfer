@@ -178,21 +178,21 @@ func (m *manager) RegisterVoucherType(voucherType datatransfer.TypeIdentifier, v
 
 // OpenPushDataChannel opens a data transfer that will send data to the recipient peer and
 // transfer parts of the piece that match the selector
-func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucherType datatransfer.TypeIdentifier, voucher ipld.Node, voucherResultType datatransfer.TypeIdentifier, baseCid cid.Cid, selector ipld.Node) (datatransfer.ChannelID, error) {
+func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.ChannelID, error) {
 	log.Infof("open push channel to %s with base cid %s", requestTo, baseCid)
 
-	req, err := m.newRequest(ctx, selector, false, voucherType, voucher, baseCid, requestTo)
+	req, err := m.newRequest(ctx, selector, false, voucher, baseCid, requestTo)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
 
-	chid, err := m.channels.CreateNew(m.peerID, req.TransferID(), baseCid, selector, voucherType, voucher,
-		voucherResultType, m.peerID, m.peerID, requestTo) // initiator = us, sender = us, receiver = them
+	chid, err := m.channels.CreateNew(m.peerID, req.TransferID(), baseCid, selector, voucher,
+		m.peerID, m.peerID, requestTo) // initiator = us, sender = us, receiver = them
 	if err != nil {
 		return chid, err
 	}
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
-	processor, has := m.transportConfigurers.Processor(voucherType)
+	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -219,21 +219,21 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 
 // OpenPullDataChannel opens a data transfer that will request data from the sending peer and
 // transfer parts of the piece that match the selector
-func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucherType datatransfer.TypeIdentifier, voucher ipld.Node, voucherResultType datatransfer.TypeIdentifier, baseCid cid.Cid, selector ipld.Node) (datatransfer.ChannelID, error) {
+func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.ChannelID, error) {
 	log.Infof("open pull channel to %s with base cid %s", requestTo, baseCid)
 
-	req, err := m.newRequest(ctx, selector, true, voucherType, voucher, baseCid, requestTo)
+	req, err := m.newRequest(ctx, selector, true, voucher, baseCid, requestTo)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
 	// initiator = us, sender = them, receiver = us
-	chid, err := m.channels.CreateNew(m.peerID, req.TransferID(), baseCid, selector, voucherType, voucher,
-		voucherResultType, m.peerID, requestTo, m.peerID)
+	chid, err := m.channels.CreateNew(m.peerID, req.TransferID(), baseCid, selector, voucher,
+		m.peerID, requestTo, m.peerID)
 	if err != nil {
 		return chid, err
 	}
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
-	processor, has := m.transportConfigurers.Processor(voucherType)
+	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -257,7 +257,7 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 }
 
 // SendVoucher sends an intermediate voucher as needed when the receiver sends a request for revalidation
-func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.ChannelID, voucher ipld.Node) error {
+func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.ChannelID, voucher datatransfer.TypedVoucher) error {
 	chst, err := m.channels.GetByID(ctx, channelID)
 	if err != nil {
 		return err
@@ -273,7 +273,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	updateRequest, err := message.VoucherRequest(channelID.ID, chst.VoucherType(), voucher)
+	updateRequest, err := message.VoucherRequest(channelID.ID, &voucher)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -289,7 +289,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 	return m.channels.NewVoucher(channelID, voucher)
 }
 
-func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.ChannelID, voucherResult ipld.Node) error {
+func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.ChannelID, voucherResult datatransfer.TypedVoucher) error {
 	chst, err := m.channels.GetByID(ctx, channelID)
 	if err != nil {
 		return err
@@ -308,9 +308,9 @@ func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.
 
 	var updateResponse datatransfer.Response
 	if chst.Status().InFinalization() {
-		updateResponse, err = message.CompleteResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), chst.VoucherResultType(), voucherResult)
+		updateResponse, err = message.CompleteResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), &voucherResult)
 	} else {
-		updateResponse, err = message.VoucherResultResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), chst.VoucherResultType(), voucherResult)
+		updateResponse, err = message.VoucherResultResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), &voucherResult)
 	}
 
 	if err != nil {

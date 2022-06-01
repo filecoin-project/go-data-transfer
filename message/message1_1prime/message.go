@@ -13,8 +13,16 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
+var emptyTypedVoucher = datatransfer.TypedVoucher{
+	Voucher: ipld.Null,
+	Type:    datatransfer.EmptyTypeIdentifier,
+}
+
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype datatransfer.TypeIdentifier, voucher ipld.Node, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
+func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, voucher *datatransfer.TypedVoucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
+	if voucher == nil {
+		voucher = &emptyTypedVoucher
+	}
 	if baseCid == cid.Undef {
 		return nil, xerrors.Errorf("base CID must be defined")
 	}
@@ -26,13 +34,17 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 		typ = uint64(types.NewMessage)
 	}
 
+	if voucher == nil {
+		voucher = &emptyTypedVoucher
+	}
+
 	return &TransferRequest1_1{
 		MessageType:           typ,
 		Pull:                  isPull,
-		VoucherPtr:            voucher,
+		VoucherPtr:            voucher.Voucher,
 		SelectorPtr:           selector,
 		BaseCidPtr:            &baseCid,
-		VoucherTypeIdentifier: vtype,
+		VoucherTypeIdentifier: voucher.Type,
 		TransferId:            uint64(id),
 	}, nil
 }
@@ -63,24 +75,30 @@ func UpdateRequest(id datatransfer.TransferID, isPaused bool) datatransfer.Reque
 }
 
 // VoucherRequest generates a new request for the data transfer protocol
-func VoucherRequest(id datatransfer.TransferID, vtype datatransfer.TypeIdentifier, voucher ipld.Node) (datatransfer.Request, error) {
+func VoucherRequest(id datatransfer.TransferID, voucher *datatransfer.TypedVoucher) (datatransfer.Request, error) {
+	if voucher == nil {
+		voucher = &emptyTypedVoucher
+	}
 	return &TransferRequest1_1{
 		MessageType:           uint64(types.VoucherMessage),
-		VoucherPtr:            voucher,
-		VoucherTypeIdentifier: vtype,
+		VoucherPtr:            voucher.Voucher,
+		VoucherTypeIdentifier: voucher.Type,
 		TransferId:            uint64(id),
 	}, nil
 }
 
 // RestartResponse builds a new Data Transfer response
-func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult ipld.Node) (datatransfer.Response, error) {
+func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) (datatransfer.Response, error) {
+	if voucherResult == nil {
+		voucherResult = &emptyTypedVoucher
+	}
 	return &TransferResponse1_1{
 		RequestAccepted:       accepted,
 		MessageType:           uint64(types.RestartMessage),
 		Paused:                isPaused,
 		TransferId:            uint64(id),
-		VoucherTypeIdentifier: voucherResultType,
-		VoucherResultPtr:      voucherResult,
+		VoucherResultPtr:      voucherResult.Voucher,
+		VoucherTypeIdentifier: voucherResult.Type,
 	}, nil
 }
 
@@ -93,9 +111,9 @@ func ValidationResultResponse(
 	validationErr error,
 	paused bool) (datatransfer.Response, error) {
 
-	voucherResultType := datatransfer.EmptyTypeIdentifier
-	if validationResult.VoucherResult != nil && validationResult.VoucherResultType != "" {
-		voucherResultType = validationResult.VoucherResultType
+	voucherResult := &emptyTypedVoucher
+	if validationResult.VoucherResult != nil {
+		voucherResult = validationResult.VoucherResult
 	}
 	return &TransferResponse1_1{
 		// TODO: when we area able to change the protocol, it would be helpful to record
@@ -104,32 +122,38 @@ func ValidationResultResponse(
 		MessageType:           uint64(messageType),
 		Paused:                paused,
 		TransferId:            uint64(id),
-		VoucherTypeIdentifier: voucherResultType,
-		VoucherResultPtr:      validationResult.VoucherResult,
+		VoucherTypeIdentifier: voucherResult.Type,
+		VoucherResultPtr:      voucherResult.Voucher,
 	}, nil
 }
 
 // NewResponse builds a new Data Transfer response
-func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult ipld.Node) (datatransfer.Response, error) {
+func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) (datatransfer.Response, error) {
+	if voucherResult == nil {
+		voucherResult = &emptyTypedVoucher
+	}
 	return &TransferResponse1_1{
 		RequestAccepted:       accepted,
 		MessageType:           uint64(types.NewMessage),
 		Paused:                isPaused,
 		TransferId:            uint64(id),
-		VoucherTypeIdentifier: voucherResultType,
-		VoucherResultPtr:      voucherResult,
+		VoucherTypeIdentifier: voucherResult.Type,
+		VoucherResultPtr:      voucherResult.Voucher,
 	}, nil
 }
 
 // VoucherResultResponse builds a new response for a voucher result
-func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult ipld.Node) (datatransfer.Response, error) {
+func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) (datatransfer.Response, error) {
+	if voucherResult == nil {
+		voucherResult = &emptyTypedVoucher
+	}
 	return &TransferResponse1_1{
 		RequestAccepted:       accepted,
 		MessageType:           uint64(types.VoucherResultMessage),
 		Paused:                isPaused,
 		TransferId:            uint64(id),
-		VoucherTypeIdentifier: voucherResultType,
-		VoucherResultPtr:      voucherResult,
+		VoucherTypeIdentifier: voucherResult.Type,
+		VoucherResultPtr:      voucherResult.Voucher,
 	}, nil
 }
 
@@ -151,13 +175,16 @@ func CancelResponse(id datatransfer.TransferID) datatransfer.Response {
 }
 
 // CompleteResponse returns a new complete response message
-func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool, voucherResultType datatransfer.TypeIdentifier, voucherResult ipld.Node) (datatransfer.Response, error) {
+func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) (datatransfer.Response, error) {
+	if voucherResult == nil {
+		voucherResult = &emptyTypedVoucher
+	}
 	return &TransferResponse1_1{
 		MessageType:           uint64(types.CompleteMessage),
 		RequestAccepted:       isAccepted,
 		Paused:                isPaused,
-		VoucherTypeIdentifier: voucherResultType,
-		VoucherResultPtr:      voucherResult,
+		VoucherTypeIdentifier: voucherResult.Type,
+		VoucherResultPtr:      voucherResult.Voucher,
 		TransferId:            uint64(id),
 	}, nil
 }

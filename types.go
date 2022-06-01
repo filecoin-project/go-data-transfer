@@ -19,6 +19,19 @@ type TypeIdentifier string
 // EmptyTypeIdentifier means there is no voucher present
 const EmptyTypeIdentifier = TypeIdentifier("")
 
+// TypedVoucher is a voucher or voucher result in IPLD form and an associated
+// type identifier for that voucher or voucher result
+type TypedVoucher struct {
+	Voucher ipld.Node
+	Type    TypeIdentifier
+}
+
+// Equals is a utility to compare that two TypedVouchers are the same - both type
+// and the voucher's IPLD content
+func (tv1 TypedVoucher) Equals(tv2 TypedVoucher) bool {
+	return tv1.Type == tv2.Type && ipld.DeepEqual(tv1.Voucher, tv2.Voucher)
+}
+
 // TransferID is an identifier for a data transfer, shared between
 // request/responder and unique to the requester
 type TransferID uint64
@@ -56,11 +69,8 @@ type Channel interface {
 	// an IPLD node)
 	Selector() ipld.Node
 
-	// VoucherType returns the type of voucher for this data transfer
-	VoucherType() TypeIdentifier
-
-	// Voucher returns the voucher for this data transfer
-	Voucher() (ipld.Node, error)
+	// Voucher returns the initial voucher for this data transfer
+	Voucher() (TypedVoucher, error)
 
 	// Sender returns the peer id for the node that is sending data
 	Sender() peer.ID
@@ -101,19 +111,16 @@ type ChannelState interface {
 	Message() string
 
 	// Vouchers returns all vouchers sent on this channel
-	Vouchers() ([]ipld.Node, error)
-
-	// VoucherResultType returns the type of voucher results sent on the channel
-	VoucherResultType() TypeIdentifier
+	Vouchers() ([]TypedVoucher, error)
 
 	// VoucherResults are results of vouchers sent on the channel
-	VoucherResults() ([]ipld.Node, error)
+	VoucherResults() ([]TypedVoucher, error)
 
 	// LastVoucher returns the last voucher sent on the channel
-	LastVoucher() (ipld.Node, error)
+	LastVoucher() (TypedVoucher, error)
 
 	// LastVoucherResult returns the last voucher result sent on the channel
-	LastVoucherResult() (ipld.Node, error)
+	LastVoucherResult() (TypedVoucher, error)
 
 	// ReceivedCidsTotal returns the number of (non-unique) cids received so far
 	// on the channel - note that a block can exist in more than one place in the DAG
