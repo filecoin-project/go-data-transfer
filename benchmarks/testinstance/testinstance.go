@@ -21,9 +21,9 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	tn "github.com/filecoin-project/go-data-transfer/v2/benchmarks/testnet"
 	dtimpl "github.com/filecoin-project/go-data-transfer/v2/impl"
-	dtnet "github.com/filecoin-project/go-data-transfer/v2/network"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 	gstransport "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
+	dtnet "github.com/filecoin-project/go-data-transfer/v2/transport/helpers/network"
 )
 
 // TempDirGenerator is any interface that can generate temporary directories

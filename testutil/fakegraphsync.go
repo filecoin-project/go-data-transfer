@@ -13,6 +13,7 @@ import (
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/traversal"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 
@@ -430,7 +431,7 @@ func NewFakeRequest(id graphsync.RequestID, extensions map[graphsync.ExtensionNa
 	return &fakeRequest{
 		id:          id,
 		root:        GenerateCids(1)[0],
-		selector:    allSelector,
+		selector:    selectorparse.CommonSelector_ExploreAllRecursively,
 		priority:    graphsync.Priority(rand.Int()),
 		extensions:  extensions,
 		requestType: graphsync.RequestTypeNew,
