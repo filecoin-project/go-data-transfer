@@ -1390,7 +1390,6 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 
 			require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 
-			require.NoError(t, dt2.RegisterVoucherResultType(testutil.TestVoucherType))
 			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
 			require.NoError(t, err)
 
@@ -1792,7 +1791,6 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt1)
 	voucherResult := testutil.NewTestTypedVoucher()
-	err = dt1.RegisterVoucherResultType(testutil.TestVoucherType)
 	require.NoError(t, err)
 
 	t.Run("when request is initiated", func(t *testing.T) {
@@ -2113,8 +2111,6 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	})
 	require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 
-	require.NoError(t, dt2.RegisterVoucherResultType(testutil.TestVoucherType))
-
 	voucher := testutil.NewTestTypedVoucherWith("applesauce")
 	chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, gsData.AllSelector)
 	require.NoError(t, err)
@@ -2175,8 +2171,6 @@ func TestMultipleParallelTransfers(t *testing.T) {
 		initialVoucherResult: &respVoucher,
 	}
 	require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
-
-	require.NoError(t, dt2.RegisterVoucherResultType(testutil.TestVoucherType))
 
 	// for each size we create a new random DAG of the given size and try to retrieve it
 	for _, size := range sizes {

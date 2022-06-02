@@ -113,10 +113,6 @@ type Manager interface {
 	// or if there is a voucher type registered with an identical identifier
 	RegisterVoucherType(voucherType TypeIdentifier, validator RequestValidator) error
 
-	// RegisterVoucherResultType allows deserialization of a voucher result,
-	// so that a listener can read the metadata
-	RegisterVoucherResultType(resultType TypeIdentifier) error
-
 	// RegisterTransportConfigurer registers the given transport configurer to be run on requests with the given voucher
 	// type
 	RegisterTransportConfigurer(voucherType TypeIdentifier, configurer TransportConfigurer) error

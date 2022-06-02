@@ -189,7 +189,6 @@ func NewInstance(ctx context.Context, net tn.Network, tempDir string, diskBasedD
 	sv.StubSuccessPull()
 	sv.StubSuccessPush()
 	dt.RegisterVoucherType(testutil.TestVoucherType, sv)
-	dt.RegisterVoucherResultType(testutil.TestVoucherType)
 	return Instance{
 		Adapter:         dtNet,
 		Peer:            p,

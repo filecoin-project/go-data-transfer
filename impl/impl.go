@@ -35,7 +35,6 @@ var cancelSendTimeout = 30 * time.Second
 type manager struct {
 	dataTransferNetwork  network.DataTransferNetwork
 	validatedTypes       *registry.Registry
-	resultTypes          *registry.Registry
 	transportConfigurers *registry.Registry
 	pubSub               *pubsub.PubSub
 	readySub             *pubsub.PubSub
@@ -95,7 +94,6 @@ func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTran
 	m := &manager{
 		dataTransferNetwork:  dataTransferNetwork,
 		validatedTypes:       registry.NewRegistry(),
-		resultTypes:          registry.NewRegistry(),
 		transportConfigurers: registry.NewRegistry(),
 		pubSub:               pubsub.New(dispatcher),
 		readySub:             pubsub.New(readyDispatcher),
@@ -591,16 +589,6 @@ func (m *manager) SubscribeToEvents(subscriber datatransfer.Subscriber) datatran
 // get all in progress transfers
 func (m *manager) InProgressChannels(ctx context.Context) (map[datatransfer.ChannelID]datatransfer.ChannelState, error) {
 	return m.channels.InProgress()
-}
-
-// RegisterVoucherResultType allows deserialization of a voucher result,
-// so that a listener can read the metadata
-func (m *manager) RegisterVoucherResultType(resultType datatransfer.TypeIdentifier) error {
-	err := m.resultTypes.Register(resultType, nil)
-	if err != nil {
-		return xerrors.Errorf("error registering voucher type: %w", err)
-	}
-	return nil
 }
 
 // RegisterTransportConfigurer registers the given transport configurer to be run on requests with the given voucher

@@ -336,7 +336,6 @@ func TestDataTransferInitiating(t *testing.T) {
 			h.stor = testutil.AllSelector()
 			h.voucher = testutil.NewTestTypedVoucher()
 			h.voucherResult = testutil.NewTestTypedVoucher()
-			err = h.dt.RegisterVoucherResultType(h.voucherResult.Type)
 			require.NoError(t, err)
 			h.baseCid = testutil.GenerateCids(1)[0]
 			verify.verify(t, h)
@@ -603,7 +602,6 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			h.voucher = testutil.NewTestTypedVoucher()
 			require.NoError(t, h.dt.RegisterVoucherType(h.voucher.Type, h.voucherValidator))
 			h.voucherResult = testutil.NewTestTypedVoucher()
-			err = h.dt.RegisterVoucherResultType(h.voucherResult.Type)
 			require.NoError(t, err)
 			h.baseCid = testutil.GenerateCids(1)[0]
 
