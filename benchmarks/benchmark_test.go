@@ -14,10 +14,6 @@ import (
 	"testing"
 	"time"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/benchmarks/testinstance"
-	tn "github.com/filecoin-project/go-data-transfer/v2/benchmarks/testnet"
-	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -31,6 +27,11 @@ import (
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/benchmarks/testinstance"
+	tn "github.com/filecoin-project/go-data-transfer/v2/benchmarks/testnet"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 const stdBlockSize = 8000
