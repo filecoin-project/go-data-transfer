@@ -49,7 +49,8 @@ const loremFile = "lorem.txt"
 const loremFileTransferBytes = 20439
 
 const loremLargeFile = "lorem_large.txt"
-const loremLargeFileTransferBytes = 217452
+
+// const loremLargeFileTransferBytes = 217452
 
 // nil means use the default protocols
 // tests data transfer for the following protocol combinations:
@@ -1921,6 +1922,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				request, err := message.NewRequest(id, false, true, &voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
 				nd, err := request.ToIPLD()
+				require.NoError(t, err)
 				gsRequest := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 					Name: extension.ExtensionDataTransfer1_1,
 					Data: nd,

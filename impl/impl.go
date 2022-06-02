@@ -198,7 +198,7 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	monitoredChan := m.channelMonitor.AddPushChannel(chid)
 	if err := m.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
-		err = fmt.Errorf("Unable to send request: %w", err)
+		err = fmt.Errorf("unable to send request: %w", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		_ = m.channels.Error(chid, err)
@@ -239,7 +239,7 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	monitoredChan := m.channelMonitor.AddPullChannel(chid)
 	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, nil, req); err != nil {
-		err = fmt.Errorf("Unable to send request: %w", err)
+		err = fmt.Errorf("unable to send request: %w", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		_ = m.channels.Error(chid, err)
@@ -278,7 +278,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 		return err
 	}
 	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherPeer(), updateRequest); err != nil {
-		err = fmt.Errorf("Unable to send request: %w", err)
+		err = fmt.Errorf("unable to send request: %w", err)
 		_ = m.OnRequestDisconnected(channelID, err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -317,7 +317,7 @@ func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.
 		return err
 	}
 	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherPeer(), updateResponse); err != nil {
-		err = fmt.Errorf("Unable to send request: %w", err)
+		err = fmt.Errorf("unable to send request: %w", err)
 		_ = m.OnRequestDisconnected(channelID, err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -540,7 +540,7 @@ func (m *manager) PauseDataTransferChannel(ctx context.Context, chid datatransfe
 	}
 
 	if err := m.dataTransferNetwork.SendMessage(ctx, chid.OtherParty(m.peerID), m.pauseMessage(chid)); err != nil {
-		err = fmt.Errorf("Unable to send pause message: %w", err)
+		err = fmt.Errorf("unable to send pause message: %w", err)
 		_ = m.OnRequestDisconnected(chid, err)
 		return err
 	}
