@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
 
@@ -50,7 +50,7 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 		return datatransfer.ValidationResult{}, xerrors.Errorf("unknown voucher type: %s", voucher.Type)
 	}
 
-	var validatorFunc func(datatransfer.ChannelID, peer.ID, ipld.Node, cid.Cid, ipld.Node) (datatransfer.ValidationResult, error)
+	var validatorFunc func(datatransfer.ChannelID, peer.ID, datamodel.Node, cid.Cid, datamodel.Node) (datatransfer.ValidationResult, error)
 	validator := processor.(datatransfer.RequestValidator)
 	if incoming.IsPull() {
 		validatorFunc = validator.ValidatePull

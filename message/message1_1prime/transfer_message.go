@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"io"
 
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
@@ -41,7 +41,7 @@ func (tm *TransferMessage1_1) toIPLD() (schema.TypedNode, error) {
 }
 
 // ToIPLD converts a transfer message type to an ipld Node
-func (tm *TransferMessage1_1) ToIPLD() (ipld.Node, error) {
+func (tm *TransferMessage1_1) ToIPLD() (datamodel.Node, error) {
 	node, err := tm.toIPLD()
 	if err != nil {
 		return nil, err

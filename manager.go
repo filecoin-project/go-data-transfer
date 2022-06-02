@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
@@ -66,9 +66,9 @@ type RequestValidator interface {
 	ValidatePush(
 		chid ChannelID,
 		sender peer.ID,
-		voucher ipld.Node,
+		voucher datamodel.Node,
 		baseCid cid.Cid,
-		selector ipld.Node) (ValidationResult, error)
+		selector datamodel.Node) (ValidationResult, error)
 	// ValidatePull validates a pull request received from the peer that will receive data
 	// -- All information about the validation operation is contained in ValidationResult,
 	// including if it was rejected. Information about why a rejection occurred should be embedded
@@ -77,9 +77,9 @@ type RequestValidator interface {
 	ValidatePull(
 		chid ChannelID,
 		receiver peer.ID,
-		voucher ipld.Node,
+		voucher datamodel.Node,
 		baseCid cid.Cid,
-		selector ipld.Node) (ValidationResult, error)
+		selector datamodel.Node) (ValidationResult, error)
 
 	// ValidateRestart validates restarting a request
 	// -- All information about the validation operation is contained in ValidationResult,
@@ -123,11 +123,11 @@ type Manager interface {
 
 	// open a data transfer that will send data to the recipient peer and
 	// transfer parts of the piece that match the selector
-	OpenPushDataChannel(ctx context.Context, to peer.ID, voucher TypedVoucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
+	OpenPushDataChannel(ctx context.Context, to peer.ID, voucher TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (ChannelID, error)
 
 	// open a data transfer that will request data from the sending peer and
 	// transfer parts of the piece that match the selector
-	OpenPullDataChannel(ctx context.Context, to peer.ID, voucher TypedVoucher, baseCid cid.Cid, selector ipld.Node) (ChannelID, error)
+	OpenPullDataChannel(ctx context.Context, to peer.ID, voucher TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (ChannelID, error)
 
 	// send an intermediate voucher as needed when the receiver sends a request for revalidation
 	SendVoucher(ctx context.Context, chid ChannelID, voucher TypedVoucher) error

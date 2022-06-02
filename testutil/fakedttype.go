@@ -52,7 +52,7 @@ func AssertEqualTestVoucherResult(t *testing.T, expectedResponse datatransfer.Re
 }
 
 // NewTestVoucher returns a fake voucher with random data
-func NewTestVoucher() ipld.Node {
+func NewTestVoucher() datamodel.Node {
 	n, err := qp.BuildList(basicnode.Prototype.Any, 1, func(ma datamodel.ListAssembler) {
 		qp.ListEntry(ma, qp.String(string(RandomBytes(100))))
 	})
@@ -67,7 +67,7 @@ func NewTestTypedVoucher() datatransfer.TypedVoucher {
 }
 
 // NewTestVoucher returns a fake voucher with random data
-func NewTestVoucherWith(data string) ipld.Node {
+func NewTestVoucherWith(data string) datamodel.Node {
 	n, err := qp.BuildList(basicnode.Prototype.Any, 1, func(ma datamodel.ListAssembler) {
 		qp.ListEntry(ma, qp.String(data))
 	})

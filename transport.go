@@ -4,6 +4,7 @@ import (
 	"context"
 
 	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
@@ -98,7 +99,7 @@ type Transport interface {
 		dataSender peer.ID,
 		channelID ChannelID,
 		root ipld.Link,
-		stor ipld.Node,
+		stor datamodel.Node,
 		channel ChannelState,
 		msg Message,
 	) error

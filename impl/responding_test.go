@@ -11,6 +11,7 @@ import (
 	"github.com/ipfs/go-datastore"
 	dss "github.com/ipfs/go-datastore/sync"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/assert"
@@ -1152,7 +1153,7 @@ type receiverHarness struct {
 	sv            *testutil.StubbedValidator
 	ds            datastore.Batching
 	dt            datatransfer.Manager
-	stor          ipld.Node
+	stor          datamodel.Node
 	voucher       datatransfer.TypedVoucher
 	baseCid       cid.Cid
 }

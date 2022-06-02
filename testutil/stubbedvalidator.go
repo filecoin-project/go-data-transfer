@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 
@@ -21,9 +21,9 @@ func NewStubbedValidator() *StubbedValidator {
 func (sv *StubbedValidator) ValidatePush(
 	chid datatransfer.ChannelID,
 	sender peer.ID,
-	voucher ipld.Node,
+	voucher datamodel.Node,
 	baseCid cid.Cid,
-	selector ipld.Node) (datatransfer.ValidationResult, error) {
+	selector datamodel.Node) (datatransfer.ValidationResult, error) {
 	sv.didPush = true
 	sv.ValidationsReceived = append(sv.ValidationsReceived, ReceivedValidation{false, sender, voucher, baseCid, selector})
 	return sv.result, sv.pushError
@@ -33,9 +33,9 @@ func (sv *StubbedValidator) ValidatePush(
 func (sv *StubbedValidator) ValidatePull(
 	chid datatransfer.ChannelID,
 	receiver peer.ID,
-	voucher ipld.Node,
+	voucher datamodel.Node,
 	baseCid cid.Cid,
-	selector ipld.Node) (datatransfer.ValidationResult, error) {
+	selector datamodel.Node) (datatransfer.ValidationResult, error) {
 	sv.didPull = true
 	sv.ValidationsReceived = append(sv.ValidationsReceived, ReceivedValidation{true, receiver, voucher, baseCid, selector})
 	return sv.result, sv.pullError
@@ -140,9 +140,9 @@ func (sv *StubbedValidator) ExpectSuccessValidateRestart() {
 type ReceivedValidation struct {
 	IsPull   bool
 	Other    peer.ID
-	Voucher  ipld.Node
+	Voucher  datamodel.Node
 	BaseCid  cid.Cid
-	Selector ipld.Node
+	Selector datamodel.Node
 }
 
 // ReceivedRestartValidation records a call to ValidateRestart

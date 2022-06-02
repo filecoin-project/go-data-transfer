@@ -27,6 +27,7 @@ import (
 	"github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -1187,9 +1188,9 @@ type retrievalRevalidator struct {
 func (r *retrievalRevalidator) ValidatePush(
 	chid datatransfer.ChannelID,
 	sender peer.ID,
-	voucher ipld.Node,
+	voucher datamodel.Node,
 	baseCid cid.Cid,
-	selector ipld.Node) (datatransfer.ValidationResult, error) {
+	selector datamodel.Node) (datatransfer.ValidationResult, error) {
 	vr := datatransfer.ValidationResult{
 		Accepted:             true,
 		RequiresFinalization: r.requiresFinalization,
@@ -1209,9 +1210,9 @@ func (r *retrievalRevalidator) ValidatePush(
 func (r *retrievalRevalidator) ValidatePull(
 	chid datatransfer.ChannelID,
 	sender peer.ID,
-	voucher ipld.Node,
+	voucher datamodel.Node,
 	baseCid cid.Cid,
-	selector ipld.Node) (datatransfer.ValidationResult, error) {
+	selector datamodel.Node) (datatransfer.ValidationResult, error) {
 	vr := datatransfer.ValidationResult{
 		Accepted:             true,
 		RequiresFinalization: r.requiresFinalization,

@@ -5,6 +5,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	xerrors "golang.org/x/xerrors"
 
@@ -19,7 +20,7 @@ var emptyTypedVoucher = datatransfer.TypedVoucher{
 }
 
 // NewRequest generates a new request for the data transfer protocol
-func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, voucher *datatransfer.TypedVoucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.Request, error) {
+func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, voucher *datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (datatransfer.Request, error) {
 	if voucher == nil {
 		voucher = &emptyTypedVoucher
 	}
@@ -208,7 +209,7 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
-func FromIPLD(node ipld.Node) (datatransfer.Message, error) {
+func FromIPLD(node datamodel.Node) (datatransfer.Message, error) {
 	if tn, ok := node.(schema.TypedNode); ok { // shouldn't need this if from Graphsync
 		node = tn.Representation()
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -99,9 +100,9 @@ func FromReader(r io.Reader, ptrValue interface{}) (interface{}, error) {
 	return typ, nil
 }
 
-// FromNode converts an ipld.Node into an appropriate Go type that's provided as
+// FromNode converts an datamodel.Node into an appropriate Go type that's provided as
 // a pointer via the ptrValue argument
-func FromNode(node ipld.Node, ptrValue interface{}) (interface{}, error) {
+func FromNode(node datamodel.Node, ptrValue interface{}) (interface{}, error) {
 	name := typeName(ptrValue)
 	proto, err := prototypeFor(name, ptrValue)
 	if err != nil {
@@ -126,7 +127,7 @@ func FromNode(node ipld.Node, ptrValue interface{}) (interface{}, error) {
 }
 
 // ToNode converts a Go type that's provided as a pointer via the ptrValue
-// argument to an ipld.Node.
+// argument to an datamodel.Node.
 func ToNode(ptrValue interface{}) (schema.TypedNode, error) {
 	name := typeName(ptrValue)
 	proto, err := prototypeFor(name, ptrValue)
@@ -136,15 +137,15 @@ func ToNode(ptrValue interface{}) (schema.TypedNode, error) {
 	return bindnode.Wrap(ptrValue, proto.Type(), bindnodeOptions...), err
 }
 
-// NodeToWriter is a utility method that serializes an ipld.Node as DAG-CBOR to
+// NodeToWriter is a utility method that serializes an datamodel.Node as DAG-CBOR to
 // a Writer
-func NodeToWriter(node ipld.Node, w io.Writer) error {
+func NodeToWriter(node datamodel.Node, w io.Writer) error {
 	return ipld.EncodeStreaming(w, node, dagcbor.Encode)
 }
 
-// NodeToBytes is a utility method that serializes an ipld.Node as DAG-CBOR to
+// NodeToBytes is a utility method that serializes an datamodel.Node as DAG-CBOR to
 // a []byte
-func NodeToBytes(node ipld.Node) ([]byte, error) {
+func NodeToBytes(node datamodel.Node) ([]byte, error) {
 	var buf bytes.Buffer
 	err := NodeToWriter(node, &buf)
 	if err != nil {
@@ -153,9 +154,9 @@ func NodeToBytes(node ipld.Node) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// NodeFromBytes is a utility method that deserializes an untyped ipld.Node
+// NodeFromBytes is a utility method that deserializes an untyped datamodel.Node
 // from DAG-CBOR format bytes
-func NodeFromBytes(b []byte) (ipld.Node, error) {
+func NodeFromBytes(b []byte) (datamodel.Node, error) {
 	return ipld.Decode(b, dagcbor.Decode)
 }
 
@@ -169,7 +170,7 @@ func TypeToWriter(ptrValue interface{}, w io.Writer) error {
 	return ipld.EncodeStreaming(w, node, dagcbor.Encode)
 }
 
-func NodeToDeferred(node ipld.Node) (*cbg.Deferred, error) {
+func NodeToDeferred(node datamodel.Node) (*cbg.Deferred, error) {
 	byts, err := NodeToBytes(node)
 	if err != nil {
 		return nil, err
@@ -177,6 +178,6 @@ func NodeToDeferred(node ipld.Node) (*cbg.Deferred, error) {
 	return &cbg.Deferred{Raw: byts}, nil
 }
 
-func DeferredToNode(def *cbg.Deferred) (ipld.Node, error) {
+func DeferredToNode(def *cbg.Deferred) (datamodel.Node, error) {
 	return NodeFromBytes(def.Raw)
 }

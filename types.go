@@ -6,6 +6,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
@@ -22,7 +23,7 @@ const EmptyTypeIdentifier = TypeIdentifier("")
 // TypedVoucher is a voucher or voucher result in IPLD form and an associated
 // type identifier for that voucher or voucher result
 type TypedVoucher struct {
-	Voucher ipld.Node
+	Voucher datamodel.Node
 	Type    TypeIdentifier
 }
 
@@ -67,7 +68,7 @@ type Channel interface {
 
 	// Selector returns the IPLD selector for this data transfer (represented as
 	// an IPLD node)
-	Selector() ipld.Node
+	Selector() datamodel.Node
 
 	// Voucher returns the initial voucher for this data transfer
 	Voucher() (TypedVoucher, error)

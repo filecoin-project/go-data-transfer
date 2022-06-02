@@ -4,7 +4,6 @@ import (
 	"io"
 
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -91,7 +90,7 @@ func (trq *TransferRequest1_1) VoucherType() datatransfer.TypeIdentifier {
 }
 
 // Voucher returns the Voucher bytes
-func (trq *TransferRequest1_1) Voucher() (ipld.Node, error) {
+func (trq *TransferRequest1_1) Voucher() (datamodel.Node, error) {
 	if trq.VoucherPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}

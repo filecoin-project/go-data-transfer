@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
@@ -29,7 +29,7 @@ var resumeTransportStatesResponder = statusList{
 }
 
 // newRequest encapsulates message creation
-func (m *manager) newRequest(ctx context.Context, selector ipld.Node, isPull bool, voucher datatransfer.TypedVoucher, baseCid cid.Cid, to peer.ID) (datatransfer.Request, error) {
+func (m *manager) newRequest(ctx context.Context, selector datamodel.Node, isPull bool, voucher datatransfer.TypedVoucher, baseCid cid.Cid, to peer.ID) (datatransfer.Request, error) {
 	// Generate a new transfer ID for the request
 	tid := datatransfer.TransferID(m.transferIDGen.next())
 	return message.NewRequest(tid, false, isPull, &voucher, baseCid, selector)

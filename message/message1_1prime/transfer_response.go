@@ -3,7 +3,6 @@ package message1_1
 import (
 	"io"
 
-	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -73,7 +72,7 @@ func (trsp *TransferResponse1_1) VoucherResultType() datatransfer.TypeIdentifier
 	return trsp.VoucherTypeIdentifier
 }
 
-func (trsp *TransferResponse1_1) VoucherResult() (ipld.Node, error) {
+func (trsp *TransferResponse1_1) VoucherResult() (datamodel.Node, error) {
 	if trsp.VoucherResultPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
