@@ -43,7 +43,8 @@ const defaultMaxAttemptDuration = 5 * time.Minute
 const defaultBackoffFactor = 5
 
 var defaultDataTransferProtocols = []protocol.ID{
-	datatransfer.ProtocolDataTransfer1_2,
+	ProtocolDataTransfer1_2,
+	ProtocolFilDataTransfer1_2,
 }
 
 // Option is an option for configuring the libp2p storage market network
@@ -85,6 +86,7 @@ func NewFromLibp2pHost(host host.Host, options ...Option) DataTransferNetwork {
 		minAttemptDuration:    defaultMinAttemptDuration,
 		maxAttemptDuration:    defaultMaxAttemptDuration,
 		backoffFactor:         defaultBackoffFactor,
+		receivers:             make(map[datatransfer.TransportID]Receiver),
 	}
 	dataTransferNetwork.setDataTransferProtocols(defaultDataTransferProtocols)
 
@@ -100,7 +102,7 @@ func NewFromLibp2pHost(host host.Host, options ...Option) DataTransferNetwork {
 type libp2pDataTransferNetwork struct {
 	host host.Host
 	// inbound messages from the network are forwarded to the receiver
-	receiver Receiver
+	receivers map[datatransfer.TransportID]Receiver
 
 	openStreamTimeout     time.Duration
 	sendMessageTimeout    time.Duration
@@ -159,6 +161,7 @@ func (impl *libp2pDataTransferNetwork) openStream(ctx context.Context, id peer.I
 func (dtnet *libp2pDataTransferNetwork) SendMessage(
 	ctx context.Context,
 	p peer.ID,
+	transportID datatransfer.TransportID,
 	outgoing datatransfer.Message) error {
 
 	ctx, span := otel.Tracer("data-transfer").Start(ctx, "sendMessage", trace.WithAttributes(
@@ -180,7 +183,15 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 		return err
 	}
 
-	outgoing, err = outgoing.MessageForProtocol(s.Protocol())
+	messageVersion, err := MessageVersion(s.Protocol())
+	if err != nil {
+		err = xerrors.Errorf("failed to determine message version for protocol: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	outgoing, err = outgoing.MessageForVersion(messageVersion)
 	if err != nil {
 		err = xerrors.Errorf("failed to convert message for protocol: %w", err)
 		span.RecordError(err)
@@ -188,7 +199,7 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 		return err
 	}
 
-	if err = dtnet.msgToStream(ctx, s, outgoing); err != nil {
+	if err = dtnet.msgToStream(ctx, s, transportID, outgoing); err != nil {
 		if err2 := s.Reset(); err2 != nil {
 			log.Error(err)
 			span.RecordError(err2)
@@ -203,8 +214,8 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 	return s.Close()
 }
 
-func (dtnet *libp2pDataTransferNetwork) SetDelegate(r Receiver) {
-	dtnet.receiver = r
+func (dtnet *libp2pDataTransferNetwork) SetDelegate(transportID datatransfer.TransportID, r Receiver) {
+	dtnet.receivers[transportID] = r
 	for _, p := range dtnet.dtProtocols {
 		dtnet.host.SetStreamHandler(p, dtnet.handleNewStream)
 	}
@@ -234,26 +245,39 @@ func (dtnet *libp2pDataTransferNetwork) ConnectWithRetry(ctx context.Context, p 
 func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 	defer s.Close() // nolint: errcheck,gosec
 
-	if dtnet.receiver == nil {
+	if len(dtnet.receivers) == 0 {
 		s.Reset() // nolint: errcheck,gosec
 		return
 	}
 
 	p := s.Conn().RemotePeer()
 	for {
+		var transportID datatransfer.TransportID
 		var received datatransfer.Message
 		var err error
 		switch s.Protocol() {
-		case datatransfer.ProtocolDataTransfer1_2:
+		case ProtocolFilDataTransfer1_2:
+			if dtnet.receivers[datatransfer.LegacyTransportID] == nil {
+				s.Reset() // nolint: errcheck,gosec
+				return
+			}
+			transportID = datatransfer.LegacyTransportID
 			received, err = message.FromNet(s)
+		case ProtocolDataTransfer1_2:
+			transportID, received, err = message.FromNetWrapped(s)
 		}
 
 		if err != nil {
 			if err != io.EOF && err != io.ErrUnexpectedEOF {
 				s.Reset() // nolint: errcheck,gosec
-				go dtnet.receiver.ReceiveError(err)
-				log.Debugf("net handleNewStream from %s error: %s", p, err)
+				log.Errorf("net handleNewStream from %s error: %s", p, err)
 			}
+			return
+		}
+
+		// if we have no transport handler, reset the stream
+		if dtnet.receivers[transportID] == nil {
+			s.Reset() // nolint: errcheck,gosec
 			return
 		}
 
@@ -264,15 +288,15 @@ func (dtnet *libp2pDataTransferNetwork) handleNewStream(s network.Stream) {
 			receivedRequest, ok := received.(datatransfer.Request)
 			if ok {
 				if receivedRequest.IsRestartExistingChannelRequest() {
-					dtnet.receiver.ReceiveRestartExistingChannelRequest(ctx, p, receivedRequest)
+					dtnet.receivers[transportID].ReceiveRestartExistingChannelRequest(ctx, p, receivedRequest)
 				} else {
-					dtnet.receiver.ReceiveRequest(ctx, p, receivedRequest)
+					dtnet.receivers[transportID].ReceiveRequest(ctx, p, receivedRequest)
 				}
 			}
 		} else {
 			receivedResponse, ok := received.(datatransfer.Response)
 			if ok {
-				dtnet.receiver.ReceiveResponse(ctx, p, receivedResponse)
+				dtnet.receivers[transportID].ReceiveResponse(ctx, p, receivedResponse)
 			}
 		}
 	}
@@ -290,7 +314,7 @@ func (dtnet *libp2pDataTransferNetwork) Unprotect(id peer.ID, tag string) bool {
 	return dtnet.host.ConnManager().Unprotect(id, tag)
 }
 
-func (dtnet *libp2pDataTransferNetwork) msgToStream(ctx context.Context, s network.Stream, msg datatransfer.Message) error {
+func (dtnet *libp2pDataTransferNetwork) msgToStream(ctx context.Context, s network.Stream, transportID datatransfer.TransportID, msg datatransfer.Message) error {
 	if msg.IsRequest() {
 		log.Debugf("Outgoing request message for transfer ID: %d", msg.TransferID())
 	}
@@ -309,7 +333,12 @@ func (dtnet *libp2pDataTransferNetwork) msgToStream(ctx context.Context, s netwo
 	}()
 
 	switch s.Protocol() {
-	case datatransfer.ProtocolDataTransfer1_2:
+	case ProtocolFilDataTransfer1_2:
+		if transportID != datatransfer.LegacyTransportID {
+			return fmt.Errorf("cannot send messages for transports other than graphsync on legacy protocol")
+		}
+	case ProtocolDataTransfer1_2:
+		msg = msg.WrappedForTransport(transportID)
 	default:
 		return fmt.Errorf("unrecognized protocol on remote: %s", s.Protocol())
 	}
@@ -318,7 +347,6 @@ func (dtnet *libp2pDataTransferNetwork) msgToStream(ctx context.Context, s netwo
 		log.Debugf("error: %s", err)
 		return err
 	}
-
 	return nil
 }
 

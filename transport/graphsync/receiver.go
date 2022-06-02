@@ -49,7 +49,7 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 	if err != nil {
 		if !initiateGraphsyncRequest {
 			if response != nil {
-				return r.transport.dtNet.SendMessage(ctx, initiator, response)
+				return r.transport.dtNet.SendMessage(ctx, initiator, transportID, response)
 			}
 			return receiveErr
 		}
@@ -84,7 +84,7 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 				return err
 			}
 		} else {
-			if err := r.transport.dtNet.SendMessage(ctx, initiator, response); err != nil {
+			if err := r.transport.dtNet.SendMessage(ctx, initiator, transportID, response); err != nil {
 				return err
 			}
 		}

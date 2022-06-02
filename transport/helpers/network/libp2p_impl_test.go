@@ -91,8 +91,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 		messageReceived: make(chan struct{}),
 		connectedPeers:  make(chan peer.ID, 2),
 	}
-	dtnet1.SetDelegate(r)
-	dtnet2.SetDelegate(r)
+	dtnet1.SetDelegate("graphsync", r)
+	dtnet2.SetDelegate("graphsync", r)
 
 	err = dtnet1.ConnectTo(ctx, host2.ID())
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		voucher := testutil.NewTestTypedVoucher()
 		request, err := message.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 		require.NoError(t, err)
-		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
+		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), "graphsync", request))
 
 		select {
 		case <-ctx.Done():
@@ -134,7 +134,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		voucherResult := testutil.NewTestTypedVoucher()
 		response, err := message.ValidationResultResponse(types.NewMessage, id, datatransfer.ValidationResult{Accepted: accepted, VoucherResult: &voucherResult}, nil, false)
 		require.NoError(t, err)
-		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), response))
+		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), "graphsync", response))
 
 		select {
 		case <-ctx.Done():
@@ -161,7 +161,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 			Responder: peers[1], ID: id}
 
 		request := message.RestartExistingChannelRequest(chId)
-		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
+		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), "graphsync", request))
 
 		select {
 		case <-ctx.Done():
@@ -263,8 +263,8 @@ func TestSendMessageRetry(t *testing.T) {
 				messageReceived: make(chan struct{}),
 				connectedPeers:  make(chan peer.ID, 2),
 			}
-			dtnet1.SetDelegate(r)
-			dtnet2.SetDelegate(r)
+			dtnet1.SetDelegate("graphsync", r)
+			dtnet2.SetDelegate("graphsync", r)
 
 			err = dtnet1.ConnectTo(ctx, host2.ID())
 			require.NoError(t, err)
@@ -277,7 +277,7 @@ func TestSendMessageRetry(t *testing.T) {
 			request, err := message.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 			require.NoError(t, err)
 
-			err = dtnet1.SendMessage(ctx, host2.ID(), request)
+			err = dtnet1.SendMessage(ctx, host2.ID(), "graphsync", request)
 			if !tcase.expSuccess {
 				require.Error(t, err)
 				return

@@ -11,14 +11,14 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
-func TestResponseMessageForProtocol(t *testing.T) {
+func TestResponseMessageForVersion(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucherResult := testutil.NewTestTypedVoucher()
 	response, err := message1_1.NewResponse(id, false, true, &voucherResult) // not accepted
 	require.NoError(t, err)
 
-	// v1.2 protocol
-	out, err := response.MessageForProtocol(datatransfer.ProtocolDataTransfer1_2)
+	// v1.2 new protocol
+	out, err := response.MessageForVersion(datatransfer.DataTransfer1_2)
 	require.NoError(t, err)
 	require.Equal(t, response, out)
 
@@ -28,8 +28,17 @@ func TestResponseMessageForProtocol(t *testing.T) {
 	require.Equal(t, testutil.TestVoucherType, resp.VoucherResultType())
 	require.True(t, resp.IsValidationResult())
 
-	// random protocol
-	out, err = response.MessageForProtocol("RAND")
+	wrappedOut := out.WrappedForTransport(datatransfer.LegacyTransportID)
+	require.Equal(t, &message1_1.WrappedTransferRepsponse1_1{
+		TransferResponse1_1: response.(*message1_1.TransferResponse1_1),
+		TransportID:         string(datatransfer.LegacyTransportID),
+	}, wrappedOut)
+
+	// random protocol should fail
+	_, err = response.MessageForVersion(datatransfer.MessageVersion{
+		Major: rand.Uint64(),
+		Minor: rand.Uint64(),
+		Patch: rand.Uint64(),
+	})
 	require.Error(t, err)
-	require.Nil(t, out)
 }
