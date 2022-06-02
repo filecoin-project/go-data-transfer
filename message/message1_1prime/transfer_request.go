@@ -6,7 +6,6 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
@@ -29,13 +28,17 @@ type TransferRequest1_1 struct {
 	RestartChannel        datatransfer.ChannelID
 }
 
-func (trq *TransferRequest1_1) MessageForProtocol(targetProtocol protocol.ID) (datatransfer.Message, error) {
-	switch targetProtocol {
-	case datatransfer.ProtocolDataTransfer1_2:
+func (trq *TransferRequest1_1) MessageForVersion(version datatransfer.MessageVersion) (datatransfer.Message, error) {
+	switch version {
+	case datatransfer.DataTransfer1_2:
 		return trq, nil
 	default:
 		return nil, xerrors.Errorf("protocol not supported")
 	}
+}
+
+func (trq *TransferRequest1_1) WrappedForTransport(transportID datatransfer.TransportID) datatransfer.Message {
+	return &WrappedTransferRequest1_1{trq, string(transportID)}
 }
 
 // IsRequest always returns true in this case because this is a transfer request
@@ -162,4 +165,31 @@ func (trq *TransferRequest1_1) ToNet(w io.Writer) error {
 		return err
 	}
 	return ipldutils.NodeToWriter(i, w)
+}
+
+// WrappedTransferRequest1_1 is used to serialize a request along with a
+// transport id
+type WrappedTransferRequest1_1 struct {
+	*TransferRequest1_1
+	TransportID string
+}
+
+func (trsp *WrappedTransferRequest1_1) toIPLD() schema.TypedNode {
+	msg := WrappedTransferMessage1_1{
+		TransportID: trsp.TransportID,
+		Message: TransferMessage1_1{
+			IsRequest: true,
+			Request:   trsp.TransferRequest1_1,
+			Response:  nil,
+		},
+	}
+	return msg.toIPLD()
+}
+
+func (trq *WrappedTransferRequest1_1) ToIPLD() (datamodel.Node, error) {
+	return trq.toIPLD().Representation(), nil
+}
+
+func (trq *WrappedTransferRequest1_1) ToNet(w io.Writer) error {
+	return dagcbor.Encode(trq.toIPLD().Representation(), w)
 }

@@ -22,6 +22,8 @@ import (
 
 var log = logging.Logger("dt_graphsync")
 
+var transportID datatransfer.TransportID = "graphsync"
+
 // When restarting a data transfer, we cancel the existing graphsync request
 // before opening a new one.
 // This constant defines the maximum time to wait for the request to be
@@ -103,6 +105,10 @@ func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, dtNet network.Data
 	return t
 }
 
+func (t *Transport) ID() datatransfer.TransportID {
+	return transportID
+}
+
 func (t *Transport) Capabilities() datatransfer.TransportCapabilities {
 	return datatransfer.TransportCapabilities{
 		Pausable:    true,
@@ -125,7 +131,7 @@ func (t *Transport) OpenChannel(
 			channel.Selector(),
 			req)
 	}
-	return t.dtNet.SendMessage(ctx, channel.OtherPeer(), req)
+	return t.dtNet.SendMessage(ctx, channel.OtherPeer(), transportID, req)
 }
 
 // RestartChannel restarts a channel on the initiator side
@@ -155,7 +161,7 @@ func (t *Transport) RestartChannel(
 			channelState.Selector(),
 			req)
 	}
-	return t.dtNet.SendMessage(ctx, channelState.OtherPeer(), req)
+	return t.dtNet.SendMessage(ctx, channelState.OtherPeer(), transportID, req)
 }
 
 func (t *Transport) openRequest(
@@ -201,7 +207,7 @@ func (t *Transport) UpdateChannel(ctx context.Context, chid datatransfer.Channel
 	ch, err := t.getDTChannel(chid)
 	if err != nil {
 		if update.SendMessage != nil && !update.Closed {
-			return t.dtNet.SendMessage(ctx, t.otherPeer(chid), update.SendMessage)
+			return t.dtNet.SendMessage(ctx, t.otherPeer(chid), transportID, update.SendMessage)
 		}
 		return err
 	}
@@ -221,7 +227,7 @@ func (t *Transport) UpdateChannel(ctx context.Context, chid datatransfer.Channel
 	}
 
 	if update.SendMessage != nil {
-		if err := t.dtNet.SendMessage(ctx, t.otherPeer(chid), update.SendMessage); err != nil {
+		if err := t.dtNet.SendMessage(ctx, t.otherPeer(chid), transportID, update.SendMessage); err != nil {
 			return err
 		}
 	}
@@ -239,7 +245,7 @@ func (t *Transport) UpdateChannel(ctx context.Context, chid datatransfer.Channel
 
 // SendMessage sends a data transfer message over the channel to the other peer
 func (t *Transport) SendMessage(ctx context.Context, chid datatransfer.ChannelID, msg datatransfer.Message) error {
-	return t.dtNet.SendMessage(ctx, t.otherPeer(chid), msg)
+	return t.dtNet.SendMessage(ctx, t.otherPeer(chid), transportID, msg)
 }
 
 // CleanupChannel is called on the otherside of a cancel - removes any associated
@@ -286,7 +292,7 @@ func (t *Transport) SetEventHandler(events datatransfer.EventsHandler) error {
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterNetworkErrorListener(t.gsNetworkSendErrorListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterReceiverNetworkErrorListener(t.gsNetworkReceiveErrorListener))
 
-	t.dtNet.SetDelegate(&receiver{t})
+	t.dtNet.SetDelegate(transportID, &receiver{t})
 	return nil
 }
 

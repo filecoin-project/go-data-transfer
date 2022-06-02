@@ -55,7 +55,10 @@ var protocolsForTest = map[string]struct {
 	host1Protocols []protocol.ID
 	host2Protocols []protocol.ID
 }{
-	"(v1.2 -> v1.2)": {nil, nil},
+	"(wrapped v1.2 -> wrapped v1.2)": {nil, nil},
+	"(v1.2 -> wrapped v1.2)":         {[]protocol.ID{network.ProtocolFilDataTransfer1_2}, nil},
+	"(wrapped v1.2 -> v1.2)":         {nil, []protocol.ID{network.ProtocolFilDataTransfer1_2}},
+	"(v1.2 -> v1.2)":                 {[]protocol.ID{network.ProtocolFilDataTransfer1_2}, []protocol.ID{network.ProtocolFilDataTransfer1_2}},
 }
 
 // tests data transfer for the protocol combinations that support restart messages
@@ -63,7 +66,10 @@ var protocolsForRestartTest = map[string]struct {
 	host1Protocols []protocol.ID
 	host2Protocols []protocol.ID
 }{
-	"(v1.2 -> v1.2)": {nil, nil},
+	"(wrapped v1.2 -> wrapped v1.2)": {nil, nil},
+	"(v1.2 -> wrapped v1.2)":         {[]protocol.ID{network.ProtocolFilDataTransfer1_2}, nil},
+	"(wrapped v1.2 -> v1.2)":         {nil, []protocol.ID{network.ProtocolFilDataTransfer1_2}},
+	"(v1.2 -> v1.2)":                 {[]protocol.ID{network.ProtocolFilDataTransfer1_2}, []protocol.ID{network.ProtocolFilDataTransfer1_2}},
 }
 
 func TestRoundTrip(t *testing.T) {
@@ -1774,7 +1780,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	r := &receiver{
 		messageReceived: make(chan receivedMessage),
 	}
-	dtnet2.SetDelegate(r)
+	dtnet2.SetDelegate("graphsync", r)
 
 	gsr := &fakeGraphSyncReceiver{
 		receivedMessages: make(chan receivedGraphSyncMessage),
@@ -1854,7 +1860,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 	r := &receiver{
 		messageReceived: make(chan receivedMessage),
 	}
-	dtnet2.SetDelegate(r)
+	dtnet2.SetDelegate("graphsync", r)
 
 	gsr := &fakeGraphSyncReceiver{
 		receivedMessages: make(chan receivedGraphSyncMessage),

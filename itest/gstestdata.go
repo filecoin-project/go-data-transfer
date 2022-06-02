@@ -52,7 +52,8 @@ const unixfsChunkSize uint64 = 1 << 10
 const unixfsLinksPerLevel = 1024
 
 var extsForProtocol = map[protocol.ID]graphsync.ExtensionName{
-	datatransfer.ProtocolDataTransfer1_2: extension.ExtensionDataTransfer1_1,
+	network.ProtocolDataTransfer1_2:    extension.ExtensionDataTransfer1_1,
+	network.ProtocolFilDataTransfer1_2: extension.ExtensionDataTransfer1_1,
 }
 
 // GraphsyncTestingData is a test harness for testing data transfer on top of
