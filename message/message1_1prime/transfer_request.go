@@ -174,7 +174,7 @@ type WrappedTransferRequest1_1 struct {
 	TransportID string
 }
 
-func (trsp *WrappedTransferRequest1_1) toIPLD() schema.TypedNode {
+func (trsp *WrappedTransferRequest1_1) toIPLD() (schema.TypedNode, error) {
 	msg := WrappedTransferMessage1_1{
 		TransportID: trsp.TransportID,
 		Message: TransferMessage1_1{
@@ -187,9 +187,17 @@ func (trsp *WrappedTransferRequest1_1) toIPLD() schema.TypedNode {
 }
 
 func (trq *WrappedTransferRequest1_1) ToIPLD() (datamodel.Node, error) {
-	return trq.toIPLD().Representation(), nil
+	msg, err := trq.toIPLD()
+	if err != nil {
+		return nil, err
+	}
+	return msg.Representation(), nil
 }
 
 func (trq *WrappedTransferRequest1_1) ToNet(w io.Writer) error {
-	return dagcbor.Encode(trq.toIPLD().Representation(), w)
+	i, err := trq.toIPLD()
+	if err != nil {
+		return err
+	}
+	return ipldutils.NodeToWriter(i, w)
 }

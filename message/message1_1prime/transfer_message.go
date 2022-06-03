@@ -63,6 +63,10 @@ type WrappedTransferMessage1_1 struct {
 	Message     TransferMessage1_1
 }
 
-func (wtm *WrappedTransferMessage1_1) toIPLD() schema.TypedNode {
-	return bindnode.Wrap(&wtm, Prototype.WrappedTransferMessage.Type())
+func (wtm *WrappedTransferMessage1_1) BindnodeSchema() string {
+	return string(embedSchema)
+}
+
+func (wtm *WrappedTransferMessage1_1) toIPLD() (schema.TypedNode, error) {
+	return ipldutils.ToNode(wtm)
 }

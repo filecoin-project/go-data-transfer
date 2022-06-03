@@ -214,13 +214,11 @@ func fromMessage(tresp *TransferMessage1_1) (datatransfer.Message, error) {
 
 // FromNetWrraped can read a network stream to deserialize a message + transport ID
 func FromNetWrapped(r io.Reader) (datatransfer.TransportID, datatransfer.Message, error) {
-	builder := Prototype.WrappedTransferMessage.Representation().NewBuilder()
-	err := dagcbor.Decode(builder, r)
+	tm, err := ipldutils.FromReader(r, &WrappedTransferMessage1_1{})
 	if err != nil {
 		return "", nil, err
 	}
-	node := builder.Build()
-	wtresp := bindnode.Unwrap(node).(*WrappedTransferMessage1_1)
+	wtresp := tm.(*WrappedTransferMessage1_1)
 	msg, err := fromMessage(&wtresp.Message)
 	return datatransfer.TransportID(wtresp.TransportID), msg, err
 }
