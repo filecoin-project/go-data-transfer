@@ -29,6 +29,7 @@ import (
 	"github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector"
@@ -44,7 +45,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
-var allSelector ipld.Node
+var allSelector datamodel.Node
 
 const loremFile = "lorem.txt"
 
@@ -82,7 +83,7 @@ type GraphsyncTestingData struct {
 	GsNet2         gsnet.GraphSyncNetwork
 	DtNet1         network.DataTransferNetwork
 	DtNet2         network.DataTransferNetwork
-	AllSelector    ipld.Node
+	AllSelector    datamodel.Node
 	OrigBytes      []byte
 	TempDir1       string
 	TempDir2       string

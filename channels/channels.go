@@ -7,7 +7,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
@@ -20,10 +20,8 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
 	"github.com/filecoin-project/go-data-transfer/v2/channels/internal/migrations"
-	"github.com/filecoin-project/go-data-transfer/v2/encoding"
+	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 )
-
-type DecoderByTypeFunc func(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool)
 
 type Notifier func(datatransfer.Event, datatransfer.ChannelState)
 
@@ -46,8 +44,6 @@ var ErrWrongType = errors.New("Cannot change type of implementation specific dat
 // Channels is a thread safe list of channels
 type Channels struct {
 	notifier             Notifier
-	voucherDecoder       DecoderByTypeFunc
-	voucherResultDecoder DecoderByTypeFunc
 	blockIndexCache      *blockIndexCache
 	progressCache        *progressCache
 	stateMachines        fsm.Group
@@ -65,16 +61,10 @@ type ChannelEnvironment interface {
 // New returns a new thread safe list of channels
 func New(ds datastore.Batching,
 	notifier Notifier,
-	voucherDecoder DecoderByTypeFunc,
-	voucherResultDecoder DecoderByTypeFunc,
 	env ChannelEnvironment,
 	selfPeer peer.ID) (*Channels, error) {
 
-	c := &Channels{
-		notifier:             notifier,
-		voucherDecoder:       voucherDecoder,
-		voucherResultDecoder: voucherResultDecoder,
-	}
+	c := &Channels{notifier: notifier}
 	c.blockIndexCache = newBlockIndexCache()
 	c.progressCache = newProgressCache()
 	channelMigrations, err := migrations.GetChannelStateMigrations(selfPeer)
@@ -121,7 +111,7 @@ func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 
 // CreateNew creates a new channel id and channel state and saves to channels.
 // returns error if the channel exists already.
-func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector ipld.Node, voucher datatransfer.Voucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
+func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector datamodel.Node, voucher datatransfer.TypedVoucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
 	var responder peer.ID
 	if dataSender == initiator {
 		responder = dataReceiver
@@ -129,11 +119,11 @@ func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, base
 		responder = dataSender
 	}
 	chid := datatransfer.ChannelID{Initiator: initiator, Responder: responder, ID: tid}
-	voucherBytes, err := encoding.Encode(voucher)
+	initialVoucher, err := ipldutils.NodeToDeferred(voucher.Voucher)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
-	selBytes, err := encoding.Encode(selector)
+	selBytes, err := ipldutils.NodeToBytes(selector)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
@@ -149,10 +139,8 @@ func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, base
 		Stages:     &datatransfer.ChannelStages{},
 		Vouchers: []internal.EncodedVoucher{
 			{
-				Type: voucher.Type(),
-				Voucher: &cbg.Deferred{
-					Raw: voucherBytes,
-				},
+				Type:    voucher.Type,
+				Voucher: initialVoucher,
 			},
 		},
 		Status: datatransfer.Requested,
@@ -289,21 +277,21 @@ func (c *Channels) ResumeResponder(chid datatransfer.ChannelID) error {
 }
 
 // NewVoucher records a new voucher for this channel
-func (c *Channels) NewVoucher(chid datatransfer.ChannelID, voucher datatransfer.Voucher) error {
-	voucherBytes, err := encoding.Encode(voucher)
+func (c *Channels) NewVoucher(chid datatransfer.ChannelID, voucher datatransfer.TypedVoucher) error {
+	voucherBytes, err := ipldutils.NodeToBytes(voucher.Voucher)
 	if err != nil {
 		return err
 	}
-	return c.send(chid, datatransfer.NewVoucher, voucher.Type(), voucherBytes)
+	return c.send(chid, datatransfer.NewVoucher, voucher.Type, voucherBytes)
 }
 
 // NewVoucherResult records a new voucher result for this channel
-func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResult datatransfer.VoucherResult) error {
-	voucherResultBytes, err := encoding.Encode(voucherResult)
+func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResult datatransfer.TypedVoucher) error {
+	voucherResultBytes, err := ipldutils.NodeToBytes(voucherResult.Voucher)
 	if err != nil {
 		return err
 	}
-	return c.send(chid, datatransfer.NewVoucherResult, voucherResult.Type(), voucherResultBytes)
+	return c.send(chid, datatransfer.NewVoucherResult, voucherResult.Type, voucherResultBytes)
 }
 
 // Complete indicates responder has completed sending/receiving data
@@ -485,5 +473,5 @@ func (c *Channels) checkChannelExists(chid datatransfer.ChannelID, code datatran
 
 // Convert from the internally used channel state format to the externally exposed ChannelState
 func (c *Channels) fromInternalChannelState(ch internal.ChannelState) datatransfer.ChannelState {
-	return fromInternalChannelState(ch, c.voucherDecoder, c.voucherResultDecoder)
+	return fromInternalChannelState(ch)
 }

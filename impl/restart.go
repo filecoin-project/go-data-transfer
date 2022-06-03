@@ -1,16 +1,15 @@
 package impl
 
 import (
-	"bytes"
 	"context"
 
+	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
-	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
 )
 
@@ -73,17 +72,20 @@ func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel dat
 
 func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransfer.ChannelState) error {
 	selector := channel.Selector()
-	voucher := channel.Voucher()
+	voucher, err := channel.Voucher()
+	if err != nil {
+		return err
+	}
 	baseCid := channel.BaseCID()
 	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
 
-	req, err := message.NewRequest(chid.ID, true, false, voucher.Type(), voucher, baseCid, selector)
+	req, err := message.NewRequest(chid.ID, true, false, &voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}
 
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -108,17 +110,20 @@ func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransf
 
 func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransfer.ChannelState) error {
 	selector := channel.Selector()
-	voucher := channel.Voucher()
+	voucher, err := channel.Voucher()
+	if err != nil {
+		return err
+	}
 	baseCid := channel.BaseCID()
 	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
 
-	req, err := message.NewRequest(chid.ID, true, true, voucher.Type(), voucher, baseCid, selector)
+	req, err := message.NewRequest(chid.ID, true, true, &voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}
 
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -164,24 +169,19 @@ func (m *manager) validateRestartRequest(ctx context.Context, otherPeer peer.ID,
 	}
 
 	// vouchers should match
-	reqVoucher, err := m.decodeVoucher(req)
+	reqVoucher, err := req.Voucher()
 	if err != nil {
-		return xerrors.Errorf("failed to decode request voucher: %w", err)
+		return xerrors.Errorf("failed to fetch request voucher: %w", err)
 	}
-	if reqVoucher.Type() != channel.Voucher().Type() {
+	channelVoucher, err := channel.Voucher()
+	if err != nil {
+		return xerrors.Errorf("failed to fetch channel voucher: %w", err)
+	}
+	if req.VoucherType() != channelVoucher.Type {
 		return xerrors.New("channel and request voucher types do not match")
 	}
 
-	reqBz, err := encoding.Encode(reqVoucher)
-	if err != nil {
-		return xerrors.New("failed to encode request voucher")
-	}
-	channelBz, err := encoding.Encode(channel.Voucher())
-	if err != nil {
-		return xerrors.New("failed to encode channel voucher")
-	}
-
-	if !bytes.Equal(reqBz, channelBz) {
+	if !ipld.DeepEqual(reqVoucher, channelVoucher.Voucher) {
 		return xerrors.New("channel and request vouchers do not match")
 	}
 

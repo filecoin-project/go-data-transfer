@@ -11,6 +11,7 @@ import (
 	"github.com/ipfs/go-graphsync/donotsendfirstblocks"
 	logging "github.com/ipfs/go-log/v2"
 	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
@@ -111,7 +112,7 @@ func (t *Transport) OpenChannel(
 	dataSender peer.ID,
 	channelID datatransfer.ChannelID,
 	root ipld.Link,
-	stor ipld.Node,
+	stor datamodel.Node,
 	channel datatransfer.ChannelState,
 	msg datatransfer.Message,
 ) error {
@@ -938,7 +939,7 @@ func (c *dtChannel) open(
 	chid datatransfer.ChannelID,
 	dataSender peer.ID,
 	root ipld.Link,
-	stor ipld.Node,
+	stor datamodel.Node,
 	channel datatransfer.ChannelState,
 	exts []graphsync.ExtensionData,
 ) (*gsReq, error) {

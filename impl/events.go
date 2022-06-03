@@ -38,7 +38,7 @@ func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
 // back a pause to the transport if the data limit is exceeded
 func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-	ctx, span := otel.Tracer("data-transfer").Start(ctx, "dataReceived", trace.WithAttributes(
+	_, span := otel.Tracer("data-transfer").Start(ctx, "dataReceived", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 		attribute.String("link", link.String()),
 		attribute.Int64("index", index),
@@ -69,7 +69,7 @@ func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size
 	// machine.
 
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-	ctx, span := otel.Tracer("data-transfer").Start(ctx, "dataQueued", trace.WithAttributes(
+	_, span := otel.Tracer("data-transfer").Start(ctx, "dataQueued", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 		attribute.String("link", link.String()),
 		attribute.Int64("size", int64(size)),
@@ -91,7 +91,7 @@ func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size
 func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
 
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-	ctx, span := otel.Tracer("data-transfer").Start(ctx, "dataSent", trace.WithAttributes(
+	_, span := otel.Tracer("data-transfer").Start(ctx, "dataSent", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 		attribute.String("link", link.String()),
 		attribute.Int64("size", int64(size)),
@@ -153,11 +153,11 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 		// is there a voucher response in this message?
 		if !response.EmptyVoucherResult() {
 			// if so decode and save it
-			vresult, err := m.decodeVoucherResult(response)
+			vresult, err := response.VoucherResult()
 			if err != nil {
 				return err
 			}
-			err = m.channels.NewVoucherResult(chid, vresult)
+			err = m.channels.NewVoucherResult(chid, datatransfer.TypedVoucher{Voucher: vresult, Type: response.VoucherResultType()})
 			if err != nil {
 				return err
 			}
@@ -271,7 +271,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	log.Infow("received OnChannelCompleted, will send completion message to initiator", "chid", chid)
 
 	// generate and send the final status message
-	msg, err := message.CompleteResponse(chst.TransferID(), true, chst.RequiresFinalization(), datatransfer.EmptyTypeIdentifier, nil)
+	msg, err := message.CompleteResponse(chst.TransferID(), true, chst.RequiresFinalization(), nil)
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,7 @@ package testutil
 
 import (
 	cid "github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
@@ -105,11 +105,11 @@ func (m *MockChannelState) BaseCID() cid.Cid {
 	panic("implement me")
 }
 
-func (m *MockChannelState) Selector() ipld.Node {
+func (m *MockChannelState) Selector() datamodel.Node {
 	panic("implement me")
 }
 
-func (m *MockChannelState) Voucher() datatransfer.Voucher {
+func (m *MockChannelState) Voucher() (datatransfer.TypedVoucher, error) {
 	panic("implement me")
 }
 
@@ -141,19 +141,19 @@ func (m *MockChannelState) Message() string {
 	panic("implement me")
 }
 
-func (m *MockChannelState) Vouchers() []datatransfer.Voucher {
+func (m *MockChannelState) Vouchers() ([]datatransfer.TypedVoucher, error) {
 	panic("implement me")
 }
 
-func (m *MockChannelState) VoucherResults() []datatransfer.VoucherResult {
+func (m *MockChannelState) VoucherResults() ([]datatransfer.TypedVoucher, error) {
 	panic("implement me")
 }
 
-func (m *MockChannelState) LastVoucher() datatransfer.Voucher {
+func (m *MockChannelState) LastVoucher() (datatransfer.TypedVoucher, error) {
 	panic("implement me")
 }
 
-func (m *MockChannelState) LastVoucherResult() datatransfer.VoucherResult {
+func (m *MockChannelState) LastVoucherResult() (datatransfer.TypedVoucher, error) {
 	panic("implement me")
 }
 

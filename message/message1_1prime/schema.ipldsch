@@ -30,7 +30,7 @@ type TransferResponse struct {
 	VoucherTypeIdentifier          TypeIdentifier (rename "VTyp")
 }
 
-type TransferMessage struct {
+type TransferMessage1_1 struct {
 	IsRequest         Bool             (rename "IsRq")
 	Request  nullable TransferRequest
 	Response nullable TransferResponse
