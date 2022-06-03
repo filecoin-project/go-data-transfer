@@ -86,7 +86,7 @@ func (trsp *TransferResponse1_1) EmptyVoucherResult() bool {
 	return trsp.VoucherTypeIdentifier == datatransfer.EmptyTypeIdentifier
 }
 
-func (trsp *TransferResponse1_1) MessageForVersion(version datatransfer.MessageVersion) (datatransfer.Message, error) {
+func (trsp *TransferResponse1_1) MessageForVersion(version datatransfer.Version) (datatransfer.Message, error) {
 	switch version {
 	case datatransfer.DataTransfer1_2:
 		return trsp, nil
@@ -95,8 +95,16 @@ func (trsp *TransferResponse1_1) MessageForVersion(version datatransfer.MessageV
 	}
 }
 
-func (trsp *TransferResponse1_1) WrappedForTransport(transportID datatransfer.TransportID) datatransfer.Message {
-	return &WrappedTransferResponse1_1{trsp, string(transportID)}
+func (trsp *TransferResponse1_1) Version() datatransfer.Version {
+	return datatransfer.DataTransfer1_2
+}
+
+func (trsp *TransferResponse1_1) WrappedForTransport(transportID datatransfer.TransportID, transportVersion datatransfer.Version) datatransfer.TransportedMessage {
+	return &WrappedTransferResponse1_1{
+		TransferResponse1_1: trsp,
+		transportID:         string(transportID),
+		transportVersion:    transportVersion,
+	}
 }
 func (trsp *TransferResponse1_1) toIPLD() (schema.TypedNode, error) {
 	msg := TransferMessage1_1{
@@ -128,12 +136,21 @@ func (trsp *TransferResponse1_1) ToNet(w io.Writer) error {
 // transport id
 type WrappedTransferResponse1_1 struct {
 	*TransferResponse1_1
-	TransportID string
+	transportID      string
+	transportVersion datatransfer.Version
+}
+
+func (trsp *WrappedTransferResponse1_1) TransportID() datatransfer.TransportID {
+	return datatransfer.TransportID(trsp.transportID)
+}
+func (trsp *WrappedTransferResponse1_1) TransportVersion() datatransfer.Version {
+	return trsp.transportVersion
 }
 
 func (trsp *WrappedTransferResponse1_1) toIPLD() (schema.TypedNode, error) {
 	msg := WrappedTransferMessage1_1{
-		TransportID: trsp.TransportID,
+		TransportID:      trsp.transportID,
+		TransportVersion: trsp.transportVersion,
 		Message: TransferMessage1_1{
 			IsRequest: false,
 			Request:   nil,

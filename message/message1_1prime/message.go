@@ -212,15 +212,34 @@ func fromMessage(tresp *TransferMessage1_1) (datatransfer.Message, error) {
 	return tresp.Response, nil
 }
 
+func fromWrappedMessage(wtresp *WrappedTransferMessage1_1) (datatransfer.TransportedMessage, error) {
+	tresp := wtresp.Message
+	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
+		return nil, xerrors.Errorf("invalid/malformed message")
+	}
+
+	if tresp.IsRequest {
+		return &WrappedTransferRequest1_1{
+			tresp.Request,
+			wtresp.TransportVersion,
+			wtresp.TransportID,
+		}, nil
+	}
+	return &WrappedTransferResponse1_1{
+		tresp.Response,
+		wtresp.TransportID,
+		wtresp.TransportVersion,
+	}, nil
+}
+
 // FromNetWrraped can read a network stream to deserialize a message + transport ID
-func FromNetWrapped(r io.Reader) (datatransfer.TransportID, datatransfer.Message, error) {
+func FromNetWrapped(r io.Reader) (datatransfer.TransportedMessage, error) {
 	tm, err := ipldutils.FromReader(r, &WrappedTransferMessage1_1{})
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	wtresp := tm.(*WrappedTransferMessage1_1)
-	msg, err := fromMessage(&wtresp.Message)
-	return datatransfer.TransportID(wtresp.TransportID), msg, err
+	return fromWrappedMessage(wtresp)
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage

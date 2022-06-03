@@ -20,7 +20,7 @@ const (
 )
 
 // ProtocolMap maps graphsync extensions to their libp2p protocols
-var ProtocolMap = map[graphsync.ExtensionName]datatransfer.MessageVersion{
+var ProtocolMap = map[graphsync.ExtensionName]datatransfer.Version{
 	ExtensionIncomingRequest1_1: datatransfer.DataTransfer1_2,
 	ExtensionOutgoingBlock1_1:   datatransfer.DataTransfer1_2,
 	ExtensionDataTransfer1_1:    datatransfer.DataTransfer1_2,

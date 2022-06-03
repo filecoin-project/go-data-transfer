@@ -13,6 +13,10 @@ type TransportID string
 // i.e. graphsync
 const LegacyTransportID TransportID = "graphsync"
 
+// LegacyTransportVersion is the only transport version for the fil/data-transfer protocol --
+// i.e. graphsync 1.0.0
+var LegacyTransportVersion Version = Version{1, 0, 0}
+
 // EventsHandler are semantic data transfer events that happen as a result of transport events
 type EventsHandler interface {
 	// ChannelState queries for the current channel state
@@ -103,6 +107,9 @@ Whether a command is supported can be determined ahead by calling Capabilities()
 type Transport interface {
 	// ID is a unique identifier for this transport
 	ID() TransportID
+
+	// Versions indicates what versions of this transport are supported
+	Versions() []Version
 
 	// Capabilities tells datatransfer what kinds of capabilities this transport supports
 	Capabilities() TransportCapabilities

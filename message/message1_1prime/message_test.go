@@ -510,6 +510,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 	})
 	t.Run("round-trip with wrapping", func(t *testing.T) {
 		transportID := datatransfer.TransportID("applesauce")
+		transportVersion := datatransfer.Version{Major: 1, Minor: 5, Patch: 0}
 		baseCid := testutil.GenerateCids(1)[0]
 		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 		isPull := false
@@ -519,15 +520,16 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		voucherResult := testutil.NewTestTypedVoucher()
 		request, err := message1_1.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 		require.NoError(t, err)
-		wrequest := request.WrappedForTransport(transportID)
+		wrequest := request.WrappedForTransport(transportID, transportVersion)
 		buf := new(bytes.Buffer)
 		err = wrequest.ToNet(buf)
 		require.NoError(t, err)
 		require.Greater(t, buf.Len(), 0)
-		receivedTransportID, deserialized, err := message1_1.FromNetWrapped(buf)
+		deserialized, err := message1_1.FromNetWrapped(buf)
 		require.NoError(t, err)
 
-		require.Equal(t, transportID, receivedTransportID)
+		require.Equal(t, transportID, deserialized.TransportID())
+		require.Equal(t, transportVersion, deserialized.TransportVersion())
 		deserializedRequest, ok := deserialized.(datatransfer.Request)
 		require.True(t, ok)
 
@@ -541,12 +543,13 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 
 		response, err := message1_1.NewResponse(id, accepted, false, &voucherResult)
 		require.NoError(t, err)
-		wresponse := response.WrappedForTransport(transportID)
+		wresponse := response.WrappedForTransport(transportID, transportVersion)
 		err = wresponse.ToNet(buf)
 		require.NoError(t, err)
-		receivedTransportID, deserialized, err = message1_1.FromNetWrapped(buf)
+		deserialized, err = message1_1.FromNetWrapped(buf)
 		require.NoError(t, err)
-		require.Equal(t, transportID, receivedTransportID)
+		require.Equal(t, transportID, deserialized.TransportID())
+		require.Equal(t, transportVersion, deserialized.TransportVersion())
 
 		deserializedResponse, ok := deserialized.(datatransfer.Response)
 		require.True(t, ok)
@@ -559,12 +562,13 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		testutil.AssertEqualTestVoucherResult(t, response, deserializedResponse)
 
 		request = message1_1.CancelRequest(id)
-		wrequest = request.WrappedForTransport(transportID)
+		wrequest = request.WrappedForTransport(transportID, transportVersion)
 		err = wrequest.ToNet(buf)
 		require.NoError(t, err)
-		receivedTransportID, deserialized, err = message1_1.FromNetWrapped(buf)
+		deserialized, err = message1_1.FromNetWrapped(buf)
 		require.NoError(t, err)
-		require.Equal(t, transportID, receivedTransportID)
+		require.Equal(t, transportID, deserialized.TransportID())
+		require.Equal(t, transportVersion, deserialized.TransportVersion())
 
 		deserializedRequest, ok = deserialized.(datatransfer.Request)
 		require.True(t, ok)
