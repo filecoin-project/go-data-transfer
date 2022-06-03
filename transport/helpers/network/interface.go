@@ -20,11 +20,19 @@ const (
 	ProtocolDataTransfer1_2 protocol.ID = "/datatransfer/1.2.0"
 )
 
+// ProtocolDescription describes how you are connected to a given
+// peer on a given transport, if at all
+type ProtocolDescription struct {
+	IsLegacy         bool
+	MessageVersion   datatransfer.Version
+	TransportVersion datatransfer.Version
+}
+
 // MessageVersion extracts the message version from the full protocol
-func MessageVersion(protocol protocol.ID) (datatransfer.MessageVersion, error) {
+func MessageVersion(protocol protocol.ID) (datatransfer.Version, error) {
 	protocolParts := strings.Split(string(protocol), "/")
 	if len(protocolParts) == 0 {
-		return datatransfer.MessageVersion{}, errors.New("no protocol to parse")
+		return datatransfer.Version{}, errors.New("no protocol to parse")
 	}
 	return datatransfer.MessageVersionFromString(protocolParts[len(protocolParts)-1])
 }
@@ -43,7 +51,7 @@ type DataTransferNetwork interface {
 
 	// SetDelegate registers the Reciver to handle messages received from the
 	// network.
-	SetDelegate(datatransfer.TransportID, Receiver)
+	SetDelegate(datatransfer.TransportID, []datatransfer.Version, Receiver)
 
 	// ConnectTo establishes a connection to the given peer
 	ConnectTo(context.Context, peer.ID) error
@@ -51,14 +59,14 @@ type DataTransferNetwork interface {
 	// ConnectWithRetry establishes a connection to the given peer, retrying if
 	// necessary, and opens a stream on the data-transfer protocol to verify
 	// the peer will accept messages on the protocol
-	ConnectWithRetry(ctx context.Context, p peer.ID) error
+	ConnectWithRetry(ctx context.Context, p peer.ID, transportID datatransfer.TransportID) error
 
 	// ID returns the peer id of this libp2p host
 	ID() peer.ID
 
 	// Protocol returns the protocol version of the peer, connecting to
 	// the peer if necessary
-	Protocol(context.Context, peer.ID) (protocol.ID, error)
+	Protocol(context.Context, peer.ID, datatransfer.TransportID) (ProtocolDescription, error)
 }
 
 // Receiver is an interface for receiving messages from the GraphSyncNetwork.

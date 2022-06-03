@@ -23,6 +23,7 @@ import (
 var log = logging.Logger("dt_graphsync")
 
 var transportID datatransfer.TransportID = "graphsync"
+var supportedVersions = []datatransfer.Version{{Major: 1, Minor: 0, Patch: 0}}
 
 // When restarting a data transfer, we cancel the existing graphsync request
 // before opening a new one.
@@ -109,6 +110,10 @@ func (t *Transport) ID() datatransfer.TransportID {
 	return transportID
 }
 
+func (t *Transport) Versions() []datatransfer.Version {
+	return supportedVersions
+}
+
 func (t *Transport) Capabilities() datatransfer.TransportCapabilities {
 	return datatransfer.TransportCapabilities{
 		Pausable:    true,
@@ -142,7 +147,7 @@ func (t *Transport) RestartChannel(
 	req datatransfer.Request) error {
 	log.Debugf("%s: re-establishing connection to %s", channelState.ChannelID(), channelState.OtherPeer())
 	start := time.Now()
-	err := t.dtNet.ConnectWithRetry(ctx, channelState.OtherPeer())
+	err := t.dtNet.ConnectWithRetry(ctx, channelState.OtherPeer(), transportID)
 	if err != nil {
 		return xerrors.Errorf("%s: failed to reconnect to peer %s after %s: %w",
 			channelState.ChannelID(), channelState.OtherPeer(), time.Since(start), err)
@@ -292,7 +297,7 @@ func (t *Transport) SetEventHandler(events datatransfer.EventsHandler) error {
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterNetworkErrorListener(t.gsNetworkSendErrorListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterReceiverNetworkErrorListener(t.gsNetworkReceiveErrorListener))
 
-	t.dtNet.SetDelegate(transportID, &receiver{t})
+	t.dtNet.SetDelegate(transportID, supportedVersions, &receiver{t})
 	return nil
 }
 
