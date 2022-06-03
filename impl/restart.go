@@ -49,12 +49,12 @@ func (m *manager) openRestartChannel(ctx context.Context, channel datatransfer.C
 	if !m.transport.Capabilities().Restartable {
 		return datatransfer.ErrUnsupported
 	}
-        req, err := message.NewRequest(chid.ID, true, channel.IsPull(), &voucher, baseCid, selector)
+	req, err := message.NewRequest(chid.ID, true, channel.IsPull(), &voucher, baseCid, selector)
 	if err != nil {
 		return err
 	}
 
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)

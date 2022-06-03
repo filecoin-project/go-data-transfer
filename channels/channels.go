@@ -136,9 +136,7 @@ func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, base
 		return datatransfer.ChannelID{}, nil, err
 	}
 	log.Debugw("created tracking channel for data-transfer, emitting channel Open event", "channelID", chid)
-	chint := c.fromInternalChannelState(*channel)
-	chint.(channelState).decodedVouchers[0] = &voucher
-	return chid, chint, c.stateMachines.Send(chid, datatransfer.Open)
+	return chid, c.fromInternalChannelState(*channel), c.stateMachines.Send(chid, datatransfer.Open)
 }
 
 // InProgress returns a list of in progress channels

@@ -188,8 +188,10 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 
 func (m *manager) openChannel(ctx context.Context, channel datatransfer.Channel, request datatransfer.Request) error {
 	chid := channel.ChannelID()
-	voucher := channel.Voucher()
-
+	voucher, err := channel.Voucher()
+	if err != nil {
+		return err
+	}
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
 	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
