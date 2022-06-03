@@ -37,7 +37,7 @@ type TransferMessage1_1 struct {
 	Response nullable TransferResponse
 }
 
-type WrappedTransferMessage struct {
+type WrappedTransferMessage1_1 struct {
 	TransportID TransportID (rename "ID")
-	Message TransferMessage (rename "Msg")
+	Message TransferMessage1_1 (rename "Msg")
 }

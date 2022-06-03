@@ -334,7 +334,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				events:         make(chan datatransfer.EventCode, len(verify.expectedEvents)),
 			}
 			ev.setup(t, dt)
-			h.stor = 			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
+			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
 			h.voucher = testutil.NewTestTypedVoucher()
 			h.voucherResult = testutil.NewTestTypedVoucher()
 			require.NoError(t, err)
@@ -581,11 +581,10 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			ev.setup(t, dt)
 
 			// setup voucher processing
-			h.stor = testutil.AllSelector()
-			h.voucher = testutil.NewFakeDTType()
-			require.NoError(t, h.dt.RegisterVoucherType(h.voucher, h.voucherValidator))
-			h.voucherResult = testutil.NewFakeDTType()
-			err = h.dt.RegisterVoucherResultType(h.voucherResult)
+			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
+			h.voucher = testutil.NewTestTypedVoucher()
+			require.NoError(t, h.dt.RegisterVoucherType(h.voucher.Type, h.voucherValidator))
+			h.voucherResult = testutil.NewTestTypedVoucher()
 			require.NoError(t, err)
 			h.baseCid = testutil.GenerateCids(1)[0]
 

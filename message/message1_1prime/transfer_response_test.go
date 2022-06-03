@@ -29,7 +29,7 @@ func TestResponseMessageForVersion(t *testing.T) {
 	require.True(t, resp.IsValidationResult())
 
 	wrappedOut := out.WrappedForTransport(datatransfer.LegacyTransportID)
-	require.Equal(t, &message1_1.WrappedTransferRepsponse1_1{
+	require.Equal(t, &message1_1.WrappedTransferResponse1_1{
 		TransferResponse1_1: response.(*message1_1.TransferResponse1_1),
 		TransportID:         string(datatransfer.LegacyTransportID),
 	}, wrappedOut)

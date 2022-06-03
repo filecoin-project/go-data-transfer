@@ -515,9 +515,9 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
 		accepted := false
-		voucher := testutil.NewFakeDTType()
-		voucherResult := testutil.NewFakeDTType()
-		request, err := message1_1.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+		voucher := testutil.NewTestTypedVoucher()
+		voucherResult := testutil.NewTestTypedVoucher()
+		request, err := message1_1.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 		require.NoError(t, err)
 		wrequest := request.WrappedForTransport(transportID)
 		buf := new(bytes.Buffer)
@@ -536,10 +536,10 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		require.Equal(t, deserializedRequest.IsPull(), request.IsPull())
 		require.Equal(t, deserializedRequest.IsRequest(), request.IsRequest())
 		require.Equal(t, deserializedRequest.BaseCid(), request.BaseCid())
-		testutil.AssertEqualFakeDTVoucher(t, request, deserializedRequest)
+		testutil.AssertEqualTestVoucher(t, request, deserializedRequest)
 		testutil.AssertEqualSelector(t, request, deserializedRequest)
 
-		response, err := message1_1.NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
+		response, err := message1_1.NewResponse(id, accepted, false, &voucherResult)
 		require.NoError(t, err)
 		wresponse := response.WrappedForTransport(transportID)
 		err = wresponse.ToNet(buf)
@@ -556,7 +556,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		require.Equal(t, deserializedResponse.IsRequest(), response.IsRequest())
 		require.Equal(t, deserializedResponse.IsUpdate(), response.IsUpdate())
 		require.Equal(t, deserializedResponse.IsPaused(), response.IsPaused())
-		testutil.AssertEqualFakeDTVoucherResult(t, response, deserializedResponse)
+		testutil.AssertEqualTestVoucherResult(t, response, deserializedResponse)
 
 		request = message1_1.CancelRequest(id)
 		wrequest = request.WrappedForTransport(transportID)
