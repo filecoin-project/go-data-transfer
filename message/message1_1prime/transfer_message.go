@@ -1,15 +1,18 @@
 package message1_1
 
 import (
+	_ "embed"
 	"io"
 
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 )
+
+//go:embed schema.ipldsch
+var embedSchema []byte
 
 // TransferMessage1_1 is the transfer message for the 1.1 Data Transfer Protocol.
 type TransferMessage1_1 struct {
@@ -17,6 +20,10 @@ type TransferMessage1_1 struct {
 
 	Request  *TransferRequest1_1
 	Response *TransferResponse1_1
+}
+
+func (tm *TransferMessage1_1) BindnodeSchema() string {
+	return string(embedSchema)
 }
 
 // ========= datatransfer.Message interface
@@ -29,16 +36,24 @@ func (tm *TransferMessage1_1) TransferID() datatransfer.TransferID {
 	return tm.Response.TransferID()
 }
 
-func (tm *TransferMessage1_1) toIPLD() schema.TypedNode {
-	return bindnode.Wrap(&tm, Prototype.TransferMessage.Type())
+func (tm *TransferMessage1_1) toIPLD() (schema.TypedNode, error) {
+	return ipldutils.ToNode(tm)
 }
 
-// ToNet serializes a transfer message type.
+// ToIPLD converts a transfer message type to an ipld Node
 func (tm *TransferMessage1_1) ToIPLD() (datamodel.Node, error) {
-	return tm.toIPLD().Representation(), nil
+	node, err := tm.toIPLD()
+	if err != nil {
+		return nil, err
+	}
+	return node.Representation(), nil
 }
 
 // ToNet serializes a transfer message type.
 func (tm *TransferMessage1_1) ToNet(w io.Writer) error {
-	return dagcbor.Encode(tm.toIPLD().Representation(), w)
+	i, err := tm.toIPLD()
+	if err != nil {
+		return err
+	}
+	return ipldutils.NodeToWriter(i, w)
 }

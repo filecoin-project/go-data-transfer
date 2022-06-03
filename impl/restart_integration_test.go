@@ -41,8 +41,8 @@ func TestRestartPush(t *testing.T) {
 		"Restart peer create push": {
 			stopAt: 20,
 			openPushF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.FakeDTType{Data: "applesauce"}
-				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, &voucher, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, rh.gsData.AllSelector)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -53,7 +53,7 @@ func TestRestartPush(t *testing.T) {
 				tp1 := rh.gsData.SetupGSTransportHost1()
 				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1)
 				require.NoError(rh.t, err)
-				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
+				require.NoError(rh.t, rh.dt1.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
 				rh.dt1.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt1.RestartDataTransferChannel(rh.testCtx, chId))
@@ -83,8 +83,8 @@ func TestRestartPush(t *testing.T) {
 		"Restart peer receive push": {
 			stopAt: 20,
 			openPushF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.FakeDTType{Data: "applesauce"}
-				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, &voucher, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, rh.gsData.AllSelector)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -95,7 +95,7 @@ func TestRestartPush(t *testing.T) {
 				tp2 := rh.gsData.SetupGSTransportHost2()
 				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.DtNet2, tp2)
 				require.NoError(rh.t, err)
-				require.NoError(rh.t, rh.dt2.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
+				require.NoError(rh.t, rh.dt2.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 				rh.dt2.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt2.RestartDataTransferChannel(rh.testCtx, chId))
@@ -294,8 +294,8 @@ func TestRestartPull(t *testing.T) {
 		"Restart peer create pull": {
 			stopAt: 40,
 			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.FakeDTType{Data: "applesauce"}
-				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, &voucher, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, rh.gsData.AllSelector)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -306,7 +306,7 @@ func TestRestartPull(t *testing.T) {
 				tp2 := rh.gsData.SetupGSTransportHost2()
 				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.DtNet2, tp2)
 				require.NoError(rh.t, err)
-				require.NoError(rh.t, rh.dt2.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
+				require.NoError(rh.t, rh.dt2.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 				rh.dt2.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt2.RestartDataTransferChannel(rh.testCtx, chId))
@@ -333,8 +333,8 @@ func TestRestartPull(t *testing.T) {
 		"Restart peer receive pull": {
 			stopAt: 40,
 			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.FakeDTType{Data: "applesauce"}
-				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, &voucher, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, rh.gsData.AllSelector)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -345,7 +345,7 @@ func TestRestartPull(t *testing.T) {
 				tp1 := rh.gsData.SetupGSTransportHost1()
 				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1)
 				require.NoError(rh.t, err)
-				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
+				require.NoError(rh.t, rh.dt1.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
 				rh.dt1.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt1.RestartDataTransferChannel(rh.testCtx, chId))
@@ -570,8 +570,8 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	require.NoError(t, err)
 
 	sv := testutil.NewStubbedValidator()
-	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
-	require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+	require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
+	require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
 
 	sourceDagService := gsData.DagService1
 	root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService, largeFile)

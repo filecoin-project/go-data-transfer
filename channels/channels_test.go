@@ -16,7 +16,6 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
-	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
@@ -32,13 +31,13 @@ func TestChannels(t *testing.T) {
 
 	tid1 := datatransfer.TransferID(0)
 	tid2 := datatransfer.TransferID(1)
-	fv1 := &testutil.FakeDTType{}
-	fv2 := &testutil.FakeDTType{}
+	fv1 := testutil.NewTestTypedVoucher()
+	fv2 := testutil.NewTestTypedVoucher()
 	cids := testutil.GenerateCids(4)
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	peers := testutil.GeneratePeers(4)
 
-	channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+	channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
 	require.NoError(t, err)
 
 	err = channelList.Start(ctx)
@@ -80,7 +79,9 @@ func TestChannels(t *testing.T) {
 		require.NotEqual(t, channels.EmptyChannelState, state)
 		require.Equal(t, cids[0], state.BaseCID())
 		require.Equal(t, selector, state.Selector())
-		require.Equal(t, fv1, state.Voucher())
+		voucher, err := state.Voucher()
+		require.NoError(t, err)
+		require.True(t, fv1.Equals(voucher))
 		require.Equal(t, peers[0], state.Sender())
 		require.Equal(t, peers[1], state.Recipient())
 
@@ -124,7 +125,7 @@ func TestChannels(t *testing.T) {
 	t.Run("datasent/queued when transfer is already finished", func(t *testing.T) {
 		ds := dss.MutexWrap(datastore.NewMapDatastore())
 
-		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+		channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
 		require.NoError(t, err)
 		err = channelList.Start(ctx)
 		require.NoError(t, err)
@@ -156,7 +157,7 @@ func TestChannels(t *testing.T) {
 	t.Run("updating send/receive values", func(t *testing.T) {
 		ds := dss.MutexWrap(datastore.NewMapDatastore())
 
-		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+		channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
 		require.NoError(t, err)
 		err = channelList.Start(ctx)
 		require.NoError(t, err)
@@ -218,7 +219,7 @@ func TestChannels(t *testing.T) {
 	t.Run("data limit", func(t *testing.T) {
 		ds := dss.MutexWrap(datastore.NewMapDatastore())
 
-		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+		channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
 		require.NoError(t, err)
 		err = channelList.Start(ctx)
 		require.NoError(t, err)
@@ -297,31 +298,53 @@ func TestChannels(t *testing.T) {
 	})
 
 	t.Run("new vouchers & voucherResults", func(t *testing.T) {
-		fv3 := testutil.NewFakeDTType()
-		fvr1 := testutil.NewFakeDTType()
+		fv3 := testutil.NewTestTypedVoucher()
+		fvr1 := testutil.NewTestTypedVoucher()
 
 		state, err := channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
-		require.Equal(t, []datatransfer.Voucher{fv1}, state.Vouchers())
-		require.Equal(t, fv1, state.Voucher())
-		require.Equal(t, fv1, state.LastVoucher())
+		vouchers, err := state.Vouchers()
+		require.NoError(t, err)
+		require.Len(t, vouchers, 1)
+		require.True(t, fv1.Equals(vouchers[0]))
+		voucher, err := state.Voucher()
+		require.NoError(t, err)
+		require.True(t, fv1.Equals(voucher))
+		voucher, err = state.LastVoucher()
+		require.NoError(t, err)
+		require.True(t, fv1.Equals(voucher))
 
 		err = channelList.NewVoucher(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, fv3)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.NewVoucher)
-		require.Equal(t, []datatransfer.Voucher{fv1, fv3}, state.Vouchers())
-		require.Equal(t, fv1, state.Voucher())
-		require.Equal(t, fv3, state.LastVoucher())
+		vouchers, err = state.Vouchers()
+		require.NoError(t, err)
+		require.Len(t, vouchers, 2)
+		require.True(t, fv1.Equals(vouchers[0]))
+		require.True(t, fv3.Equals(vouchers[1]))
+		voucher, err = state.Voucher()
+		require.NoError(t, err)
+		require.True(t, fv1.Equals(voucher))
+		voucher, err = state.LastVoucher()
+		require.NoError(t, err)
+		require.True(t, fv3.Equals(voucher))
 
 		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
-		require.Equal(t, []datatransfer.VoucherResult{}, state.VoucherResults())
+		results, err := state.VoucherResults()
+		require.NoError(t, err)
+		require.Equal(t, []datatransfer.TypedVoucher{}, results)
 
 		err = channelList.NewVoucherResult(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, fvr1)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.NewVoucherResult)
-		require.Equal(t, []datatransfer.VoucherResult{fvr1}, state.VoucherResults())
-		require.Equal(t, fvr1, state.LastVoucherResult())
+		voucherResults, err := state.VoucherResults()
+		require.NoError(t, err)
+		require.Len(t, voucherResults, 1)
+		require.True(t, fvr1.Equals(voucherResults[0]))
+		voucherResult, err := state.LastVoucherResult()
+		require.NoError(t, err)
+		require.True(t, fvr1.Equals(voucherResult))
 	})
 
 	t.Run("test finality", func(t *testing.T) {
@@ -387,7 +410,7 @@ func TestChannels(t *testing.T) {
 		notifier := func(evt datatransfer.Event, chst datatransfer.ChannelState) {
 			received <- event{evt, chst}
 		}
-		channelList, err := channels.New(ds, notifier, decoderByType, decoderByType, &fakeEnv{}, peers[0])
+		channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
 		require.NoError(t, err)
 		err = channelList.Start(ctx)
 		require.NoError(t, err)
@@ -468,15 +491,4 @@ func (fe *fakeEnv) ID() peer.ID {
 }
 
 func (fe *fakeEnv) CleanupChannel(chid datatransfer.ChannelID) {
-}
-
-func decoderByType(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool) {
-	if identifier == testutil.NewFakeDTType().Type() {
-		decoder, err := encoding.NewDecoder(testutil.NewFakeDTType())
-		if err != nil {
-			return nil, false
-		}
-		return decoder, true
-	}
-	return nil, false
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log/v2"
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"go.opentelemetry.io/otel"
@@ -22,7 +22,6 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channelmonitor"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
-	"github.com/filecoin-project/go-data-transfer/v2/encoding"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/network"
@@ -36,7 +35,6 @@ var cancelSendTimeout = 30 * time.Second
 type manager struct {
 	dataTransferNetwork  network.DataTransferNetwork
 	validatedTypes       *registry.Registry
-	resultTypes          *registry.Registry
 	transportConfigurers *registry.Registry
 	pubSub               *pubsub.PubSub
 	readySub             *pubsub.PubSub
@@ -96,7 +94,6 @@ func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTran
 	m := &manager{
 		dataTransferNetwork:  dataTransferNetwork,
 		validatedTypes:       registry.NewRegistry(),
-		resultTypes:          registry.NewRegistry(),
 		transportConfigurers: registry.NewRegistry(),
 		pubSub:               pubsub.New(dispatcher),
 		readySub:             pubsub.New(readyDispatcher),
@@ -106,7 +103,7 @@ func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTran
 		spansIndex:           tracing.NewSpansIndex(),
 	}
 
-	channels, err := channels.New(ds, m.notifier, m.voucherDecoder, m.resultTypes.Decoder, &channelEnvironment{m}, dataTransferNetwork.ID())
+	channels, err := channels.New(ds, m.notifier, &channelEnvironment{m}, dataTransferNetwork.ID())
 	if err != nil {
 		return nil, err
 	}
@@ -122,10 +119,6 @@ func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTran
 	m.channelMonitor = channelmonitor.NewMonitor(m, m.channelMonitorCfg)
 
 	return m, nil
-}
-
-func (m *manager) voucherDecoder(voucherType datatransfer.TypeIdentifier) (encoding.Decoder, bool) {
-	return m.validatedTypes.Decoder(voucherType)
 }
 
 func (m *manager) notifier(evt datatransfer.Event, chst datatransfer.ChannelState) {
@@ -173,7 +166,7 @@ func (m *manager) Stop(ctx context.Context) error {
 // * voucher type does not implement voucher
 // * there is a voucher type registered with an identical identifier
 // * voucherType's Kind is not reflect.Ptr
-func (m *manager) RegisterVoucherType(voucherType datatransfer.Voucher, validator datatransfer.RequestValidator) error {
+func (m *manager) RegisterVoucherType(voucherType datatransfer.TypeIdentifier, validator datatransfer.RequestValidator) error {
 	err := m.validatedTypes.Register(voucherType, validator)
 	if err != nil {
 		return xerrors.Errorf("error registering voucher type: %w", err)
@@ -183,7 +176,7 @@ func (m *manager) RegisterVoucherType(voucherType datatransfer.Voucher, validato
 
 // OpenPushDataChannel opens a data transfer that will send data to the recipient peer and
 // transfer parts of the piece that match the selector
-func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.ChannelID, error) {
+func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (datatransfer.ChannelID, error) {
 	log.Infof("open push channel to %s with base cid %s", requestTo, baseCid)
 
 	req, err := m.newRequest(ctx, selector, false, voucher, baseCid, requestTo)
@@ -197,7 +190,7 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 		return chid, err
 	}
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -205,7 +198,7 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	monitoredChan := m.channelMonitor.AddPushChannel(chid)
 	if err := m.dataTransferNetwork.SendMessage(ctx, requestTo, req); err != nil {
-		err = fmt.Errorf("Unable to send request: %w", err)
+		err = fmt.Errorf("unable to send request: %w", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		_ = m.channels.Error(chid, err)
@@ -224,7 +217,7 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 
 // OpenPullDataChannel opens a data transfer that will request data from the sending peer and
 // transfer parts of the piece that match the selector
-func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.Voucher, baseCid cid.Cid, selector ipld.Node) (datatransfer.ChannelID, error) {
+func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (datatransfer.ChannelID, error) {
 	log.Infof("open pull channel to %s with base cid %s", requestTo, baseCid)
 
 	req, err := m.newRequest(ctx, selector, true, voucher, baseCid, requestTo)
@@ -238,7 +231,7 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 		return chid, err
 	}
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
-	processor, has := m.transportConfigurers.Processor(voucher.Type())
+	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
@@ -246,7 +239,7 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	monitoredChan := m.channelMonitor.AddPullChannel(chid)
 	if err := m.transport.OpenChannel(ctx, requestTo, chid, cidlink.Link{Cid: baseCid}, selector, nil, req); err != nil {
-		err = fmt.Errorf("Unable to send request: %w", err)
+		err = fmt.Errorf("unable to send request: %w", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		_ = m.channels.Error(chid, err)
@@ -262,7 +255,7 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 }
 
 // SendVoucher sends an intermediate voucher as needed when the receiver sends a request for revalidation
-func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.ChannelID, voucher datatransfer.Voucher) error {
+func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.ChannelID, voucher datatransfer.TypedVoucher) error {
 	chst, err := m.channels.GetByID(ctx, channelID)
 	if err != nil {
 		return err
@@ -270,7 +263,6 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 	ctx, _ = m.spansIndex.SpanForChannel(ctx, channelID)
 	ctx, span := otel.Tracer("data-transfer").Start(ctx, "sendVoucher", trace.WithAttributes(
 		attribute.String("channelID", channelID.String()),
-		attribute.String("voucherType", string(voucher.Type())),
 	))
 	defer span.End()
 	if channelID.Initiator != m.peerID {
@@ -279,14 +271,14 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	updateRequest, err := message.VoucherRequest(channelID.ID, voucher.Type(), voucher)
+	updateRequest, err := message.VoucherRequest(channelID.ID, &voucher)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherPeer(), updateRequest); err != nil {
-		err = fmt.Errorf("Unable to send request: %w", err)
+		err = fmt.Errorf("unable to send request: %w", err)
 		_ = m.OnRequestDisconnected(channelID, err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -295,7 +287,7 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 	return m.channels.NewVoucher(channelID, voucher)
 }
 
-func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.ChannelID, voucherResult datatransfer.VoucherResult) error {
+func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.ChannelID, voucherResult datatransfer.TypedVoucher) error {
 	chst, err := m.channels.GetByID(ctx, channelID)
 	if err != nil {
 		return err
@@ -303,7 +295,6 @@ func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.
 	ctx, _ = m.spansIndex.SpanForChannel(ctx, channelID)
 	ctx, span := otel.Tracer("data-transfer").Start(ctx, "sendVoucherResult", trace.WithAttributes(
 		attribute.String("channelID", channelID.String()),
-		attribute.String("voucherResultType", string(voucherResult.Type())),
 	))
 	defer span.End()
 	if channelID.Initiator == m.peerID {
@@ -315,9 +306,9 @@ func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.
 
 	var updateResponse datatransfer.Response
 	if chst.Status().InFinalization() {
-		updateResponse, err = message.CompleteResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), voucherResult.Type(), voucherResult)
+		updateResponse, err = message.CompleteResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), &voucherResult)
 	} else {
-		updateResponse, err = message.VoucherResultResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), voucherResult.Type(), voucherResult)
+		updateResponse, err = message.VoucherResultResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), &voucherResult)
 	}
 
 	if err != nil {
@@ -326,7 +317,7 @@ func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.
 		return err
 	}
 	if err := m.dataTransferNetwork.SendMessage(ctx, chst.OtherPeer(), updateResponse); err != nil {
-		err = fmt.Errorf("Unable to send request: %w", err)
+		err = fmt.Errorf("unable to send request: %w", err)
 		_ = m.OnRequestDisconnected(channelID, err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -549,7 +540,7 @@ func (m *manager) PauseDataTransferChannel(ctx context.Context, chid datatransfe
 	}
 
 	if err := m.dataTransferNetwork.SendMessage(ctx, chid.OtherParty(m.peerID), m.pauseMessage(chid)); err != nil {
-		err = fmt.Errorf("Unable to send pause message: %w", err)
+		err = fmt.Errorf("unable to send pause message: %w", err)
 		_ = m.OnRequestDisconnected(chid, err)
 		return err
 	}
@@ -600,19 +591,9 @@ func (m *manager) InProgressChannels(ctx context.Context) (map[datatransfer.Chan
 	return m.channels.InProgress()
 }
 
-// RegisterVoucherResultType allows deserialization of a voucher result,
-// so that a listener can read the metadata
-func (m *manager) RegisterVoucherResultType(resultType datatransfer.VoucherResult) error {
-	err := m.resultTypes.Register(resultType, nil)
-	if err != nil {
-		return xerrors.Errorf("error registering voucher type: %w", err)
-	}
-	return nil
-}
-
 // RegisterTransportConfigurer registers the given transport configurer to be run on requests with the given voucher
 // type
-func (m *manager) RegisterTransportConfigurer(voucherType datatransfer.Voucher, configurer datatransfer.TransportConfigurer) error {
+func (m *manager) RegisterTransportConfigurer(voucherType datatransfer.TypeIdentifier, configurer datatransfer.TransportConfigurer) error {
 	err := m.transportConfigurers.Register(voucherType, configurer)
 	if err != nil {
 		return xerrors.Errorf("error registering transport configurer: %w", err)

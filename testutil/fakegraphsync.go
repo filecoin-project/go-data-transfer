@@ -40,7 +40,7 @@ type ReceivedGraphSyncRequest struct {
 	Ctx             context.Context
 	P               peer.ID
 	Root            ipld.Link
-	Selector        ipld.Node
+	Selector        datamodel.Node
 	Extensions      []graphsync.ExtensionData
 	ResponseChan    chan graphsync.ResponseProgress
 	ResponseErrChan chan error
@@ -193,7 +193,7 @@ func (fgs *FakeGraphSync) AssertDoesNotHavePersistenceOption(t *testing.T, name 
 }
 
 // Request initiates a new GraphSync request to the given peer using the given selector spec.
-func (fgs *FakeGraphSync) Request(ctx context.Context, p peer.ID, root ipld.Link, selector ipld.Node, extensions ...graphsync.ExtensionData) (<-chan graphsync.ResponseProgress, <-chan error) {
+func (fgs *FakeGraphSync) Request(ctx context.Context, p peer.ID, root ipld.Link, selector datamodel.Node, extensions ...graphsync.ExtensionData) (<-chan graphsync.ResponseProgress, <-chan error) {
 	errors := make(chan error)
 	responses := make(chan graphsync.ResponseProgress)
 	fgs.requests <- ReceivedGraphSyncRequest{ctx, p, root, selector, extensions, responses, errors}
@@ -387,7 +387,7 @@ func NewFakeBlockData() graphsync.BlockData {
 type fakeRequest struct {
 	id          graphsync.RequestID
 	root        cid.Cid
-	selector    ipld.Node
+	selector    datamodel.Node
 	priority    graphsync.Priority
 	requestType graphsync.RequestType
 	extensions  map[graphsync.ExtensionName]datamodel.Node
@@ -404,7 +404,7 @@ func (fr *fakeRequest) Root() cid.Cid {
 }
 
 // Selector returns the byte representation of the selector for this request
-func (fr *fakeRequest) Selector() ipld.Node {
+func (fr *fakeRequest) Selector() datamodel.Node {
 	return fr.selector
 }
 

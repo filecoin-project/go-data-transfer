@@ -13,8 +13,8 @@ import (
 
 func TestResponseMessageForProtocol(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	voucherResult := testutil.NewFakeDTType()
-	response, err := message1_1.NewResponse(id, false, true, voucherResult.Type(), voucherResult) // not accepted
+	voucherResult := testutil.NewTestTypedVoucher()
+	response, err := message1_1.NewResponse(id, false, true, &voucherResult) // not accepted
 	require.NoError(t, err)
 
 	// v1.2 protocol
@@ -25,7 +25,7 @@ func TestResponseMessageForProtocol(t *testing.T) {
 	resp, ok := (out).(datatransfer.Response)
 	require.True(t, ok)
 	require.True(t, resp.IsPaused())
-	require.Equal(t, voucherResult.Type(), resp.VoucherResultType())
+	require.Equal(t, testutil.TestVoucherType, resp.VoucherResultType())
 	require.True(t, resp.IsValidationResult())
 
 	// random protocol
