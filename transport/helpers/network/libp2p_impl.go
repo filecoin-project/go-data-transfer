@@ -241,7 +241,6 @@ func (dtnet *libp2pDataTransferNetwork) SetDelegate(transportID datatransfer.Tra
 	for _, dtProtocol := range dtnet.dtProtocols {
 		messageVersion, _ := MessageVersion(dtProtocol)
 		if isLegacyProtocol(dtProtocol) {
-
 			if transportID == datatransfer.LegacyTransportID {
 				dtnet.receivers[dtProtocol] = receiverData{
 					ProtocolDescription: ProtocolDescription{
