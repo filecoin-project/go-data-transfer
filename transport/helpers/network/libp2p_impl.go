@@ -269,7 +269,6 @@ func (dtnet *libp2pDataTransferNetwork) SetDelegate(transportID datatransfer.Tra
 				}
 				transportProtocols.protocols = append(transportProtocols.protocols, protocol.ID(joinedProtocol))
 				transportProtocols.protocolStrings = append(transportProtocols.protocolStrings, joinedProtocol)
-
 			}
 		}
 	}
