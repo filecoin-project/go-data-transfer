@@ -1,14 +1,56 @@
 package internal
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 
 	"github.com/ipfs/go-cid"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/ipld/go-ipld-prime/node/basicnode"
+	"github.com/ipld/go-ipld-prime/schema"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
+
+type CborGenCompatibleNode struct {
+	Node datamodel.Node
+}
+
+func (sn CborGenCompatibleNode) IsNull() bool {
+	return sn.Node == nil || sn.Node == datamodel.Null
+}
+
+// UnmarshalCBOR is for cbor-gen compatibility
+func (sn *CborGenCompatibleNode) UnmarshalCBOR(r io.Reader) error {
+	// use cbg.Deferred.UnmarshalCBOR to figure out how much to pull
+	def := cbg.Deferred{}
+	if err := def.UnmarshalCBOR(r); err != nil {
+		return err
+	}
+	// convert it to a Node
+	na := basicnode.Prototype.Any.NewBuilder()
+	if err := dagcbor.Decode(na, bytes.NewReader(def.Raw)); err != nil {
+		return err
+	}
+	sn.Node = na.Build()
+	return nil
+}
+
+// MarshalCBOR is for cbor-gen compatibility
+func (sn *CborGenCompatibleNode) MarshalCBOR(w io.Writer) error {
+	node := datamodel.Null
+	if sn != nil && sn.Node != nil {
+		node = sn.Node
+		if tn, ok := node.(schema.TypedNode); ok {
+			node = tn.Representation()
+		}
+	}
+	return dagcbor.Encode(node, w)
+}
 
 //go:generate cbor-gen-for --map-encoding ChannelState EncodedVoucher EncodedVoucherResult
 
@@ -17,7 +59,7 @@ type EncodedVoucher struct {
 	// Vouchers identifier for decoding
 	Type datatransfer.TypeIdentifier
 	// used to verify this channel
-	Voucher *cbg.Deferred
+	Voucher CborGenCompatibleNode
 }
 
 // EncodedVoucherResult is how the voucher result is stored on disk
@@ -25,7 +67,7 @@ type EncodedVoucherResult struct {
 	// Vouchers identifier for decoding
 	Type datatransfer.TypeIdentifier
 	// used to verify this channel
-	VoucherResult *cbg.Deferred
+	VoucherResult CborGenCompatibleNode
 }
 
 // ChannelState is the internal representation on disk for the channel fsm
@@ -41,7 +83,7 @@ type ChannelState struct {
 	// base CID for the piece being transferred
 	BaseCid cid.Cid
 	// portion of Piece to return, specified by an IPLD selector
-	Selector *cbg.Deferred
+	Selector CborGenCompatibleNode
 	// the party that is sending the data (not who initiated the request)
 	Sender peer.ID
 	// the party that is receiving the data (not who initiated the request)

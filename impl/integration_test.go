@@ -1335,8 +1335,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					errChan <- struct{}{}
 				}
 				if event.Code == datatransfer.NewVoucherResult {
-					lastVoucherResult, err := channelState.LastVoucherResult()
-					require.NoError(t, err)
+					lastVoucherResult := channelState.LastVoucherResult()
 					if lastVoucherResult.Equals(finalVoucherResult) {
 						_ = dt2.SendVoucher(ctx, chid, testutil.NewTestTypedVoucher())
 					}
@@ -2050,7 +2049,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 		}
 		// Here we verify reception of voucherResults by the client
 		if event.Code == datatransfer.NewVoucherResult {
-			voucherResult, err := channelState.LastVoucherResult()
+			voucherResult := channelState.LastVoucherResult()
 			require.NoError(t, err)
 
 			// If this voucher result is the response voucher no action is needed
@@ -2200,7 +2199,7 @@ func TestMultipleParallelTransfers(t *testing.T) {
 				}
 				// Here we verify reception of voucherResults by the client
 				if event.Code == datatransfer.NewVoucherResult {
-					voucherResult, err := channelState.LastVoucherResult()
+					voucherResult := channelState.LastVoucherResult()
 					require.NoError(t, err)
 					require.NoError(t, err)
 

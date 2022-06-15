@@ -2,7 +2,6 @@ package channels
 
 import (
 	logging "github.com/ipfs/go-log/v2"
-	cbg "github.com/whyrusleeping/cbor-gen"
 
 	"github.com/filecoin-project/go-statemachine/fsm"
 
@@ -148,15 +147,15 @@ var ChannelEvents = fsm.Events{
 	}),
 
 	fsm.Event(datatransfer.NewVoucher).FromAny().ToNoChange().
-		Action(func(chst *internal.ChannelState, vtype datatransfer.TypeIdentifier, voucherBytes []byte) error {
-			chst.Vouchers = append(chst.Vouchers, internal.EncodedVoucher{Type: vtype, Voucher: &cbg.Deferred{Raw: voucherBytes}})
+		Action(func(chst *internal.ChannelState, voucher datatransfer.TypedVoucher) error {
+			chst.Vouchers = append(chst.Vouchers, internal.EncodedVoucher{Type: voucher.Type, Voucher: internal.CborGenCompatibleNode{Node: voucher.Voucher}})
 			chst.AddLog("got new voucher")
 			return nil
 		}),
 	fsm.Event(datatransfer.NewVoucherResult).FromAny().ToNoChange().
-		Action(func(chst *internal.ChannelState, vtype datatransfer.TypeIdentifier, voucherResultBytes []byte) error {
+		Action(func(chst *internal.ChannelState, voucherResult datatransfer.TypedVoucher) error {
 			chst.VoucherResults = append(chst.VoucherResults,
-				internal.EncodedVoucherResult{Type: vtype, VoucherResult: &cbg.Deferred{Raw: voucherResultBytes}})
+				internal.EncodedVoucherResult{Type: voucherResult.Type, VoucherResult: internal.CborGenCompatibleNode{Node: voucherResult.Voucher}})
 			chst.AddLog("got new voucher result")
 			return nil
 		}),
