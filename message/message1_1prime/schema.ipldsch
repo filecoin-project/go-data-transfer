@@ -1,6 +1,7 @@
 type PeerID string # peer.ID, really should be bytes (this is non-utf8) but is string for backward compat
 type TransferID int
 type TypeIdentifier string
+type TransportID string
 
 type ChannelID struct {
 	Initiator PeerID
@@ -34,4 +35,9 @@ type TransferMessage1_1 struct {
 	IsRequest         Bool             (rename "IsRq")
 	Request  nullable TransferRequest
 	Response nullable TransferResponse
+}
+
+type WrappedTransferMessage1_1 struct {
+	TransportID TransportID (rename "ID")
+	Message TransferMessage1_1 (rename "Msg")
 }

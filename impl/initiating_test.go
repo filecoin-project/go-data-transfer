@@ -11,6 +11,7 @@ import (
 	dss "github.com/ipfs/go-datastore/sync"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 
@@ -333,7 +334,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				events:         make(chan datatransfer.EventCode, len(verify.expectedEvents)),
 			}
 			ev.setup(t, dt)
-			h.stor = testutil.AllSelector()
+			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
 			h.voucher = testutil.NewTestTypedVoucher()
 			h.voucherResult = testutil.NewTestTypedVoucher()
 			require.NoError(t, err)
@@ -580,7 +581,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			ev.setup(t, dt)
 
 			// setup voucher processing
-			h.stor = testutil.AllSelector()
+			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
 			h.voucher = testutil.NewTestTypedVoucher()
 			require.NoError(t, h.dt.RegisterVoucherType(h.voucher.Type, h.voucherValidator))
 			h.voucherResult = testutil.NewTestTypedVoucher()

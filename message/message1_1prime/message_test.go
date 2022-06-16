@@ -508,6 +508,71 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		require.Equal(t, deserializedRequest.IsCancel(), request.IsCancel())
 		require.Equal(t, deserializedRequest.IsRequest(), request.IsRequest())
 	})
+	t.Run("round-trip with wrapping", func(t *testing.T) {
+		transportID := datatransfer.TransportID("applesauce")
+		baseCid := testutil.GenerateCids(1)[0]
+		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
+		isPull := false
+		id := datatransfer.TransferID(rand.Int31())
+		accepted := false
+		voucher := testutil.NewTestTypedVoucher()
+		voucherResult := testutil.NewTestTypedVoucher()
+		request, err := message1_1.NewRequest(id, false, isPull, &voucher, baseCid, selector)
+		require.NoError(t, err)
+		wrequest := request.WrappedForTransport(transportID)
+		buf := new(bytes.Buffer)
+		err = wrequest.ToNet(buf)
+		require.NoError(t, err)
+		require.Greater(t, buf.Len(), 0)
+		receivedTransportID, deserialized, err := message1_1.FromNetWrapped(buf)
+		require.NoError(t, err)
+
+		require.Equal(t, transportID, receivedTransportID)
+		deserializedRequest, ok := deserialized.(datatransfer.Request)
+		require.True(t, ok)
+
+		require.Equal(t, deserializedRequest.TransferID(), request.TransferID())
+		require.Equal(t, deserializedRequest.IsCancel(), request.IsCancel())
+		require.Equal(t, deserializedRequest.IsPull(), request.IsPull())
+		require.Equal(t, deserializedRequest.IsRequest(), request.IsRequest())
+		require.Equal(t, deserializedRequest.BaseCid(), request.BaseCid())
+		testutil.AssertEqualTestVoucher(t, request, deserializedRequest)
+		testutil.AssertEqualSelector(t, request, deserializedRequest)
+
+		response, err := message1_1.NewResponse(id, accepted, false, &voucherResult)
+		require.NoError(t, err)
+		wresponse := response.WrappedForTransport(transportID)
+		err = wresponse.ToNet(buf)
+		require.NoError(t, err)
+		receivedTransportID, deserialized, err = message1_1.FromNetWrapped(buf)
+		require.NoError(t, err)
+		require.Equal(t, transportID, receivedTransportID)
+
+		deserializedResponse, ok := deserialized.(datatransfer.Response)
+		require.True(t, ok)
+
+		require.Equal(t, deserializedResponse.TransferID(), response.TransferID())
+		require.Equal(t, deserializedResponse.Accepted(), response.Accepted())
+		require.Equal(t, deserializedResponse.IsRequest(), response.IsRequest())
+		require.Equal(t, deserializedResponse.IsUpdate(), response.IsUpdate())
+		require.Equal(t, deserializedResponse.IsPaused(), response.IsPaused())
+		testutil.AssertEqualTestVoucherResult(t, response, deserializedResponse)
+
+		request = message1_1.CancelRequest(id)
+		wrequest = request.WrappedForTransport(transportID)
+		err = wrequest.ToNet(buf)
+		require.NoError(t, err)
+		receivedTransportID, deserialized, err = message1_1.FromNetWrapped(buf)
+		require.NoError(t, err)
+		require.Equal(t, transportID, receivedTransportID)
+
+		deserializedRequest, ok = deserialized.(datatransfer.Request)
+		require.True(t, ok)
+
+		require.Equal(t, deserializedRequest.TransferID(), request.TransferID())
+		require.Equal(t, deserializedRequest.IsCancel(), request.IsCancel())
+		require.Equal(t, deserializedRequest.IsRequest(), request.IsRequest())
+	})
 }
 
 func TestFromNetMessageValidation(t *testing.T) {

@@ -7,7 +7,6 @@ import (
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
@@ -88,15 +87,18 @@ func (trsp *TransferResponse1_1) EmptyVoucherResult() bool {
 	return trsp.VoucherTypeIdentifier == datatransfer.EmptyTypeIdentifier
 }
 
-func (trsp *TransferResponse1_1) MessageForProtocol(targetProtocol protocol.ID) (datatransfer.Message, error) {
-	switch targetProtocol {
-	case datatransfer.ProtocolDataTransfer1_2:
+func (trsp *TransferResponse1_1) MessageForVersion(version datatransfer.MessageVersion) (datatransfer.Message, error) {
+	switch version {
+	case datatransfer.DataTransfer1_2:
 		return trsp, nil
 	default:
-		return nil, xerrors.Errorf("protocol %s not supported", targetProtocol)
+		return nil, xerrors.Errorf("protocol %s not supported", version)
 	}
 }
 
+func (trsp *TransferResponse1_1) WrappedForTransport(transportID datatransfer.TransportID) datatransfer.Message {
+	return &WrappedTransferResponse1_1{trsp, string(transportID)}
+}
 func (trsp *TransferResponse1_1) toIPLD() schema.TypedNode {
 	msg := TransferMessage1_1{
 		IsRequest: false,
@@ -112,5 +114,32 @@ func (trsp *TransferResponse1_1) ToIPLD() datamodel.Node {
 
 // ToNet serializes a transfer response.
 func (trsp *TransferResponse1_1) ToNet(w io.Writer) error {
+	return ipld.EncodeStreaming(w, trsp.toIPLD(), dagcbor.Encode)
+}
+
+// WrappedTransferResponse1_1 is used to serialize a response along with a
+// transport id
+type WrappedTransferResponse1_1 struct {
+	*TransferResponse1_1
+	TransportID string
+}
+
+func (trsp *WrappedTransferResponse1_1) toIPLD() schema.TypedNode {
+	msg := WrappedTransferMessage1_1{
+		TransportID: trsp.TransportID,
+		Message: TransferMessage1_1{
+			IsRequest: false,
+			Request:   nil,
+			Response:  trsp.TransferResponse1_1,
+		},
+	}
+	return msg.toIPLD()
+}
+
+func (trsp *WrappedTransferResponse1_1) ToIPLD() datamodel.Node {
+	return trsp.toIPLD().Representation()
+}
+
+func (trsp *WrappedTransferResponse1_1) ToNet(w io.Writer) error {
 	return ipld.EncodeStreaming(w, trsp.toIPLD(), dagcbor.Encode)
 }
