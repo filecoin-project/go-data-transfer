@@ -1,4 +1,4 @@
-package impl_test
+package itest
 
 import (
 	"context"
@@ -51,7 +51,7 @@ func TestRestartPush(t *testing.T) {
 				require.NoError(t, rh.dt1.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp1 := rh.gsData.SetupGSTransportHost1()
-				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1)
+				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.Host1.ID(), tp1)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt1.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
@@ -93,7 +93,7 @@ func TestRestartPush(t *testing.T) {
 				require.NoError(t, rh.dt2.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp2 := rh.gsData.SetupGSTransportHost2()
-				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.DtNet2, tp2)
+				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.Host2.ID(), tp2)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt2.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
@@ -108,7 +108,8 @@ func TestRestartPush(t *testing.T) {
 				// initiator: abort GS response
 				"transfer(0)->response(0)->abortRequest(0)",
 				// initiator: receive restart request and send restart channel message
-				"transfer(0)->receiveRequest(0)->sendMessage(0)",
+				"transfer(0)->receiveRequest(0)",
+				"transfer(0)->sendMessage(1)",
 				// initiator: receive second GS request in response to restart channel message
 				// and execute GS response
 				"transfer(0)->response(1)->executeTask(0)",
@@ -304,7 +305,7 @@ func TestRestartPull(t *testing.T) {
 				require.NoError(t, rh.dt2.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp2 := rh.gsData.SetupGSTransportHost2()
-				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.DtNet2, tp2)
+				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.Host2.ID(), tp2)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt2.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
@@ -343,7 +344,7 @@ func TestRestartPull(t *testing.T) {
 				require.NoError(t, rh.dt1.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp1 := rh.gsData.SetupGSTransportHost1()
-				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1)
+				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.Host1.ID(), tp1)
 				require.NoError(rh.t, err)
 				require.NoError(rh.t, rh.dt1.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
@@ -356,7 +357,8 @@ func TestRestartPull(t *testing.T) {
 				// initiator: initial outgoing gs request terminates
 				"transfer(0)->request(0)->terminateRequest(0)",
 				// initiator: respond to restart request and send second GS request
-				"transfer(0)->receiveRequest(0)->request(0)",
+				"transfer(0)->receiveRequest(0)",
+				"transfer(0)->request(1)->executeTask(0)",
 				// initiator: receive completion message from responder that they sent all the data
 				"transfer(0)->receiveResponse(0)",
 				// responder: receive GS request and execute response
@@ -563,10 +565,10 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	tp1 := gsData.SetupGSTransportHost1()
 	tp2 := gsData.SetupGSTransportHost2()
 
-	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1)
+	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.Host1.ID(), tp1)
 	require.NoError(t, err)
 
-	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2)
+	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.Host2.ID(), tp2)
 	require.NoError(t, err)
 
 	sv := testutil.NewStubbedValidator()

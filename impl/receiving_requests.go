@@ -76,7 +76,7 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 	}
 
 	log.Infow("data-transfer request validated, will create & start tracking channel", "channelID", chid, "payloadCid", incoming.BaseCid())
-	_, err = m.channels.CreateNew(
+	_, _, err = m.channels.CreateNew(
 		m.peerID,
 		incoming.TransferID(),
 		incoming.BaseCid(),
@@ -114,7 +114,6 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, voucher, m.transport)
 	}
-	m.dataTransferNetwork.Protect(chid.Initiator, chid.String())
 
 	return result, nil
 }
@@ -147,17 +146,17 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 		return false, datatransfer.ValidationResult{}, xerrors.New("initiator cannot be manager peer for a restart request")
 	}
 
-	// valide that the request parameters match the original request
-	// TODO: not sure this is needed -- the request parameters cannot change,
-	// so perhaps the solution is just to ignore them in the message
-	if err := m.validateRestartRequest(context.Background(), initiator, chid, incoming); err != nil {
-		return false, datatransfer.ValidationResult{}, xerrors.Errorf("restart request for channel %s failed validation: %w", chid, err)
-	}
-
 	// read the channel state
 	chst, err := m.channels.GetByID(context.TODO(), chid)
 	if err != nil {
 		return false, datatransfer.ValidationResult{}, err
+	}
+
+	// valide that the request parameters match the original request
+	// TODO: not sure this is needed -- the request parameters cannot change,
+	// so perhaps the solution is just to ignore them in the message
+	if err := m.validateRestartRequest(context.Background(), initiator, chst, incoming); err != nil {
+		return false, datatransfer.ValidationResult{}, xerrors.Errorf("restart request for channel %s failed validation: %w", chid, err)
 	}
 
 	// perform a revalidation against the last voucher
@@ -196,7 +195,6 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
 		transportConfigurer(chid, typedVoucher, m.transport)
 	}
-	m.dataTransferNetwork.Protect(initiator, chid.String())
 	return stayPaused, result, nil
 }
 

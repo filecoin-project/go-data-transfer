@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	blocks "github.com/ipfs/go-block-format"
@@ -121,4 +122,10 @@ func StartAndWaitForReady(ctx context.Context, t *testing.T, manager datatransfe
 	case err := <-ready:
 		require.NoError(t, err)
 	}
+}
+
+// GenerateChannelID generates a new data transfer channel id for use in tests
+func GenerateChannelID() datatransfer.ChannelID {
+	p := GeneratePeers(2)
+	return datatransfer.ChannelID{Initiator: p[0], Responder: p[1], ID: datatransfer.TransferID(rand.Int31())}
 }
