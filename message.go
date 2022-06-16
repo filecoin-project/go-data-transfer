@@ -25,7 +25,7 @@ type Message interface {
 	IsCancel() bool
 	TransferID() TransferID
 	ToNet(w io.Writer) error
-	ToIPLD() (datamodel.Node, error)
+	ToIPLD() datamodel.Node
 	MessageForProtocol(targetProtocol protocol.ID) (newMsg Message, err error)
 }
 

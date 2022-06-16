@@ -4,12 +4,15 @@ import (
 	_ "embed"
 	"io"
 
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
+	bindnoderegistry "github.com/ipld/go-ipld-prime/node/bindnode/registry"
 	"github.com/ipld/go-ipld-prime/schema"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 )
+
+var bindnodeRegistry = bindnoderegistry.NewRegistry()
 
 //go:embed schema.ipldsch
 var embedSchema []byte
@@ -22,10 +25,6 @@ type TransferMessage1_1 struct {
 	Response *TransferResponse1_1
 }
 
-func (tm *TransferMessage1_1) BindnodeSchema() string {
-	return string(embedSchema)
-}
-
 // ========= datatransfer.Message interface
 
 // TransferID returns the TransferID of this message
@@ -36,24 +35,22 @@ func (tm *TransferMessage1_1) TransferID() datatransfer.TransferID {
 	return tm.Response.TransferID()
 }
 
-func (tm *TransferMessage1_1) toIPLD() (schema.TypedNode, error) {
-	return ipldutils.ToNode(tm)
+func (tm *TransferMessage1_1) toIPLD() schema.TypedNode {
+	return bindnodeRegistry.TypeToNode(tm)
 }
 
 // ToIPLD converts a transfer message type to an ipld Node
 func (tm *TransferMessage1_1) ToIPLD() (datamodel.Node, error) {
-	node, err := tm.toIPLD()
-	if err != nil {
-		return nil, err
-	}
-	return node.Representation(), nil
+	return tm.toIPLD().Representation(), nil
 }
 
 // ToNet serializes a transfer message type.
 func (tm *TransferMessage1_1) ToNet(w io.Writer) error {
-	i, err := tm.toIPLD()
-	if err != nil {
-		return err
+	return bindnodeRegistry.TypeToWriter(tm.toIPLD(), w, dagcbor.Encode)
+}
+
+func init() {
+	if err := bindnodeRegistry.RegisterType((*TransferMessage1_1)(nil), string(embedSchema), "TransferMessage1_1"); err != nil {
+		panic(err.Error())
 	}
-	return ipldutils.NodeToWriter(i, w)
 }

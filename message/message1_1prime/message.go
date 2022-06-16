@@ -5,12 +5,12 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
@@ -192,7 +192,7 @@ func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
 func FromNet(r io.Reader) (datatransfer.Message, error) {
-	tm, err := ipldutils.FromReader(r, &TransferMessage1_1{})
+	tm, err := bindnodeRegistry.TypeFromReader(r, &TransferMessage1_1{}, dagcbor.Decode)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func FromIPLD(node datamodel.Node) (datatransfer.Message, error) {
 	if tn, ok := node.(schema.TypedNode); ok { // shouldn't need this if from Graphsync
 		node = tn.Representation()
 	}
-	tm, err := ipldutils.FromNode(node, &TransferMessage1_1{})
+	tm, err := bindnodeRegistry.TypeFromNode(node, &TransferMessage1_1{})
 	if err != nil {
 		return nil, err
 	}

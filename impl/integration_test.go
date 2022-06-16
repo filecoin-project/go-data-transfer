@@ -1807,8 +1807,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 
 		response, err := message.NewResponse(requestReceived.TransferID(), true, false, &voucherResult)
 		require.NoError(t, err)
-		nd, err := response.ToIPLD()
-		require.NoError(t, err)
+		nd := response.ToIPLD()
 		request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 			Name: extension.ExtensionDataTransfer1_1,
 			Data: nd,
@@ -1826,8 +1825,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	t.Run("when no request is initiated", func(t *testing.T) {
 		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint32()), true, false, &voucher)
 		require.NoError(t, err)
-		nd, err := response.ToIPLD()
-		require.NoError(t, err)
+		nd := response.ToIPLD()
 		request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 			Name: extension.ExtensionDataTransfer1_1,
 			Data: nd,
@@ -1920,8 +1918,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				voucher := testutil.NewTestTypedVoucher()
 				request, err := message.NewRequest(id, false, true, &voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
-				nd, err := request.ToIPLD()
-				require.NoError(t, err)
+				nd := request.ToIPLD()
 				gsRequest := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 					Name: extension.ExtensionDataTransfer1_1,
 					Data: nd,
@@ -1949,8 +1946,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				dtRequest, err := message.NewRequest(id, false, true, &voucher, testutil.GenerateCids(1)[0], gsData.AllSelector)
 				require.NoError(t, err)
 
-				nd, err := dtRequest.ToIPLD()
-				require.NoError(t, err)
+				nd := dtRequest.ToIPLD()
 				request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, gsData.AllSelector, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
 					Name: extension.ExtensionDataTransfer1_1,
 					Data: nd,

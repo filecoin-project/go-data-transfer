@@ -4,13 +4,14 @@ import (
 	"io"
 
 	"github.com/ipfs/go-cid"
+	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
@@ -138,7 +139,7 @@ func (trq *TransferRequest1_1) IsPartial() bool {
 	return trq.Partial
 }
 
-func (trq *TransferRequest1_1) toIPLD() (schema.TypedNode, error) {
+func (trq *TransferRequest1_1) toIPLD() schema.TypedNode {
 	msg := TransferMessage1_1{
 		IsRequest: true,
 		Request:   trq,
@@ -147,19 +148,11 @@ func (trq *TransferRequest1_1) toIPLD() (schema.TypedNode, error) {
 	return msg.toIPLD()
 }
 
-func (trq *TransferRequest1_1) ToIPLD() (datamodel.Node, error) {
-	msg, err := trq.toIPLD()
-	if err != nil {
-		return nil, err
-	}
-	return msg.Representation(), nil
+func (trq *TransferRequest1_1) ToIPLD() datamodel.Node {
+	return trq.toIPLD().Representation()
 }
 
 // ToNet serializes a transfer request.
 func (trq *TransferRequest1_1) ToNet(w io.Writer) error {
-	i, err := trq.toIPLD()
-	if err != nil {
-		return err
-	}
-	return ipldutils.NodeToWriter(i, w)
+	return ipld.EncodeStreaming(w, trq.toIPLD(), dagcbor.Encode)
 }
