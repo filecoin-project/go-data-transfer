@@ -59,6 +59,11 @@ func (ft *FakeTransport) ID() datatransfer.TransportID {
 	return "fake"
 }
 
+// Versions indicates what versions of this transport are supported
+func (ft *FakeTransport) Versions() []datatransfer.Version {
+	return []datatransfer.Version{{Major: 1, Minor: 1, Patch: 0}}
+}
+
 // Capabilities tells datatransfer what kinds of capabilities this transport supports
 func (ft *FakeTransport) Capabilities() datatransfer.TransportCapabilities {
 	return datatransfer.TransportCapabilities{

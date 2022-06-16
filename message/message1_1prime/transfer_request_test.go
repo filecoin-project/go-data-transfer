@@ -40,14 +40,12 @@ func TestRequestMessageForVersion(t *testing.T) {
 	require.Equal(t, selector, n)
 	require.Equal(t, testutil.TestVoucherType, req.VoucherType())
 
-	wrappedOut12 := out12.WrappedForTransport(datatransfer.LegacyTransportID)
-	require.Equal(t, &message1_1.WrappedTransferRequest1_1{
-		TransferRequest1_1: request.(*message1_1.TransferRequest1_1),
-		TransportID:        string(datatransfer.LegacyTransportID),
-	}, wrappedOut12)
+	wrappedOut12 := out12.WrappedForTransport(datatransfer.LegacyTransportID, datatransfer.LegacyTransportVersion)
+	require.Equal(t, datatransfer.LegacyTransportID, wrappedOut12.TransportID())
+	require.Equal(t, datatransfer.LegacyTransportVersion, wrappedOut12.TransportVersion())
 
 	// random protocol should fail
-	_, err = request.MessageForVersion(datatransfer.MessageVersion{
+	_, err = request.MessageForVersion(datatransfer.Version{
 		Major: rand.Uint64(),
 		Minor: rand.Uint64(),
 		Patch: rand.Uint64(),

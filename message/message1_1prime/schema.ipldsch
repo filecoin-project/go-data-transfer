@@ -37,7 +37,14 @@ type TransferMessage1_1 struct {
 	Response nullable TransferResponse
 }
 
+type Version struct {
+	Major Int
+	Minor Int
+	Patch Int
+} representation tuple
+
 type WrappedTransferMessage1_1 struct {
 	TransportID TransportID (rename "ID")
+	TransportVersion Version (rename "TV")
 	Message TransferMessage1_1 (rename "Msg")
 }

@@ -28,14 +28,12 @@ func TestResponseMessageForVersion(t *testing.T) {
 	require.Equal(t, testutil.TestVoucherType, resp.VoucherResultType())
 	require.True(t, resp.IsValidationResult())
 
-	wrappedOut := out.WrappedForTransport(datatransfer.LegacyTransportID)
-	require.Equal(t, &message1_1.WrappedTransferResponse1_1{
-		TransferResponse1_1: response.(*message1_1.TransferResponse1_1),
-		TransportID:         string(datatransfer.LegacyTransportID),
-	}, wrappedOut)
+	wrappedOut := out.WrappedForTransport(datatransfer.LegacyTransportID, datatransfer.LegacyTransportVersion)
+	require.Equal(t, datatransfer.LegacyTransportID, wrappedOut.TransportID())
+	require.Equal(t, datatransfer.LegacyTransportVersion, wrappedOut.TransportVersion())
 
 	// random protocol should fail
-	_, err = response.MessageForVersion(datatransfer.MessageVersion{
+	_, err = response.MessageForVersion(datatransfer.Version{
 		Major: rand.Uint64(),
 		Minor: rand.Uint64(),
 		Patch: rand.Uint64(),

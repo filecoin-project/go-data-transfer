@@ -29,7 +29,7 @@ type TransferRequest1_1 struct {
 	RestartChannel        datatransfer.ChannelID
 }
 
-func (trq *TransferRequest1_1) MessageForVersion(version datatransfer.MessageVersion) (datatransfer.Message, error) {
+func (trq *TransferRequest1_1) MessageForVersion(version datatransfer.Version) (datatransfer.Message, error) {
 	switch version {
 	case datatransfer.DataTransfer1_2:
 		return trq, nil
@@ -38,8 +38,16 @@ func (trq *TransferRequest1_1) MessageForVersion(version datatransfer.MessageVer
 	}
 }
 
-func (trq *TransferRequest1_1) WrappedForTransport(transportID datatransfer.TransportID) datatransfer.Message {
-	return &WrappedTransferRequest1_1{trq, string(transportID)}
+func (trq *TransferRequest1_1) Version() datatransfer.Version {
+	return datatransfer.DataTransfer1_2
+}
+
+func (trq *TransferRequest1_1) WrappedForTransport(transportID datatransfer.TransportID, transportVersion datatransfer.Version) datatransfer.TransportedMessage {
+	return &WrappedTransferRequest1_1{
+		TransferRequest1_1: trq,
+		transportID:        string(transportID),
+		transportVersion:   transportVersion,
+	}
 }
 
 // IsRequest always returns true in this case because this is a transfer request
@@ -164,15 +172,25 @@ func (trq *TransferRequest1_1) ToNet(w io.Writer) error {
 // transport id
 type WrappedTransferRequest1_1 struct {
 	*TransferRequest1_1
-	TransportID string
+	transportVersion datatransfer.Version
+	transportID      string
 }
 
-func (trsp *WrappedTransferRequest1_1) toIPLD() schema.TypedNode {
+func (trq *WrappedTransferRequest1_1) TransportID() datatransfer.TransportID {
+	return datatransfer.TransportID(trq.transportID)
+}
+
+func (trq *WrappedTransferRequest1_1) TransportVersion() datatransfer.Version {
+	return trq.transportVersion
+}
+
+func (trq *WrappedTransferRequest1_1) toIPLD() schema.TypedNode {
 	msg := WrappedTransferMessage1_1{
-		TransportID: trsp.TransportID,
+		TransportID:      trq.transportID,
+		TransportVersion: trq.transportVersion,
 		Message: TransferMessage1_1{
 			IsRequest: true,
-			Request:   trsp.TransferRequest1_1,
+			Request:   trq.TransferRequest1_1,
 			Response:  nil,
 		},
 	}

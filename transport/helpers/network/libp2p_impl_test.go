@@ -91,8 +91,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 		messageReceived: make(chan struct{}),
 		connectedPeers:  make(chan peer.ID, 2),
 	}
-	dtnet1.SetDelegate("graphsync", r)
-	dtnet2.SetDelegate("graphsync", r)
+	dtnet1.SetDelegate("graphsync", []datatransfer.Version{datatransfer.LegacyTransportVersion}, r)
+	dtnet2.SetDelegate("graphsync", []datatransfer.Version{datatransfer.LegacyTransportVersion}, r)
 
 	err = dtnet1.ConnectTo(ctx, host2.ID())
 	require.NoError(t, err)
@@ -263,8 +263,8 @@ func TestSendMessageRetry(t *testing.T) {
 				messageReceived: make(chan struct{}),
 				connectedPeers:  make(chan peer.ID, 2),
 			}
-			dtnet1.SetDelegate("graphsync", r)
-			dtnet2.SetDelegate("graphsync", r)
+			dtnet1.SetDelegate("graphsync", []datatransfer.Version{datatransfer.LegacyTransportVersion}, r)
+			dtnet2.SetDelegate("graphsync", []datatransfer.Version{datatransfer.LegacyTransportVersion}, r)
 
 			err = dtnet1.ConnectTo(ctx, host2.ID())
 			require.NoError(t, err)

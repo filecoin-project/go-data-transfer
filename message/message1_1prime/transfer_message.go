@@ -59,8 +59,9 @@ func init() {
 }
 
 type WrappedTransferMessage1_1 struct {
-	TransportID string
-	Message     TransferMessage1_1
+	TransportID      string
+	TransportVersion datatransfer.Version
+	Message          TransferMessage1_1
 }
 
 func (wtm *WrappedTransferMessage1_1) BindnodeSchema() string {
