@@ -1779,7 +1779,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	r := &receiver{
 		messageReceived: make(chan receivedMessage),
 	}
-	dtnet2.SetDelegate("graphsync", r)
+	dtnet2.SetDelegate(datatransfer.LegacyTransportID, []datatransfer.Version{datatransfer.LegacyTransportVersion}, r)
 
 	gsr := &fakeGraphSyncReceiver{
 		receivedMessages: make(chan receivedGraphSyncMessage),
@@ -1857,7 +1857,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 	r := &receiver{
 		messageReceived: make(chan receivedMessage),
 	}
-	dtnet2.SetDelegate("graphsync", r)
+	dtnet2.SetDelegate(datatransfer.LegacyTransportID, []datatransfer.Version{datatransfer.LegacyTransportVersion}, r)
 
 	gsr := &fakeGraphSyncReceiver{
 		receivedMessages: make(chan receivedGraphSyncMessage),

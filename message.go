@@ -11,41 +11,41 @@ import (
 	"github.com/ipld/go-ipld-prime/datamodel"
 )
 
-type MessageVersion struct {
+type Version struct {
 	Major uint64
 	Minor uint64
 	Patch uint64
 }
 
-func (mv MessageVersion) String() string {
+func (mv Version) String() string {
 	return fmt.Sprintf("%d.%d.%d", mv.Major, mv.Minor, mv.Patch)
 }
 
 // MessageVersionFromString parses a string into a message version
-func MessageVersionFromString(versionString string) (MessageVersion, error) {
+func MessageVersionFromString(versionString string) (Version, error) {
 	versions := strings.Split(versionString, ".")
 	if len(versions) != 3 {
-		return MessageVersion{}, errors.New("not a version string")
+		return Version{}, errors.New("not a version string")
 	}
 	major, err := strconv.ParseUint(versions[0], 10, 0)
 	if err != nil {
-		return MessageVersion{}, errors.New("unable to parse major version")
+		return Version{}, errors.New("unable to parse major version")
 	}
 	minor, err := strconv.ParseUint(versions[1], 10, 0)
 	if err != nil {
-		return MessageVersion{}, errors.New("unable to parse major version")
+		return Version{}, errors.New("unable to parse major version")
 	}
 	patch, err := strconv.ParseUint(versions[2], 10, 0)
 	if err != nil {
-		return MessageVersion{}, errors.New("unable to parse major version")
+		return Version{}, errors.New("unable to parse major version")
 	}
-	return MessageVersion{Major: major, Minor: minor, Patch: patch}, nil
+	return Version{Major: major, Minor: minor, Patch: patch}, nil
 }
 
 var (
 	// DataTransfer1_2 is the identifier for the current
 	// supported version of data-transfer
-	DataTransfer1_2 MessageVersion = MessageVersion{1, 2, 0}
+	DataTransfer1_2 Version = Version{1, 2, 0}
 )
 
 // Message is a message for the data transfer protocol
@@ -60,8 +60,16 @@ type Message interface {
 	TransferID() TransferID
 	ToNet(w io.Writer) error
 	ToIPLD() datamodel.Node
-	MessageForVersion(targetProtocol MessageVersion) (newMsg Message, err error)
-	WrappedForTransport(transportID TransportID) Message
+	MessageForVersion(targetProtocol Version) (newMsg Message, err error)
+	Version() Version
+	WrappedForTransport(transportID TransportID, transportVersion Version) TransportedMessage
+}
+
+// TransportedMessage is a message that can also report how it was transported
+type TransportedMessage interface {
+	Message
+	TransportID() TransportID
+	TransportVersion() Version
 }
 
 // Request is a response message for the data transfer protocol
