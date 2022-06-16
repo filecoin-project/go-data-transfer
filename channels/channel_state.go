@@ -1,17 +1,12 @@
 package channels
 
 import (
-	"bytes"
-
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
-	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 )
 
 // channelState is immutable channel data plus mutable state
@@ -43,25 +38,16 @@ func (c channelState) BaseCID() cid.Cid { return c.ic.BaseCid }
 // Selector returns the IPLD selector for this data transfer (represented as
 // an IPLD node)
 func (c channelState) Selector() datamodel.Node {
-	builder := basicnode.Prototype.Any.NewBuilder()
-	reader := bytes.NewReader(c.ic.Selector.Raw)
-	err := dagcbor.Decode(builder, reader)
-	if err != nil {
-		log.Error(err)
-	}
-	return builder.Build()
+	return c.ic.Selector.Node
 }
 
 // Voucher returns the voucher for this data transfer
-func (c channelState) Voucher() (datatransfer.TypedVoucher, error) {
+func (c channelState) Voucher() datatransfer.TypedVoucher {
 	if len(c.ic.Vouchers) == 0 {
-		return datatransfer.TypedVoucher{}, nil
+		return datatransfer.TypedVoucher{}
 	}
-	node, err := ipldutils.DeferredToNode(c.ic.Vouchers[0].Voucher)
-	if err != nil {
-		return datatransfer.TypedVoucher{}, err
-	}
-	return datatransfer.TypedVoucher{Voucher: node, Type: c.ic.Vouchers[0].Type}, nil
+	ev := c.ic.Vouchers[0]
+	return datatransfer.TypedVoucher{Voucher: ev.Voucher.Node, Type: ev.Type}
 }
 
 // ReceivedCidsTotal returns the number of (non-unique) cids received so far
@@ -107,46 +93,31 @@ func (c channelState) Message() string {
 	return c.ic.Message
 }
 
-func (c channelState) Vouchers() ([]datatransfer.TypedVoucher, error) {
+func (c channelState) Vouchers() []datatransfer.TypedVoucher {
 	vouchers := make([]datatransfer.TypedVoucher, 0, len(c.ic.Vouchers))
 	for _, encoded := range c.ic.Vouchers {
-		node, err := ipldutils.DeferredToNode(encoded.Voucher)
-		if err != nil {
-			return nil, err
-		}
-		vouchers = append(vouchers, datatransfer.TypedVoucher{Voucher: node, Type: encoded.Type})
+		vouchers = append(vouchers, datatransfer.TypedVoucher{Voucher: encoded.Voucher.Node, Type: encoded.Type})
 	}
-	return vouchers, nil
+	return vouchers
 }
 
-func (c channelState) LastVoucher() (datatransfer.TypedVoucher, error) {
+func (c channelState) LastVoucher() datatransfer.TypedVoucher {
 	ev := c.ic.Vouchers[len(c.ic.Vouchers)-1]
-	node, err := ipldutils.DeferredToNode(ev.Voucher)
-	if err != nil {
-		return datatransfer.TypedVoucher{}, err
-	}
-	return datatransfer.TypedVoucher{Voucher: node, Type: ev.Type}, nil
+
+	return datatransfer.TypedVoucher{Voucher: ev.Voucher.Node, Type: ev.Type}
 }
 
-func (c channelState) LastVoucherResult() (datatransfer.TypedVoucher, error) {
+func (c channelState) LastVoucherResult() datatransfer.TypedVoucher {
 	evr := c.ic.VoucherResults[len(c.ic.VoucherResults)-1]
-	node, err := ipldutils.DeferredToNode(evr.VoucherResult)
-	if err != nil {
-		return datatransfer.TypedVoucher{}, err
-	}
-	return datatransfer.TypedVoucher{Voucher: node, Type: evr.Type}, nil
+	return datatransfer.TypedVoucher{Voucher: evr.VoucherResult.Node, Type: evr.Type}
 }
 
-func (c channelState) VoucherResults() ([]datatransfer.TypedVoucher, error) {
+func (c channelState) VoucherResults() []datatransfer.TypedVoucher {
 	voucherResults := make([]datatransfer.TypedVoucher, 0, len(c.ic.VoucherResults))
 	for _, encoded := range c.ic.VoucherResults {
-		node, err := ipldutils.DeferredToNode(encoded.VoucherResult)
-		if err != nil {
-			return nil, err
-		}
-		voucherResults = append(voucherResults, datatransfer.TypedVoucher{Voucher: node, Type: encoded.Type})
+		voucherResults = append(voucherResults, datatransfer.TypedVoucher{Voucher: encoded.VoucherResult.Node, Type: encoded.Type})
 	}
-	return voucherResults, nil
+	return voucherResults
 }
 
 func (c channelState) SelfPeer() peer.ID {

@@ -71,7 +71,7 @@ type Channel interface {
 	Selector() datamodel.Node
 
 	// Voucher returns the initial voucher for this data transfer
-	Voucher() (TypedVoucher, error)
+	Voucher() TypedVoucher
 
 	// Sender returns the peer id for the node that is sending data
 	Sender() peer.ID
@@ -112,16 +112,16 @@ type ChannelState interface {
 	Message() string
 
 	// Vouchers returns all vouchers sent on this channel
-	Vouchers() ([]TypedVoucher, error)
+	Vouchers() []TypedVoucher
 
 	// VoucherResults are results of vouchers sent on the channel
-	VoucherResults() ([]TypedVoucher, error)
+	VoucherResults() []TypedVoucher
 
 	// LastVoucher returns the last voucher sent on the channel
-	LastVoucher() (TypedVoucher, error)
+	LastVoucher() TypedVoucher
 
 	// LastVoucherResult returns the last voucher result sent on the channel
-	LastVoucherResult() (TypedVoucher, error)
+	LastVoucherResult() TypedVoucher
 
 	// ReceivedCidsTotal returns the number of (non-unique) cids received so far
 	// on the channel - note that a block can exist in more than one place in the DAG

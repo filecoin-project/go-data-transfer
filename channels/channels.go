@@ -9,7 +9,6 @@ import (
 	"github.com/ipfs/go-datastore"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	peer "github.com/libp2p/go-libp2p-core/peer"
-	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
 	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
@@ -20,7 +19,6 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
 	"github.com/filecoin-project/go-data-transfer/v2/channels/internal/migrations"
-	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 )
 
 type Notifier func(datatransfer.Event, datatransfer.ChannelState)
@@ -119,28 +117,20 @@ func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, base
 		responder = dataSender
 	}
 	chid := datatransfer.ChannelID{Initiator: initiator, Responder: responder, ID: tid}
-	initialVoucher, err := ipldutils.NodeToDeferred(voucher.Voucher)
-	if err != nil {
-		return datatransfer.ChannelID{}, err
-	}
-	selBytes, err := ipldutils.NodeToBytes(selector)
-	if err != nil {
-		return datatransfer.ChannelID{}, err
-	}
-	err = c.stateMachines.Begin(chid, &internal.ChannelState{
+	err := c.stateMachines.Begin(chid, &internal.ChannelState{
 		SelfPeer:   selfPeer,
 		TransferID: tid,
 		Initiator:  initiator,
 		Responder:  responder,
 		BaseCid:    baseCid,
-		Selector:   &cbg.Deferred{Raw: selBytes},
+		Selector:   internal.CborGenCompatibleNode{Node: selector},
 		Sender:     dataSender,
 		Recipient:  dataReceiver,
 		Stages:     &datatransfer.ChannelStages{},
 		Vouchers: []internal.EncodedVoucher{
 			{
 				Type:    voucher.Type,
-				Voucher: initialVoucher,
+				Voucher: internal.CborGenCompatibleNode{voucher.Voucher},
 			},
 		},
 		Status: datatransfer.Requested,
@@ -278,20 +268,12 @@ func (c *Channels) ResumeResponder(chid datatransfer.ChannelID) error {
 
 // NewVoucher records a new voucher for this channel
 func (c *Channels) NewVoucher(chid datatransfer.ChannelID, voucher datatransfer.TypedVoucher) error {
-	voucherBytes, err := ipldutils.NodeToBytes(voucher.Voucher)
-	if err != nil {
-		return err
-	}
-	return c.send(chid, datatransfer.NewVoucher, voucher.Type, voucherBytes)
+	return c.send(chid, datatransfer.NewVoucher, voucher)
 }
 
 // NewVoucherResult records a new voucher result for this channel
 func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResult datatransfer.TypedVoucher) error {
-	voucherResultBytes, err := ipldutils.NodeToBytes(voucherResult.Voucher)
-	if err != nil {
-		return err
-	}
-	return c.send(chid, datatransfer.NewVoucherResult, voucherResult.Type, voucherResultBytes)
+	return c.send(chid, datatransfer.NewVoucherResult, voucherResult)
 }
 
 // Complete indicates responder has completed sending/receiving data

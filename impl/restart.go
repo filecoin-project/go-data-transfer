@@ -72,10 +72,7 @@ func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel dat
 
 func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransfer.ChannelState) error {
 	selector := channel.Selector()
-	voucher, err := channel.Voucher()
-	if err != nil {
-		return err
-	}
+	voucher := channel.Voucher()
 	baseCid := channel.BaseCID()
 	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
@@ -110,10 +107,7 @@ func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransf
 
 func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransfer.ChannelState) error {
 	selector := channel.Selector()
-	voucher, err := channel.Voucher()
-	if err != nil {
-		return err
-	}
+	voucher := channel.Voucher()
 	baseCid := channel.BaseCID()
 	requestTo := channel.OtherPeer()
 	chid := channel.ChannelID()
@@ -173,10 +167,7 @@ func (m *manager) validateRestartRequest(ctx context.Context, otherPeer peer.ID,
 	if err != nil {
 		return xerrors.Errorf("failed to fetch request voucher: %w", err)
 	}
-	channelVoucher, err := channel.Voucher()
-	if err != nil {
-		return xerrors.Errorf("failed to fetch channel voucher: %w", err)
-	}
+	channelVoucher := channel.Voucher()
 	if req.VoucherType() != channelVoucher.Type {
 		return xerrors.New("channel and request voucher types do not match")
 	}

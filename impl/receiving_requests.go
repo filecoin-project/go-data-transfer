@@ -210,7 +210,7 @@ func (m *manager) processUpdateVoucher(chid datatransfer.ChannelID, request data
 	return nil, m.channels.NewVoucher(chid, voucher)
 }
 
-// receiveUpdateRequest handles an incoming request message with an updated voucher
+// receiveUpdateRequest handles an incoming request message change in pause status
 func (m *manager) receiveUpdateRequest(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
 
 	if request.IsPaused() {
@@ -310,10 +310,8 @@ func (m *manager) recordAcceptedValidationEvents(chst datatransfer.ChannelState,
 
 // validateRestart looks up the appropriate validator and validates a restart
 func (m *manager) validateRestart(chst datatransfer.ChannelState) (datatransfer.ValidationResult, error) {
-	chv, err := chst.Voucher()
-	if err != nil {
-		return datatransfer.ValidationResult{}, err
-	}
+	chv := chst.Voucher()
+
 	processor, _ := m.validatedTypes.Processor(chv.Type)
 	validator := processor.(datatransfer.RequestValidator)
 
