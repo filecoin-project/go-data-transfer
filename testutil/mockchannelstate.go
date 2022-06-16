@@ -9,32 +9,32 @@ import (
 )
 
 type MockChannelStateParams struct {
-	ReceivedCids []cid.Cid
-	ChannelID    datatransfer.ChannelID
-	Queued       uint64
-	Sent         uint64
-	Received     uint64
-	Complete     bool
+	ReceivedIndex datamodel.Node
+	ChannelID     datatransfer.ChannelID
+	Queued        uint64
+	Sent          uint64
+	Received      uint64
+	Complete      bool
 }
 
 func NewMockChannelState(params MockChannelStateParams) *MockChannelState {
 	return &MockChannelState{
-		receivedCids: params.ReceivedCids,
-		chid:         params.ChannelID,
-		queued:       params.Queued,
-		sent:         params.Sent,
-		received:     params.Received,
-		complete:     params.Complete,
+		receivedIndex: params.ReceivedIndex,
+		chid:          params.ChannelID,
+		queued:        params.Queued,
+		sent:          params.Sent,
+		received:      params.Received,
+		complete:      params.Complete,
 	}
 }
 
 type MockChannelState struct {
-	receivedCids []cid.Cid
-	chid         datatransfer.ChannelID
-	queued       uint64
-	sent         uint64
-	received     uint64
-	complete     bool
+	receivedIndex datamodel.Node
+	chid          datatransfer.ChannelID
+	queued        uint64
+	sent          uint64
+	received      uint64
+	complete      bool
 }
 
 var _ datatransfer.ChannelState = (*MockChannelState)(nil)
@@ -77,23 +77,15 @@ func (m *MockChannelState) Status() datatransfer.Status {
 	return datatransfer.Ongoing
 }
 
-func (m *MockChannelState) ReceivedCids() []cid.Cid {
-	return m.receivedCids
+func (m *MockChannelState) ReceivedIndex() datamodel.Node {
+	return m.receivedIndex
 }
 
-func (m *MockChannelState) ReceivedCidsLen() int {
-	return len(m.receivedCids)
-}
-
-func (m *MockChannelState) ReceivedCidsTotal() int64 {
-	return (int64)(len(m.receivedCids))
-}
-
-func (m *MockChannelState) QueuedCidsTotal() int64 {
+func (m *MockChannelState) QueuedIndex() datamodel.Node {
 	panic("implement me")
 }
 
-func (m *MockChannelState) SentCidsTotal() int64 {
+func (m *MockChannelState) SentIndex() datamodel.Node {
 	panic("implement me")
 }
 
