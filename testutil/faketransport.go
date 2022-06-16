@@ -54,6 +54,11 @@ func NewFakeTransport() *FakeTransport {
 	return &FakeTransport{}
 }
 
+// ID is a unique identifier for this transport
+func (ft *FakeTransport) ID() datatransfer.TransportID {
+	return "fake"
+}
+
 // Capabilities tells datatransfer what kinds of capabilities this transport supports
 func (ft *FakeTransport) Capabilities() datatransfer.TransportCapabilities {
 	return datatransfer.TransportCapabilities{

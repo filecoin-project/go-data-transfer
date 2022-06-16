@@ -1,4 +1,4 @@
-package testutil
+package itest
 
 import (
 	"bytes"
@@ -29,37 +29,30 @@ import (
 	"github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
 	"github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	basicnode "github.com/ipld/go-ipld-prime/node/basic"
-	"github.com/ipld/go-ipld-prime/traversal/selector"
-	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/network"
 	gstransport "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
 	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/helpers/network"
 )
 
-var allSelector datamodel.Node
-
 const loremFile = "lorem.txt"
+const loremFileTransferBytes = 20439
 
-func init() {
-	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
-	allSelector = ssb.ExploreRecursive(selector.RecursionLimitNone(),
-		ssb.ExploreAll(ssb.ExploreRecursiveEdge())).Node()
-}
+const loremLargeFile = "lorem_large.txt"
+const loremLargeFileTransferBytes = 217452
 
 const unixfsChunkSize uint64 = 1 << 10
 const unixfsLinksPerLevel = 1024
 
 var extsForProtocol = map[protocol.ID]graphsync.ExtensionName{
-	datatransfer.ProtocolDataTransfer1_2: extension.ExtensionDataTransfer1_1,
+	network.ProtocolDataTransfer1_2:    extension.ExtensionDataTransfer1_1,
+	network.ProtocolFilDataTransfer1_2: extension.ExtensionDataTransfer1_1,
 }
 
 // GraphsyncTestingData is a test harness for testing data transfer on top of
@@ -83,7 +76,6 @@ type GraphsyncTestingData struct {
 	GsNet2         gsnet.GraphSyncNetwork
 	DtNet1         network.DataTransferNetwork
 	DtNet2         network.DataTransferNetwork
-	AllSelector    datamodel.Node
 	OrigBytes      []byte
 	TempDir1       string
 	TempDir2       string
@@ -152,7 +144,6 @@ func NewGraphsyncTestingData(ctx context.Context, t *testing.T, host1Protocols [
 	require.NoError(t, err)
 	gsData.TempDir2 = tempdir
 	// create a selector for the whole UnixFS dag
-	gsData.AllSelector = allSelector
 	gsData.host1Protocols = host1Protocols
 	gsData.host2Protocols = host2Protocols
 	return gsData

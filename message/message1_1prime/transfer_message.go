@@ -57,3 +57,16 @@ func (tm *TransferMessage1_1) ToNet(w io.Writer) error {
 	}
 	return ipldutils.NodeToWriter(i, w)
 }
+
+type WrappedTransferMessage1_1 struct {
+	TransportID string
+	Message     TransferMessage1_1
+}
+
+func (wtm *WrappedTransferMessage1_1) BindnodeSchema() string {
+	return string(embedSchema)
+}
+
+func (wtm *WrappedTransferMessage1_1) toIPLD() (schema.TypedNode, error) {
+	return ipldutils.ToNode(wtm)
+}
