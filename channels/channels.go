@@ -25,19 +25,6 @@ import (
 
 type Notifier func(datatransfer.Event, datatransfer.ChannelState)
 
-// ErrNotFound is returned when a channel cannot be found with a given channel ID
-type ErrNotFound struct {
-	ChannelID datatransfer.ChannelID
-}
-
-func (e *ErrNotFound) Error() string {
-	return "No channel for channel ID " + e.ChannelID.String()
-}
-
-func NewErrNotFound(chid datatransfer.ChannelID) error {
-	return &ErrNotFound{ChannelID: chid}
-}
-
 // ErrWrongType is returned when a caller attempts to change the type of implementation data after setting it
 var ErrWrongType = errors.New("Cannot change type of implementation specific data after setting it")
 
@@ -52,8 +39,6 @@ type Channels struct {
 
 // ChannelEnvironment -- just a proxy for DTNetwork for now
 type ChannelEnvironment interface {
-	Protect(id peer.ID, tag string)
-	Unprotect(id peer.ID, tag string) bool
 	ID() peer.ID
 	CleanupChannel(chid datatransfer.ChannelID)
 }
@@ -111,7 +96,7 @@ func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 
 // CreateNew creates a new channel id and channel state and saves to channels.
 // returns error if the channel exists already.
-func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector datamodel.Node, voucher datatransfer.TypedVoucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
+func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector datamodel.Node, voucher datatransfer.TypedVoucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, datatransfer.Channel, error) {
 	var responder peer.ID
 	if dataSender == initiator {
 		responder = dataReceiver
@@ -121,13 +106,13 @@ func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, base
 	chid := datatransfer.ChannelID{Initiator: initiator, Responder: responder, ID: tid}
 	initialVoucher, err := ipldutils.NodeToDeferred(voucher.Voucher)
 	if err != nil {
-		return datatransfer.ChannelID{}, err
+		return datatransfer.ChannelID{}, nil, err
 	}
 	selBytes, err := ipldutils.NodeToBytes(selector)
 	if err != nil {
-		return datatransfer.ChannelID{}, err
+		return datatransfer.ChannelID{}, nil, err
 	}
-	err = c.stateMachines.Begin(chid, &internal.ChannelState{
+	channel := &internal.ChannelState{
 		SelfPeer:   selfPeer,
 		TransferID: tid,
 		Initiator:  initiator,
@@ -144,13 +129,14 @@ func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, base
 			},
 		},
 		Status: datatransfer.Requested,
-	})
+	}
+	err = c.stateMachines.Begin(chid, channel)
 	if err != nil {
 		log.Errorw("failed to create new tracking channel for data-transfer", "channelID", chid, "err", err)
-		return datatransfer.ChannelID{}, err
+		return datatransfer.ChannelID{}, nil, err
 	}
 	log.Debugw("created tracking channel for data-transfer, emitting channel Open event", "channelID", chid)
-	return chid, c.stateMachines.Send(chid, datatransfer.Open)
+	return chid, c.fromInternalChannelState(*channel), c.stateMachines.Send(chid, datatransfer.Open)
 }
 
 // InProgress returns a list of in progress channels
@@ -174,7 +160,7 @@ func (c *Channels) GetByID(ctx context.Context, chid datatransfer.ChannelID) (da
 	var internalChannel internal.ChannelState
 	err := c.stateMachines.GetSync(ctx, chid, &internalChannel)
 	if err != nil {
-		return nil, NewErrNotFound(chid)
+		return nil, datatransfer.ErrChannelNotFound
 	}
 	return c.fromInternalChannelState(internalChannel), nil
 }
@@ -466,7 +452,7 @@ func (c *Channels) checkChannelExists(chid datatransfer.ChannelID, code datatran
 	}
 	if !has {
 		return xerrors.Errorf("cannot send FSM event %s to data-transfer channel %s: %w",
-			datatransfer.Events[code], chid, NewErrNotFound(chid))
+			datatransfer.Events[code], chid, datatransfer.ErrChannelNotFound)
 	}
 	return nil
 }

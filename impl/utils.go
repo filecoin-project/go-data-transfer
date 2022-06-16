@@ -83,3 +83,4 @@ func (m *manager) cancelMessage(chid datatransfer.ChannelID) datatransfer.Messag
 	}
 	return message.CancelResponse(chid.ID)
 }
+

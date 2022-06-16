@@ -13,10 +13,8 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/channels"
 	. "github.com/filecoin-project/go-data-transfer/v2/impl"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
@@ -37,13 +35,13 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				require.Equal(t, channelID.Initiator, h.peers[0])
-				require.Len(t, h.transport.OpenedChannels, 0)
-				require.Len(t, h.network.SentMessages, 1)
-				messageReceived := h.network.SentMessages[0]
-				require.Equal(t, messageReceived.PeerID, h.peers[1])
-				received := messageReceived.Message
-				require.True(t, received.IsRequest())
-				receivedRequest, ok := received.(datatransfer.Request)
+				require.Len(t, h.transport.OpenedChannels, 1)
+				openChannel := h.transport.OpenedChannels[0]
+				require.Equal(t, openChannel.Channel.ChannelID(), channelID)
+				require.Equal(t, openChannel.Channel.Sender(), h.peers[0])
+				require.Equal(t, openChannel.Channel.BaseCID(), h.baseCid)
+				require.Equal(t, openChannel.Channel.Selector(), h.stor)
+				receivedRequest, ok := openChannel.Message.(datatransfer.Request)
 				require.True(t, ok)
 				require.Equal(t, receivedRequest.TransferID(), channelID.ID)
 				require.Equal(t, receivedRequest.BaseCid(), h.baseCid)
@@ -62,13 +60,12 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				require.Equal(t, channelID.Initiator, h.peers[0])
-				require.Len(t, h.network.SentMessages, 0)
 				require.Len(t, h.transport.OpenedChannels, 1)
 				openChannel := h.transport.OpenedChannels[0]
-				require.Equal(t, openChannel.ChannelID, channelID)
-				require.Equal(t, openChannel.DataSender, h.peers[1])
-				require.Equal(t, openChannel.Root, cidlink.Link{Cid: h.baseCid})
-				require.Equal(t, openChannel.Selector, h.stor)
+				require.Equal(t, openChannel.Channel.ChannelID(), channelID)
+				require.Equal(t, openChannel.Channel.Sender(), h.peers[1])
+				require.Equal(t, openChannel.Channel.BaseCID(), h.baseCid)
+				require.Equal(t, openChannel.Channel.Selector(), h.stor)
 				require.True(t, openChannel.Message.IsRequest())
 				receivedRequest, ok := openChannel.Message.(datatransfer.Request)
 				require.True(t, ok)
@@ -85,7 +82,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"SendVoucher with no channel open": {
 			verify: func(t *testing.T, h *harness) {
 				err := h.dt.SendVoucher(h.ctx, datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: 999999}, h.voucher)
-				require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
+				require.EqualError(t, err, datatransfer.ErrChannelNotFound.Error())
 			},
 		},
 		"SendVoucher with channel open, push succeeds": {
@@ -96,8 +93,9 @@ func TestDataTransferInitiating(t *testing.T) {
 				voucher := testutil.NewTestTypedVoucher()
 				err = h.dt.SendVoucher(ctx, channelID, voucher)
 				require.NoError(t, err)
-				require.Len(t, h.network.SentMessages, 2)
-				received := h.network.SentMessages[1].Message
+				require.Len(t, h.transport.OpenedChannels, 1)
+				require.Len(t, h.transport.MessagesSent, 1)
+				received := h.transport.MessagesSent[0].Message
 				require.True(t, received.IsRequest())
 				receivedRequest, ok := received.(datatransfer.Request)
 				require.True(t, ok)
@@ -115,8 +113,8 @@ func TestDataTransferInitiating(t *testing.T) {
 				err = h.dt.SendVoucher(ctx, channelID, voucher)
 				require.NoError(t, err)
 				require.Len(t, h.transport.OpenedChannels, 1)
-				require.Len(t, h.network.SentMessages, 1)
-				received := h.network.SentMessages[0].Message
+				require.Len(t, h.transport.MessagesSent, 1)
+				received := h.transport.MessagesSent[0].Message
 				require.True(t, received.IsRequest())
 				receivedRequest, ok := received.(datatransfer.Request)
 				require.True(t, ok)
@@ -172,8 +170,9 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, h.transport.PausedChannels, 1)
 				require.Equal(t, h.transport.PausedChannels[0], channelID)
-				require.Len(t, h.network.SentMessages, 2)
-				pauseMessage := h.network.SentMessages[1].Message
+				require.Len(t, h.transport.OpenedChannels, 1)
+				require.Len(t, h.transport.MessagesSent, 1)
+				pauseMessage := h.transport.MessagesSent[0].Message
 				require.True(t, pauseMessage.IsUpdate())
 				require.True(t, pauseMessage.IsPaused())
 				require.True(t, pauseMessage.IsRequest())
@@ -183,8 +182,9 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, h.transport.ResumedChannels, 1)
 				resumedChannel := h.transport.ResumedChannels[0]
-				require.Equal(t, resumedChannel.ChannelID, channelID)
-				resumeMessage := resumedChannel.Message
+				require.Equal(t, resumedChannel, channelID)
+				require.Len(t, h.transport.MessagesSent, 2)
+				resumeMessage := h.transport.MessagesSent[1].Message
 				require.True(t, resumeMessage.IsUpdate())
 				require.False(t, resumeMessage.IsPaused())
 				require.True(t, resumeMessage.IsRequest())
@@ -204,9 +204,9 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Equal(t, h.transport.ClosedChannels[0], channelID)
 
 				require.Eventually(t, func() bool {
-					return len(h.network.SentMessages) == 2
+					return len(h.transport.MessagesSent) == 1
 				}, 5*time.Second, 200*time.Millisecond)
-				cancelMessage := h.network.SentMessages[1].Message
+				cancelMessage := h.transport.MessagesSent[0].Message
 				require.False(t, cancelMessage.IsUpdate())
 				require.False(t, cancelMessage.IsPaused())
 				require.True(t, cancelMessage.IsRequest())
@@ -227,9 +227,9 @@ func TestDataTransferInitiating(t *testing.T) {
 				err = h.dt.PauseDataTransferChannel(h.ctx, channelID)
 				require.NoError(t, err)
 				require.Len(t, h.transport.PausedChannels, 1)
-				require.Equal(t, h.transport.PausedChannels[0], channelID)
-				require.Len(t, h.network.SentMessages, 1)
-				pauseMessage := h.network.SentMessages[0].Message
+				require.Len(t, h.transport.OpenedChannels, 1)
+				require.Len(t, h.transport.MessagesSent, 1)
+				pauseMessage := h.transport.MessagesSent[0].Message
 				require.True(t, pauseMessage.IsUpdate())
 				require.True(t, pauseMessage.IsPaused())
 				require.True(t, pauseMessage.IsRequest())
@@ -239,8 +239,9 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, h.transport.ResumedChannels, 1)
 				resumedChannel := h.transport.ResumedChannels[0]
-				require.Equal(t, resumedChannel.ChannelID, channelID)
-				resumeMessage := resumedChannel.Message
+				require.Equal(t, resumedChannel, channelID)
+				require.Len(t, h.transport.MessagesSent, 2)
+				resumeMessage := h.transport.MessagesSent[1].Message
 				require.True(t, resumeMessage.IsUpdate())
 				require.False(t, resumeMessage.IsPaused())
 				require.True(t, resumeMessage.IsRequest())
@@ -260,10 +261,10 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Equal(t, h.transport.ClosedChannels[0], channelID)
 
 				require.Eventually(t, func() bool {
-					return len(h.network.SentMessages) == 1
+					return len(h.transport.MessagesSent) == 1
 				}, 5*time.Second, 200*time.Millisecond)
 
-				cancelMessage := h.network.SentMessages[0].Message
+				cancelMessage := h.transport.MessagesSent[0].Message
 				require.False(t, cancelMessage.IsUpdate())
 				require.False(t, cancelMessage.IsPaused())
 				require.True(t, cancelMessage.IsRequest())
@@ -321,10 +322,9 @@ func TestDataTransferInitiating(t *testing.T) {
 			defer cancel()
 			h.ctx = ctx
 			h.peers = testutil.GeneratePeers(2)
-			h.network = testutil.NewFakeNetwork(h.peers[0])
 			h.transport = testutil.NewFakeTransport()
 			h.ds = dss.MutexWrap(datastore.NewMapDatastore())
-			dt, err := NewDataTransfer(h.ds, h.network, h.transport, verify.options...)
+			dt, err := NewDataTransfer(h.ds, h.peers[0], h.transport, verify.options...)
 			require.NoError(t, err)
 			testutil.StartAndWaitForReady(ctx, t, dt)
 			h.dt = dt
@@ -359,7 +359,6 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				require.Len(t, h.transport.OpenedChannels, 1)
-				require.Len(t, h.network.SentMessages, 0)
 
 				// some cids should already be received
 				testCids := testutil.GenerateCids(2)
@@ -371,17 +370,16 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				// restart that pull channel
 				err = h.dt.RestartDataTransferChannel(ctx, channelID)
 				require.NoError(t, err)
-				require.Len(t, h.transport.OpenedChannels, 2)
-				require.Len(t, h.network.SentMessages, 0)
+				require.Len(t, h.transport.RestartedChannels, 1)
 
-				openChannel := h.transport.OpenedChannels[1]
-				require.Equal(t, openChannel.ChannelID, channelID)
-				require.Equal(t, openChannel.DataSender, h.peers[1])
-				require.Equal(t, openChannel.Root, cidlink.Link{Cid: h.baseCid})
-				require.Equal(t, openChannel.Selector, h.stor)
-				require.True(t, openChannel.Message.IsRequest())
+				restartedChannel := h.transport.RestartedChannels[0]
+				require.Equal(t, restartedChannel.Channel.ChannelID(), channelID)
+				require.Equal(t, restartedChannel.Channel.Sender(), h.peers[1])
+				require.Equal(t, restartedChannel.Channel.BaseCID(), h.baseCid)
+				require.Equal(t, restartedChannel.Channel.Selector(), h.stor)
+				require.True(t, restartedChannel.Message.IsRequest())
 
-				receivedRequest, ok := openChannel.Message.(datatransfer.Request)
+				receivedRequest := restartedChannel.Message
 				require.True(t, ok)
 				require.Equal(t, receivedRequest.TransferID(), channelID.ID)
 				require.Equal(t, receivedRequest.BaseCid(), h.baseCid)
@@ -404,22 +402,17 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				require.Len(t, h.transport.OpenedChannels, 0)
-				require.Len(t, h.network.SentMessages, 1)
+				require.Len(t, h.transport.OpenedChannels, 1)
 
 				// restart that push channel
 				err = h.dt.RestartDataTransferChannel(ctx, channelID)
 				require.NoError(t, err)
-				require.Len(t, h.transport.OpenedChannels, 0)
-				require.Len(t, h.network.SentMessages, 2)
+				require.Len(t, h.transport.RestartedChannels, 1)
 
 				// assert restart request is well formed
-				messageReceived := h.network.SentMessages[1]
-				require.Equal(t, messageReceived.PeerID, h.peers[1])
-				received := messageReceived.Message
-				require.True(t, received.IsRequest())
-				receivedRequest, ok := received.(datatransfer.Request)
-				require.True(t, ok)
+				restartedChannel := h.transport.RestartedChannels[0]
+				require.Equal(t, restartedChannel.Channel.ChannelID(), channelID)
+				receivedRequest := restartedChannel.Message
 				require.Equal(t, receivedRequest.TransferID(), channelID.ID)
 				require.Equal(t, receivedRequest.BaseCid(), h.baseCid)
 				require.False(t, receivedRequest.IsCancel())
@@ -445,26 +438,23 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				h.voucherValidator.StubResult(datatransfer.ValidationResult{Accepted: true})
 
 				// receive a push request
-				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
-				require.Len(t, h.transport.OpenedChannels, 1)
-				require.Len(t, h.network.SentMessages, 0)
+				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
+				h.transport.EventHandler.OnRequestReceived(chid, h.pushRequest)
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the push request received above and validate it
 				h.voucherValidator.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
-				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
 				require.NoError(t, h.dt.RestartDataTransferChannel(ctx, chid))
 				require.Len(t, h.voucherValidator.RevalidationsReceived, 1)
-				require.Len(t, h.transport.OpenedChannels, 1)
-				require.Len(t, h.network.SentMessages, 1)
+				require.Len(t, h.transport.MessagesSent, 1)
 
 				// assert validation on restart
 				vmsg := h.voucherValidator.RevalidationsReceived[0]
 				require.Equal(t, channelID(h.id, h.peers), vmsg.ChannelID)
 
 				// assert req was sent correctly
-				req := h.network.SentMessages[0]
-				require.Equal(t, req.PeerID, h.peers[1])
+				req := h.transport.MessagesSent[0]
+				require.Equal(t, chid, req.ChannelID)
 				received := req.Message
 				require.True(t, received.IsRequest())
 				receivedRequest, ok := received.(datatransfer.Request)
@@ -486,27 +476,24 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				h.voucherValidator.ExpectSuccessPull()
 				h.voucherValidator.StubResult(datatransfer.ValidationResult{Accepted: true})
 
-				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pullRequest)
-				require.Len(t, h.transport.OpenedChannels, 0)
-				require.Len(t, h.network.SentMessages, 1)
+				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
+				h.transport.EventHandler.OnRequestReceived(chid, h.pullRequest)
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the pull request received above
 				h.voucherValidator.ExpectSuccessValidateRestart()
 				h.voucherValidator.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
-				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pullRequest.TransferID()}
 				require.NoError(t, h.dt.RestartDataTransferChannel(ctx, chid))
-				require.Len(t, h.transport.OpenedChannels, 0)
-				require.Len(t, h.network.SentMessages, 2)
 				require.Len(t, h.voucherValidator.RevalidationsReceived, 1)
+				require.Len(t, h.transport.MessagesSent, 1)
 
 				// assert validation on restart
 				vmsg := h.voucherValidator.RevalidationsReceived[0]
 				require.Equal(t, channelID(h.id, h.peers), vmsg.ChannelID)
 
 				// assert req was sent correctly
-				req := h.network.SentMessages[1]
-				require.Equal(t, req.PeerID, h.peers[1])
+				req := h.transport.MessagesSent[0]
+				require.Equal(t, chid, req.ChannelID)
 				received := req.Message
 				require.True(t, received.IsRequest())
 				receivedRequest, ok := received.(datatransfer.Request)
@@ -527,15 +514,13 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				// receive a pull request
 				h.voucherValidator.ExpectSuccessPull()
 				h.voucherValidator.StubResult(datatransfer.ValidationResult{Accepted: true})
-				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pullRequest)
-				require.Len(t, h.transport.OpenedChannels, 0)
-				require.Len(t, h.network.SentMessages, 1)
+				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
+				h.transport.EventHandler.OnRequestReceived(chid, h.pullRequest)
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the pull request received above
 				h.voucherValidator.ExpectSuccessValidateRestart()
 				h.voucherValidator.StubRestartResult(datatransfer.ValidationResult{Accepted: false})
-				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pullRequest.TransferID()}
 				require.EqualError(t, h.dt.RestartDataTransferChannel(ctx, chid), datatransfer.ErrRejected.Error())
 			},
 		},
@@ -549,15 +534,13 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				// receive a push request
 				h.voucherValidator.ExpectSuccessPush()
 				h.voucherValidator.StubResult(datatransfer.ValidationResult{Accepted: true})
-				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
-				require.Len(t, h.transport.OpenedChannels, 1)
-				require.Len(t, h.network.SentMessages, 0)
+				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
+				h.transport.EventHandler.OnRequestReceived(chid, h.pushRequest)
 				require.Len(t, h.voucherValidator.ValidationsReceived, 1)
 
 				// restart the pull request received above
 				h.voucherValidator.ExpectSuccessValidateRestart()
 				h.voucherValidator.StubRestartResult(datatransfer.ValidationResult{Accepted: false})
-				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
 				require.EqualError(t, h.dt.RestartDataTransferChannel(ctx, chid), datatransfer.ErrRejected.Error())
 			},
 		},
@@ -579,13 +562,12 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			// create the harness
 			h.ctx = ctx
 			h.peers = testutil.GeneratePeers(2)
-			h.network = testutil.NewFakeNetwork(h.peers[0])
 			h.transport = testutil.NewFakeTransport()
 			h.ds = dss.MutexWrap(datastore.NewMapDatastore())
 			h.voucherValidator = testutil.NewStubbedValidator()
 
 			// setup data transfer``
-			dt, err := NewDataTransfer(h.ds, h.network, h.transport)
+			dt, err := NewDataTransfer(h.ds, h.peers[0], h.transport)
 			require.NoError(t, err)
 			testutil.StartAndWaitForReady(ctx, t, dt)
 			h.dt = dt
@@ -622,7 +604,6 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 type harness struct {
 	ctx              context.Context
 	peers            []peer.ID
-	network          *testutil.FakeNetwork
 	transport        *testutil.FakeTransport
 	ds               datastore.Batching
 	dt               datatransfer.Manager

@@ -30,9 +30,6 @@ func TestChannelMonitorAutoRestart(t *testing.T) {
 	testCases := []testCase{{
 		name: "attempt restart",
 	}, {
-		name:         "fail to reconnect to peer",
-		errReconnect: true,
-	}, {
 		name:              "fail to send restart message",
 		errSendRestartMsg: true,
 	}}
@@ -41,7 +38,7 @@ func TestChannelMonitorAutoRestart(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(name+": "+tc.name, func(t *testing.T) {
 				ch := testutil.NewMockChannelState(testutil.MockChannelStateParams{ChannelID: ch1})
-				mockAPI := newMockMonitorAPI(ch, tc.errReconnect, tc.errSendRestartMsg)
+				mockAPI := newMockMonitorAPI(ch, tc.errSendRestartMsg)
 
 				triggerErrorEvent := func() {
 					if isPush {
@@ -59,9 +56,9 @@ func TestChannelMonitorAutoRestart(t *testing.T) {
 
 				var mch *monitoredChannel
 				if isPush {
-					mch = m.AddPushChannel(ch1)
+					mch = m.AddChannel(ch1, false)
 				} else {
-					mch = m.AddPullChannel(ch1)
+					mch = m.AddChannel(ch1, true)
 				}
 
 				// Simulate the responder sending Accept
@@ -115,7 +112,7 @@ func TestChannelMonitorMaxConsecutiveRestarts(t *testing.T) {
 	runTest := func(name string, isPush bool) {
 		t.Run(name, func(t *testing.T) {
 			ch := testutil.NewMockChannelState(testutil.MockChannelStateParams{ChannelID: ch1})
-			mockAPI := newMockMonitorAPI(ch, false, false)
+			mockAPI := newMockMonitorAPI(ch, false)
 
 			triggerErrorEvent := func() {
 				if isPush {
@@ -134,12 +131,12 @@ func TestChannelMonitorMaxConsecutiveRestarts(t *testing.T) {
 
 			var mch *monitoredChannel
 			if isPush {
-				mch = m.AddPushChannel(ch1)
+				mch = m.AddChannel(ch1, false)
 
 				mockAPI.dataQueued(10)
 				mockAPI.dataSent(5)
 			} else {
-				mch = m.AddPullChannel(ch1)
+				mch = m.AddChannel(ch1, true)
 
 				mockAPI.dataReceived(5)
 			}
@@ -198,7 +195,7 @@ func TestChannelMonitorQueuedRestart(t *testing.T) {
 	runTest := func(name string, isPush bool) {
 		t.Run(name, func(t *testing.T) {
 			ch := testutil.NewMockChannelState(testutil.MockChannelStateParams{ChannelID: ch1})
-			mockAPI := newMockMonitorAPI(ch, false, false)
+			mockAPI := newMockMonitorAPI(ch, false)
 
 			triggerErrorEvent := func() {
 				if isPush {
@@ -216,12 +213,12 @@ func TestChannelMonitorQueuedRestart(t *testing.T) {
 			})
 
 			if isPush {
-				m.AddPushChannel(ch1)
+				m.AddChannel(ch1, false)
 
 				mockAPI.dataQueued(10)
 				mockAPI.dataSent(5)
 			} else {
-				m.AddPullChannel(ch1)
+				m.AddChannel(ch1, true)
 
 				mockAPI.dataReceived(5)
 			}
@@ -285,7 +282,7 @@ func TestChannelMonitorTimeouts(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(name+": "+tc.name, func(t *testing.T) {
 				ch := testutil.NewMockChannelState(testutil.MockChannelStateParams{ChannelID: ch1})
-				mockAPI := newMockMonitorAPI(ch, false, false)
+				mockAPI := newMockMonitorAPI(ch, false)
 
 				verifyClosedAndShutdown := func(chCtx context.Context, timeout time.Duration) {
 					mockAPI.verifyChannelClosed(t, true)
@@ -310,10 +307,10 @@ func TestChannelMonitorTimeouts(t *testing.T) {
 
 				var chCtx context.Context
 				if isPush {
-					mch := m.AddPushChannel(ch1)
+					mch := m.AddChannel(ch1, false)
 					chCtx = mch.ctx
 				} else {
-					mch := m.AddPullChannel(ch1)
+					mch := m.AddChannel(ch1, true)
 					chCtx = mch.ctx
 				}
 
@@ -370,7 +367,6 @@ func verifyChannelShutdown(t *testing.T, shutdownCtx context.Context) {
 
 type mockMonitorAPI struct {
 	ch              *testutil.MockChannelState
-	connectErrors   bool
 	restartErrors   bool
 	restartMessages chan struct{}
 	closeErr        chan error
@@ -379,10 +375,9 @@ type mockMonitorAPI struct {
 	subscribers map[int]datatransfer.Subscriber
 }
 
-func newMockMonitorAPI(ch *testutil.MockChannelState, errOnReconnect, errOnRestart bool) *mockMonitorAPI {
+func newMockMonitorAPI(ch *testutil.MockChannelState, errOnRestart bool) *mockMonitorAPI {
 	return &mockMonitorAPI{
 		ch:              ch,
-		connectErrors:   errOnReconnect,
 		restartErrors:   errOnRestart,
 		restartMessages: make(chan struct{}, 100),
 		closeErr:        make(chan error, 1),
@@ -412,13 +407,6 @@ func (m *mockMonitorAPI) fireEvent(e datatransfer.Event, state datatransfer.Chan
 	for _, subscriber := range m.subscribers {
 		subscriber(e, state)
 	}
-}
-
-func (m *mockMonitorAPI) ConnectTo(ctx context.Context, id peer.ID) error {
-	if m.connectErrors {
-		return xerrors.Errorf("connect err")
-	}
-	return nil
 }
 
 func (m *mockMonitorAPI) PeerID() peer.ID {

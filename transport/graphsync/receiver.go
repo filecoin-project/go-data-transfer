@@ -1,8 +1,9 @@
-package impl
+package graphsync
 
 import (
 	"context"
 
+	"github.com/ipfs/go-graphsync"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"go.opentelemetry.io/otel"
@@ -10,11 +11,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/channels"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
 type receiver struct {
-	manager *manager
+	transport *Transport
 }
 
 // ReceiveRequest takes an incoming data transfer request, validates the voucher and
@@ -30,9 +31,9 @@ func (r *receiver) ReceiveRequest(
 }
 
 func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incoming datatransfer.Request) error {
-	chid := datatransfer.ChannelID{Initiator: initiator, Responder: r.manager.peerID, ID: incoming.TransferID()}
-	ctx, _ = r.manager.spansIndex.SpanForChannel(ctx, chid)
-	ctx, span := otel.Tracer("data-transfer").Start(ctx, "receiveRequest", trace.WithAttributes(
+	chid := datatransfer.ChannelID{Initiator: initiator, Responder: r.transport.peerID, ID: incoming.TransferID()}
+	ctx = r.transport.events.OnContextAugment(chid)(ctx)
+	ctx, span := otel.Tracer("gs-data-transfer").Start(ctx, "receiveRequest", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 		attribute.String("baseCid", incoming.BaseCid().String()),
 		attribute.Bool("isNew", incoming.IsNew()),
@@ -42,46 +43,59 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 		attribute.Bool("isPaused", incoming.IsPaused()),
 	))
 	defer span.End()
-	response, receiveErr := r.manager.OnRequestReceived(chid, incoming)
-	if receiveErr == datatransfer.ErrResume {
-		chst, err := r.manager.channels.GetByID(ctx, chid)
-		if err != nil {
-			return err
+	response, receiveErr := r.transport.events.OnRequestReceived(chid, incoming)
+	ch, err := r.transport.getDTChannel(chid)
+	initiateGraphsyncRequest := (response != nil) && (response.IsNew() || response.IsRestart()) && response.Accepted() && !incoming.IsPull()
+	if err != nil {
+		if !initiateGraphsyncRequest {
+			if response != nil {
+				return r.transport.dtNet.SendMessage(ctx, initiator, response)
+			}
+			return receiveErr
 		}
-		if resumeTransportStatesResponder.Contains(chst.Status()) {
-			return r.manager.transport.(datatransfer.PauseableTransport).ResumeChannel(ctx, response, chid)
+		ch = r.transport.trackDTChannel(chid)
+	}
+
+	if receiveErr == datatransfer.ErrResume && ch.Paused() {
+
+		var extensions []graphsync.ExtensionData
+		if response != nil {
+			var err error
+			extensions, err = extension.ToExtensionData(response, r.transport.supportedExtensions)
+			if err != nil {
+				return err
+			}
 		}
-		receiveErr = nil
+
+		return ch.Resume(ctx, extensions)
 	}
 
 	if response != nil {
-		if (response.IsNew() || response.IsRestart()) && response.Accepted() && !incoming.IsPull() {
-			var channel datatransfer.ChannelState
+		if initiateGraphsyncRequest {
+			stor, _ := incoming.Selector()
 			if response.IsRestart() {
-				var err error
-				channel, err = r.manager.channels.GetByID(ctx, chid)
+				channel, err := r.transport.events.ChannelState(ctx, chid)
 				if err != nil {
 					return err
 				}
+				ch.UpdateReceivedCidsIfGreater(channel.ReceivedCidsTotal())
 			}
-
-			stor, _ := incoming.Selector()
-			if err := r.manager.transport.OpenChannel(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, channel, response); err != nil {
+			if err := r.transport.openRequest(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, response); err != nil {
 				return err
 			}
 		} else {
-			if err := r.manager.dataTransferNetwork.SendMessage(ctx, initiator, response); err != nil {
+			if err := r.transport.dtNet.SendMessage(ctx, initiator, response); err != nil {
 				return err
 			}
 		}
 	}
 
 	if receiveErr == datatransfer.ErrPause {
-		return r.manager.transport.(datatransfer.PauseableTransport).PauseChannel(ctx, chid)
+		return ch.Pause(ctx)
 	}
 
 	if receiveErr != nil {
-		_ = r.manager.transport.CloseChannel(ctx, chid)
+		_ = ch.Close(ctx)
 		return receiveErr
 	}
 
@@ -103,9 +117,9 @@ func (r *receiver) receiveResponse(
 	ctx context.Context,
 	sender peer.ID,
 	incoming datatransfer.Response) error {
-	chid := datatransfer.ChannelID{Initiator: r.manager.peerID, Responder: sender, ID: incoming.TransferID()}
-	ctx, _ = r.manager.spansIndex.SpanForChannel(ctx, chid)
-	ctx, span := otel.Tracer("data-transfer").Start(ctx, "receiveResponse", trace.WithAttributes(
+	chid := datatransfer.ChannelID{Initiator: r.transport.peerID, Responder: sender, ID: incoming.TransferID()}
+	ctx = r.transport.events.OnContextAugment(chid)(ctx)
+	ctx, span := otel.Tracer("gs-data-transfer").Start(ctx, "receiveResponse", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 		attribute.Bool("accepted", incoming.Accepted()),
 		attribute.Bool("isComplete", incoming.IsComplete()),
@@ -116,16 +130,20 @@ func (r *receiver) receiveResponse(
 		attribute.Bool("isPaused", incoming.IsPaused()),
 	))
 	defer span.End()
-	err := r.manager.OnResponseReceived(chid, incoming)
-	if err == datatransfer.ErrPause {
-		return r.manager.transport.(datatransfer.PauseableTransport).PauseChannel(ctx, chid)
-	}
+	receiveErr := r.transport.events.OnResponseReceived(chid, incoming)
+	ch, err := r.transport.getDTChannel(chid)
 	if err != nil {
+		return err
+	}
+	if receiveErr == datatransfer.ErrPause {
+		return ch.Pause(ctx)
+	}
+	if receiveErr != nil {
 		log.Warnf("closing channel %s after getting error processing response from %s: %s",
 			chid, sender, err)
 
-		_ = r.manager.transport.CloseChannel(ctx, chid)
-		return err
+		_ = ch.Close(ctx)
+		return receiveErr
 	}
 	return nil
 }
@@ -144,48 +162,27 @@ func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
 		return
 	}
 
-	ctx, _ = r.manager.spansIndex.SpanForChannel(ctx, ch)
-	ctx, span := otel.Tracer("data-transfer").Start(ctx, "receiveRequest", trace.WithAttributes(
+	ctx = r.transport.events.OnContextAugment(ch)(ctx)
+	ctx, span := otel.Tracer("gs-data-transfer").Start(ctx, "receiveRequest", trace.WithAttributes(
 		attribute.String("channelID", ch.String()),
 	))
 	defer span.End()
 	log.Infof("channel %s: received restart existing channel request from %s", ch, sender)
 
-	// validate channel exists -> in non-terminal state and that the sender matches
-	channel, err := r.manager.channels.GetByID(ctx, ch)
-	if err != nil || channel == nil {
-		// nothing to do here, we wont handle the request
-		return
-	}
-
 	// initiator should be me
-	if channel.ChannelID().Initiator != r.manager.peerID {
+	if ch.Initiator != r.transport.peerID {
 		log.Errorf("cannot restart channel %s: channel initiator is not the manager peer", ch)
 		return
 	}
 
-	// other peer should be the counter party on the channel
-	if channel.OtherPeer() != sender {
+	if ch.Responder != sender {
 		log.Errorf("cannot restart channel %s: channel counterparty is not the sender peer", ch)
 		return
 	}
 
-	// channel should NOT be terminated
-	if channels.IsChannelTerminated(channel.Status()) {
-		log.Errorf("cannot restart channel %s: channel already terminated", ch)
-		return
+	err = r.transport.events.OnRestartExistingChannelRequestReceived(ch)
+	if err != nil {
+		log.Errorf(err.Error())
 	}
-
-	switch r.manager.channelDataTransferType(channel) {
-	case ManagerPeerCreatePush:
-		if err := r.manager.openPushRestartChannel(ctx, channel); err != nil {
-			log.Errorf("failed to open push restart channel %s: %s", ch, err)
-		}
-	case ManagerPeerCreatePull:
-		if err := r.manager.openPullRestartChannel(ctx, channel); err != nil {
-			log.Errorf("failed to open pull restart channel %s: %s", ch, err)
-		}
-	default:
-		log.Error("peer is not the creator of the channel")
-	}
+	return
 }
