@@ -5,7 +5,6 @@ import (
 
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/libp2p/go-libp2p-core/protocol"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
@@ -21,10 +20,10 @@ const (
 )
 
 // ProtocolMap maps graphsync extensions to their libp2p protocols
-var ProtocolMap = map[graphsync.ExtensionName]protocol.ID{
-	ExtensionIncomingRequest1_1: datatransfer.ProtocolDataTransfer1_2,
-	ExtensionOutgoingBlock1_1:   datatransfer.ProtocolDataTransfer1_2,
-	ExtensionDataTransfer1_1:    datatransfer.ProtocolDataTransfer1_2,
+var ProtocolMap = map[graphsync.ExtensionName]datatransfer.MessageVersion{
+	ExtensionIncomingRequest1_1: datatransfer.DataTransfer1_2,
+	ExtensionOutgoingBlock1_1:   datatransfer.DataTransfer1_2,
+	ExtensionDataTransfer1_1:    datatransfer.DataTransfer1_2,
 }
 
 // ToExtensionData converts a message to a graphsync extension
@@ -35,7 +34,7 @@ func ToExtensionData(msg datatransfer.Message, supportedExtensions []graphsync.E
 		if !ok {
 			return nil, errors.New("unsupported protocol")
 		}
-		versionedMsg, err := msg.MessageForProtocol(protoID)
+		versionedMsg, err := msg.MessageForVersion(protoID)
 		if err != nil {
 			continue
 		}

@@ -6,6 +6,13 @@ import (
 	ipld "github.com/ipld/go-ipld-prime"
 )
 
+// TransportID identifies a unique transport
+type TransportID string
+
+// LegacyTransportID is the only transport for the fil/data-transfer protocol --
+// i.e. graphsync
+const LegacyTransportID TransportID = "graphsync"
+
 // EventsHandler are semantic data transfer events that happen as a result of transport events
 type EventsHandler interface {
 	// ChannelState queries for the current channel state
@@ -94,6 +101,9 @@ and send messages. Beyond that, additional commands may or may not be supported.
 Whether a command is supported can be determined ahead by calling Capabilities().
 */
 type Transport interface {
+	// ID is a unique identifier for this transport
+	ID() TransportID
+
 	// Capabilities tells datatransfer what kinds of capabilities this transport supports
 	Capabilities() TransportCapabilities
 	// OpenChannel opens a channel on a given transport to move data back and forth.

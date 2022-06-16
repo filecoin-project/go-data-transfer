@@ -13,6 +13,7 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -617,7 +618,7 @@ func TestDataTransferResponding(t *testing.T) {
 				events:         make(chan datatransfer.EventCode, len(verify.expectedEvents)),
 			}
 			ev.setup(t, dt)
-			h.stor = testutil.AllSelector()
+			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
 			h.voucher = testutil.NewTestTypedVoucher()
 			h.baseCid = testutil.GenerateCids(1)[0]
 			h.id = datatransfer.TransferID(rand.Int31())
@@ -999,7 +1000,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				events:         make(chan datatransfer.EventCode, len(verify.expectedEvents)),
 			}
 			ev.setup(t, dt)
-			h.stor = testutil.AllSelector()
+			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
 			h.voucher = testutil.NewTestTypedVoucher()
 			h.baseCid = testutil.GenerateCids(1)[0]
 			h.id = datatransfer.TransferID(rand.Int31())

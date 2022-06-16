@@ -53,4 +53,20 @@ func init() {
 	if err := bindnodeRegistry.RegisterType((*TransferMessage1_1)(nil), string(embedSchema), "TransferMessage1_1"); err != nil {
 		panic(err.Error())
 	}
+	if err := bindnodeRegistry.RegisterType((*WrappedTransferMessage1_1)(nil), string(embedSchema), "WrappedTransferMessage1_1"); err != nil {
+		panic(err.Error())
+	}
+}
+
+type WrappedTransferMessage1_1 struct {
+	TransportID string
+	Message     TransferMessage1_1
+}
+
+func (wtm *WrappedTransferMessage1_1) BindnodeSchema() string {
+	return string(embedSchema)
+}
+
+func (wtm *WrappedTransferMessage1_1) toIPLD() schema.TypedNode {
+	return bindnodeRegistry.TypeToNode(wtm)
 }

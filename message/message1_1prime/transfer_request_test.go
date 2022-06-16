@@ -13,7 +13,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
-func TestRequestMessageForProtocol(t *testing.T) {
+func TestRequestMessageForVersion(t *testing.T) {
 	baseCid := testutil.GenerateCids(1)[0]
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	isPull := true
@@ -24,7 +24,8 @@ func TestRequestMessageForProtocol(t *testing.T) {
 	request, err := message1_1.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 	require.NoError(t, err)
 
-	out12, err := request.MessageForProtocol(datatransfer.ProtocolDataTransfer1_2)
+	// v1.2 new protocol
+	out12, err := request.MessageForVersion(datatransfer.DataTransfer1_2)
 	require.NoError(t, err)
 	require.Equal(t, request, out12)
 
@@ -38,4 +39,19 @@ func TestRequestMessageForProtocol(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, selector, n)
 	require.Equal(t, testutil.TestVoucherType, req.VoucherType())
+
+	wrappedOut12 := out12.WrappedForTransport(datatransfer.LegacyTransportID)
+	require.Equal(t, &message1_1.WrappedTransferRequest1_1{
+		TransferRequest1_1: request.(*message1_1.TransferRequest1_1),
+		TransportID:        string(datatransfer.LegacyTransportID),
+	}, wrappedOut12)
+
+	// random protocol should fail
+	_, err = request.MessageForVersion(datatransfer.MessageVersion{
+		Major: rand.Uint64(),
+		Minor: rand.Uint64(),
+		Patch: rand.Uint64(),
+	})
+	require.Error(t, err)
+
 }

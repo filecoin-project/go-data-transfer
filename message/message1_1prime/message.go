@@ -198,6 +198,10 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 	}
 	tresp := tm.(*TransferMessage1_1)
 
+	return fromMessage(tresp)
+}
+
+func fromMessage(tresp *TransferMessage1_1) (datatransfer.Message, error) {
 	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
 		return nil, xerrors.Errorf("invalid/malformed message")
 	}
@@ -206,6 +210,17 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 		return tresp.Request, nil
 	}
 	return tresp.Response, nil
+}
+
+// FromNetWrraped can read a network stream to deserialize a message + transport ID
+func FromNetWrapped(r io.Reader) (datatransfer.TransportID, datatransfer.Message, error) {
+	tm, err := bindnodeRegistry.TypeFromReader(r, &WrappedTransferMessage1_1{}, dagcbor.Decode)
+	if err != nil {
+		return "", nil, err
+	}
+	wtresp := tm.(*WrappedTransferMessage1_1)
+	msg, err := fromMessage(&wtresp.Message)
+	return datatransfer.TransportID(wtresp.TransportID), msg, err
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage
@@ -218,13 +233,5 @@ func FromIPLD(node datamodel.Node) (datatransfer.Message, error) {
 		return nil, err
 	}
 	tresp := tm.(*TransferMessage1_1)
-
-	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
-		return nil, xerrors.Errorf("invalid/malformed message")
-	}
-
-	if tresp.IsRequest {
-		return tresp.Request, nil
-	}
-	return tresp.Response, nil
+	return fromMessage(tresp)
 }
