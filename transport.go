@@ -4,12 +4,13 @@ import (
 	"context"
 
 	ipld "github.com/ipld/go-ipld-prime"
-	"github.com/ipld/go-ipld-prime/datamodel"
-	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
-// EventsHandler are semantic data transfer events that happen as a result of graphsync hooks
+// EventsHandler are semantic data transfer events that happen as a result of transport events
 type EventsHandler interface {
+	// ChannelState queries for the current channel state
+	ChannelState(ctx context.Context, chid ChannelID) (ChannelState, error)
+
 	// OnChannelOpened is called when we send a request for data to the other
 	// peer on the given channel ID
 	// return values are:
@@ -72,58 +73,74 @@ type EventsHandler interface {
 	// OnContextAugment allows the transport to attach data transfer tracing information
 	// to its local context, in order to create a hierarchical trace
 	OnContextAugment(chid ChannelID) func(context.Context) context.Context
+
+	OnRestartExistingChannelRequestReceived(chid ChannelID) error
 }
 
 /*
 Transport defines the interface for a transport layer for data
 transfer. Where the data transfer manager will coordinate setting up push and
-pull requests, validation, etc, the transport layer is responsible for moving
+pull requests, persistence, validation, etc, the transport layer is responsible for moving
 data back and forth, and may be medium specific. For example, some transports
 may have the ability to pause and resume requests, while others may not.
-Some may support individual data events, while others may only support message
+Some may dispatch data update events, while others may only support message
 events. Some transport layers may opt to use the actual data transfer network
 protocols directly while others may be able to encode messages in their own
 data protocol.
 
 Transport is the minimum interface that must be satisfied to serve as a datatransfer
-transport layer. Transports must be able to open (open is always called by the receiving peer)
-and close channels, and set at an event handler */
+transport layer. Transports must be able to open and close channels, set at an event handler,
+and send messages. Beyond that, additional commands may or may not be supported.
+Whether a command is supported can be determined ahead by calling Capabilities().
+*/
 type Transport interface {
-	// OpenChannel initiates an outgoing request for the other peer to send data
-	// to us on this channel
-	// Note: from a data transfer symantic standpoint, it doesn't matter if the
-	// request is push or pull -- OpenChannel is called by the party that is
-	// intending to receive data
+	// Capabilities tells datatransfer what kinds of capabilities this transport supports
+	Capabilities() TransportCapabilities
+	// OpenChannel opens a channel on a given transport to move data back and forth.
+	// OpenChannel MUST ALWAYS called by the initiator.
 	OpenChannel(
 		ctx context.Context,
-		dataSender peer.ID,
-		channelID ChannelID,
-		root ipld.Link,
-		stor datamodel.Node,
-		channel ChannelState,
-		msg Message,
+		channel Channel,
+		req Request,
 	) error
 
-	// CloseChannel closes the given channel
-	CloseChannel(ctx context.Context, chid ChannelID) error
+	// UpdateChannel sends one or more updates the transport channel at once,
+	// such as pausing/resuming, closing the transfer, or sending additional
+	// messages over the channel. Grouping the commands allows the transport
+	// the ability to plan how to execute these updates based on the capabilities
+	// and API of the underlying transport protocol and library
+	UpdateChannel(ctx context.Context, chid ChannelID, update ChannelUpdate) error
 	// SetEventHandler sets the handler for events on channels
 	SetEventHandler(events EventsHandler) error
-	// CleanupChannel is called on the otherside of a cancel - removes any associated
-	// data for the channel
+	// CleanupChannel removes any associated data on a closed channel
 	CleanupChannel(chid ChannelID)
+	// SendMessage sends a data transfer message over the channel to the other peer
+	SendMessage(ctx context.Context, chid ChannelID, msg Message) error
+	// Shutdown unregisters the current EventHandler and ends all active data transfers
 	Shutdown(ctx context.Context) error
+
+	// Optional Methods: Some channels may not support these
+
+	// Restart restarts a channel on the initiator side
+	// RestartChannel MUST ALWAYS called by the initiator
+	RestartChannel(ctx context.Context, channel ChannelState, req Request) error
 }
 
-// PauseableTransport is a transport that can also pause and resume channels
-type PauseableTransport interface {
-	Transport
-	// PauseChannel paused the given channel ID
-	PauseChannel(ctx context.Context,
-		chid ChannelID,
-	) error
-	// ResumeChannel resumes the given channel
-	ResumeChannel(ctx context.Context,
-		msg Message,
-		chid ChannelID,
-	) error
+// TransportCapabilities describes additional capabilities supported by ChannelActions
+type TransportCapabilities struct {
+	// Restarable indicates ChannelActions will support RestartActions
+	Restartable bool
+	// Pausable indicates ChannelActions will support PauseActions
+	Pausable bool
+}
+
+// ChannelUpdate describes updates to a channel - changing it's paused status, closing the transfer,
+// and additional messages to send
+type ChannelUpdate struct {
+	// Paused sets the paused status of the channel. If pause/resumes are not supported, this is a no op
+	Paused bool
+	// Closed sets whether the channel is closed
+	Closed bool
+	// SendMessage sends an additional message
+	SendMessage Message
 }

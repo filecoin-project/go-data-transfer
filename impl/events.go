@@ -2,6 +2,7 @@ package impl
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -11,6 +12,7 @@ import (
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/channels"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
 )
 
@@ -51,7 +53,7 @@ func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, si
 	if err == datatransfer.ErrPause {
 		msg := message.UpdateResponse(chid.ID, true)
 		ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-		if err := m.dataTransferNetwork.SendMessage(ctx, chid.Initiator, msg); err != nil {
+		if err := m.transport.SendMessage(ctx, chid, msg); err != nil {
 			return err
 		}
 	}
@@ -277,7 +279,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	}
 	log.Infow("sending completion message to initiator", "chid", chid)
 	ctx, _ := m.spansIndex.SpanForChannel(context.Background(), chid)
-	if err := m.dataTransferNetwork.SendMessage(ctx, chid.Initiator, msg); err != nil {
+	if err := m.transport.SendMessage(ctx, chid, msg); err != nil {
 		err := xerrors.Errorf("channel %s: failed to send completion message to initiator: %w", chid, err)
 		log.Warnw("failed to send completion message to initiator", "chid", chid, "err", err)
 		return m.OnRequestDisconnected(chid, err)
@@ -298,4 +300,24 @@ func (m *manager) OnContextAugment(chid datatransfer.ChannelID) func(context.Con
 		ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
 		return ctx
 	}
+}
+
+func (m *manager) OnRestartExistingChannelRequestReceived(chid datatransfer.ChannelID) error {
+	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
+	// validate channel exists -> in non-terminal state and that the sender matches
+	channel, err := m.channels.GetByID(context.TODO(), chid)
+	if err != nil || channel == nil {
+		// nothing to do here, we wont handle the request
+		return err
+	}
+
+	// channel should NOT be terminated
+	if channels.IsChannelTerminated(channel.Status()) {
+		return fmt.Errorf("cannot restart channel %s: channel already terminated", chid)
+	}
+
+	if err := m.openRestartChannel(ctx, channel); err != nil {
+		return fmt.Errorf("failed to open restart channel %s: %s", chid, err)
+	}
+	return nil
 }

@@ -277,7 +277,6 @@ func cleanupConnection(ctx fsm.Context, env ChannelEnvironment, channel internal
 		otherParty = channel.Responder
 	}
 	env.CleanupChannel(datatransfer.ChannelID{ID: channel.TransferID, Initiator: channel.Initiator, Responder: channel.Responder})
-	env.Unprotect(otherParty, datatransfer.ChannelID{ID: channel.TransferID, Initiator: channel.Initiator, Responder: channel.Responder}.String())
 	return ctx.Trigger(datatransfer.CleanupComplete)
 }
 
