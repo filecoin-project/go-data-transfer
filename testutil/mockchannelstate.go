@@ -109,7 +109,7 @@ func (m *MockChannelState) Selector() datamodel.Node {
 	panic("implement me")
 }
 
-func (m *MockChannelState) Voucher() (datatransfer.TypedVoucher, error) {
+func (m *MockChannelState) Voucher() datatransfer.TypedVoucher {
 	panic("implement me")
 }
 
@@ -141,19 +141,19 @@ func (m *MockChannelState) Message() string {
 	panic("implement me")
 }
 
-func (m *MockChannelState) Vouchers() ([]datatransfer.TypedVoucher, error) {
+func (m *MockChannelState) Vouchers() []datatransfer.TypedVoucher {
 	panic("implement me")
 }
 
-func (m *MockChannelState) VoucherResults() ([]datatransfer.TypedVoucher, error) {
+func (m *MockChannelState) VoucherResults() []datatransfer.TypedVoucher {
 	panic("implement me")
 }
 
-func (m *MockChannelState) LastVoucher() (datatransfer.TypedVoucher, error) {
+func (m *MockChannelState) LastVoucher() datatransfer.TypedVoucher {
 	panic("implement me")
 }
 
-func (m *MockChannelState) LastVoucherResult() (datatransfer.TypedVoucher, error) {
+func (m *MockChannelState) LastVoucherResult() datatransfer.TypedVoucher {
 	panic("implement me")
 }
 

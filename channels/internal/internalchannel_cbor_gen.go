@@ -130,7 +130,7 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.BaseCid: %w", err)
 	}
 
-	// t.Selector (typegen.Deferred) (struct)
+	// t.Selector (internal.CborGenCompatibleNode) (struct)
 	if len("Selector") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Selector\" was too long")
 	}
@@ -555,16 +555,15 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 				t.BaseCid = c
 
 			}
-			// t.Selector (typegen.Deferred) (struct)
+			// t.Selector (internal.CborGenCompatibleNode) (struct)
 		case "Selector":
 
 			{
 
-				t.Selector = new(cbg.Deferred)
-
 				if err := t.Selector.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("failed to read deferred field: %w", err)
+					return xerrors.Errorf("unmarshaling t.Selector: %w", err)
 				}
+
 			}
 			// t.Sender (peer.ID) (string)
 		case "Sender":
@@ -908,7 +907,7 @@ func (t *EncodedVoucher) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Voucher (typegen.Deferred) (struct)
+	// t.Voucher (internal.CborGenCompatibleNode) (struct)
 	if len("Voucher") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Voucher\" was too long")
 	}
@@ -970,16 +969,15 @@ func (t *EncodedVoucher) UnmarshalCBOR(r io.Reader) error {
 
 				t.Type = datatransfer.TypeIdentifier(sval)
 			}
-			// t.Voucher (typegen.Deferred) (struct)
+			// t.Voucher (internal.CborGenCompatibleNode) (struct)
 		case "Voucher":
 
 			{
 
-				t.Voucher = new(cbg.Deferred)
-
 				if err := t.Voucher.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("failed to read deferred field: %w", err)
+					return xerrors.Errorf("unmarshaling t.Voucher: %w", err)
 				}
+
 			}
 
 		default:
@@ -1024,7 +1022,7 @@ func (t *EncodedVoucherResult) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.VoucherResult (typegen.Deferred) (struct)
+	// t.VoucherResult (internal.CborGenCompatibleNode) (struct)
 	if len("VoucherResult") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"VoucherResult\" was too long")
 	}
@@ -1086,16 +1084,15 @@ func (t *EncodedVoucherResult) UnmarshalCBOR(r io.Reader) error {
 
 				t.Type = datatransfer.TypeIdentifier(sval)
 			}
-			// t.VoucherResult (typegen.Deferred) (struct)
+			// t.VoucherResult (internal.CborGenCompatibleNode) (struct)
 		case "VoucherResult":
 
 			{
 
-				t.VoucherResult = new(cbg.Deferred)
-
 				if err := t.VoucherResult.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("failed to read deferred field: %w", err)
+					return xerrors.Errorf("unmarshaling t.VoucherResult: %w", err)
 				}
+
 			}
 
 		default:
