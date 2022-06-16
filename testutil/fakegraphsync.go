@@ -74,26 +74,26 @@ func (update Update) DTMessage(t *testing.T) datatransfer.Message {
 
 // FakeGraphSync implements a GraphExchange but does nothing
 type FakeGraphSync struct {
-	requests                     chan ReceivedGraphSyncRequest // records calls to fakeGraphSync.Request
-	pauses                       chan graphsync.RequestID
-	resumes                      chan Resume
-	cancels                      chan graphsync.RequestID
-	updates                      chan Update
-	persistenceOptionsLk         sync.RWMutex
-	persistenceOptions           map[string]ipld.LinkSystem
-	leaveRequestsOpen            bool
-	OutgoingRequestHook          graphsync.OnOutgoingRequestHook
-	IncomingBlockHook            graphsync.OnIncomingBlockHook
-	OutgoingBlockHook            graphsync.OnOutgoingBlockHook
-	IncomingRequestQueuedHook    graphsync.OnIncomingRequestQueuedHook
-	IncomingRequestHook          graphsync.OnIncomingRequestHook
-	CompletedResponseListener    graphsync.OnResponseCompletedListener
-	RequestUpdatedHook           graphsync.OnRequestUpdatedHook
-	IncomingResponseHook         graphsync.OnIncomingResponseHook
-	RequestorCancelledListener   graphsync.OnRequestorCancelledListener
-	BlockSentListener            graphsync.OnBlockSentListener
-	NetworkErrorListener         graphsync.OnNetworkErrorListener
-	ReceiverNetworkErrorListener graphsync.OnReceiverNetworkErrorListener
+	requests                          chan ReceivedGraphSyncRequest // records calls to fakeGraphSync.Request
+	pauses                            chan graphsync.RequestID
+	resumes                           chan Resume
+	cancels                           chan graphsync.RequestID
+	updates                           chan Update
+	persistenceOptionsLk              sync.RWMutex
+	persistenceOptions                map[string]ipld.LinkSystem
+	leaveRequestsOpen                 bool
+	OutgoingRequestHook               graphsync.OnOutgoingRequestHook
+	IncomingBlockHook                 graphsync.OnIncomingBlockHook
+	OutgoingBlockHook                 graphsync.OnOutgoingBlockHook
+	IncomingRequestProcessingListener graphsync.OnRequestProcessingListener
+	IncomingRequestHook               graphsync.OnIncomingRequestHook
+	CompletedResponseListener         graphsync.OnResponseCompletedListener
+	RequestUpdatedHook                graphsync.OnRequestUpdatedHook
+	IncomingResponseHook              graphsync.OnIncomingResponseHook
+	RequestorCancelledListener        graphsync.OnRequestorCancelledListener
+	BlockSentListener                 graphsync.OnBlockSentListener
+	NetworkErrorListener              graphsync.OnNetworkErrorListener
+	ReceiverNetworkErrorListener      graphsync.OnReceiverNetworkErrorListener
 }
 
 // NewFakeGraphSync returns a new fake graphsync implementation
@@ -233,11 +233,11 @@ func (fgs *FakeGraphSync) RegisterIncomingRequestHook(hook graphsync.OnIncomingR
 	}
 }
 
-// RegisterIncomingRequestQueuedHook adds a hook that runs when an incoming GS request is queued.
-func (fgs *FakeGraphSync) RegisterIncomingRequestQueuedHook(hook graphsync.OnIncomingRequestQueuedHook) graphsync.UnregisterHookFunc {
-	fgs.IncomingRequestQueuedHook = hook
+// RegisterIncomingRequestProcessingListener adds a hook that runs when an incoming GS request begins processing
+func (fgs *FakeGraphSync) RegisterIncomingRequestProcessingListener(hook graphsync.OnRequestProcessingListener) graphsync.UnregisterHookFunc {
+	fgs.IncomingRequestProcessingListener = hook
 	return func() {
-		fgs.IncomingRequestQueuedHook = nil
+		fgs.IncomingRequestProcessingListener = nil
 	}
 }
 
@@ -342,7 +342,7 @@ func (fgs *FakeGraphSync) Stats() graphsync.Stats {
 	return graphsync.Stats{}
 }
 
-func (fgs *FakeGraphSync) RegisterOutgoingRequestProcessingListener(graphsync.OnOutgoingRequestProcessingListener) graphsync.UnregisterHookFunc {
+func (fgs *FakeGraphSync) RegisterOutgoingRequestProcessingListener(graphsync.OnRequestProcessingListener) graphsync.UnregisterHookFunc {
 	// TODO: just a stub for now, hopefully nobody needs this
 	return func() {}
 }
@@ -533,6 +533,7 @@ type FakeIncomingRequestHookActions struct {
 	Validated         bool
 	SentExtensions    []graphsync.ExtensionData
 	Paused            bool
+	CtxAugFuncs       []func(context.Context) context.Context
 }
 
 func (fa *FakeIncomingRequestHookActions) SendExtensionData(ext graphsync.ExtensionData) {
@@ -556,6 +557,10 @@ func (fa *FakeIncomingRequestHookActions) ValidateRequest() {
 
 func (fa *FakeIncomingRequestHookActions) PauseResponse() {
 	fa.Paused = true
+}
+
+func (fa *FakeIncomingRequestHookActions) AugmentContext(ctxAugFunc func(reqCtx context.Context) context.Context) {
+	fa.CtxAugFuncs = append(fa.CtxAugFuncs, ctxAugFunc)
 }
 
 var _ graphsync.IncomingRequestHookActions = &FakeIncomingRequestHookActions{}
@@ -594,13 +599,3 @@ func (fa *FakeIncomingResponseHookActions) UpdateRequestWithExtensions(extension
 }
 
 var _ graphsync.IncomingResponseHookActions = &FakeIncomingResponseHookActions{}
-
-type FakeRequestQueuedHookActions struct {
-	ctxAugFuncs []func(context.Context) context.Context
-}
-
-func (fa *FakeRequestQueuedHookActions) AugmentContext(ctxAugFunc func(reqCtx context.Context) context.Context) {
-	fa.ctxAugFuncs = append(fa.ctxAugFuncs, ctxAugFunc)
-}
-
-var _ graphsync.RequestQueuedHookActions = &FakeRequestQueuedHookActions{}

@@ -1,6 +1,6 @@
 module github.com/filecoin-project/go-data-transfer/v2
 
-go 1.17
+go 1.18
 
 require (
 	github.com/bep/debounce v1.2.0
@@ -13,7 +13,7 @@ require (
 	github.com/ipfs/go-cid v0.2.0
 	github.com/ipfs/go-datastore v0.5.1
 	github.com/ipfs/go-ds-badger v0.3.0
-	github.com/ipfs/go-graphsync v0.13.2-0.20220531040852-fa5a9f2d7a86
+	github.com/ipfs/go-graphsync v0.13.2-0.20220613213258-f3c765731a53
 	github.com/ipfs/go-ipfs-blockstore v1.1.2
 	github.com/ipfs/go-ipfs-blocksutil v0.0.1
 	github.com/ipfs/go-ipfs-chunker v0.0.5
