@@ -3,7 +3,7 @@ package datatransfer
 import (
 	"context"
 
-	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 )
 
 // TransportID identifies a unique transport
@@ -22,70 +22,61 @@ type EventsHandler interface {
 	// ChannelState queries for the current channel state
 	ChannelState(ctx context.Context, chid ChannelID) (ChannelState, error)
 
-	// OnChannelOpened is called when we send a request for data to the other
-	// peer on the given channel ID
-	// return values are:
-	// - error = ignore incoming data for this channel
-	OnChannelOpened(chid ChannelID) error
+	// OnChannelOpened is called at the point the transport begins processing the
+	// request (prior to that it may simply be queued) -- only applies to initiator
+	OnChannelOpened(chid ChannelID)
+
+	// OnTransferInitiated is called at the point the transport actually begins sending/receiving data
+	OnTransferInitiated(chid ChannelID)
+
+	// OnRequestReceived is called when we receive a new request for the given channel ID
+	// return values is a channel command to take action based on this response
+	OnRequestReceived(chid ChannelID, msg Request) (ChannelCommand, error)
+
 	// OnResponseReceived is called when we receive a response to a request
-	// - nil = continue receiving data
-	// - error = cancel this request
-	OnResponseReceived(chid ChannelID, msg Response) error
+	OnResponseReceived(chid ChannelID, msg Response)
+
 	// OnDataReceive is called when we receive data for the given channel ID
-	// return values are:
-	// - nil = proceed with sending data
-	// - error = cancel this request
-	// - err == ErrPause - pause this request
-	OnDataReceived(chid ChannelID, link ipld.Link, size uint64, index int64, unique bool) error
+	// index is a transport dependent of serializing "here's where I am in this transport"
+	OnDataReceived(chid ChannelID, size uint64, index datamodel.Node)
 
 	// OnDataQueued is called when data is queued for sending for the given channel ID
-	// return values are:
-	// - nil = proceed with sending data
-	// - error = cancel this request
-	// - err == ErrPause - pause this request
-	OnDataQueued(chid ChannelID, link ipld.Link, size uint64, index int64, unique bool) (Message, error)
+	// index is a transport dependent of serializing "here's where I am in this transport"
+	OnDataQueued(chid ChannelID, size uint64, index datamodel.Node)
 
 	// OnDataSent is called when we send data for the given channel ID
-	OnDataSent(chid ChannelID, link ipld.Link, size uint64, index int64, unique bool) error
+	// index is a transport dependent of serializing "here's where I am in this transport"
+	OnDataSent(chid ChannelID, size uint64, index datamodel.Node)
 
-	// OnTransferQueued is called when a new data transfer request is queued in the transport layer.
-	OnTransferQueued(chid ChannelID)
+	// OnDataLimitReached is called when a channel hits a previously set data limit
+	OnDataLimitReached(chid ChannelID)
 
-	// OnRequestReceived is called when we receive a new request to send data
-	// for the given channel ID
-	// return values are:
-	// message = data transfer message along with reply
-	// err = error
-	// - nil = proceed with sending data
-	// - error = cancel this request
-	// - err == ErrPause - pause this request (only for new requests)
-	// - err == ErrResume - resume this request (only for update requests)
-	OnRequestReceived(chid ChannelID, msg Request) (Response, error)
-	// OnChannelCompleted is called when we finish transferring data for the given channel ID
-	// Error returns are logged but otherwise have no effect
-	OnChannelCompleted(chid ChannelID, err error) error
+	// OnTransferCompleted is called when we finish transferring data for the given channel ID
+	OnTransferCompleted(chid ChannelID, err error)
 
-	// OnRequestCancelled is called when a request we opened (with the given channel Id) to
+	// OnTransferCannceled is called when a request we opened (with the given channel Id) to
 	// receive data is cancelled by us.
-	// Error returns are logged but otherwise have no effect
-	OnRequestCancelled(chid ChannelID, err error) error
+	OnTransferCancelled(chid ChannelID, err error)
+
+	// OnMessageSendError is called when a network error occurs while sending a message
+	OnMessageSendError(chid ChannelID, err error)
 
 	// OnRequestDisconnected is called when a network error occurs trying to send a request
-	OnRequestDisconnected(chid ChannelID, err error) error
+	OnRequestDisconnected(chid ChannelID, err error)
 
 	// OnSendDataError is called when a network error occurs sending data
 	// at the transport layer
-	OnSendDataError(chid ChannelID, err error) error
+	OnSendDataError(chid ChannelID, err error)
 
 	// OnReceiveDataError is called when a network error occurs receiving data
 	// at the transport layer
-	OnReceiveDataError(chid ChannelID, err error) error
+	OnReceiveDataError(chid ChannelID, err error)
 
 	// OnContextAugment allows the transport to attach data transfer tracing information
 	// to its local context, in order to create a hierarchical trace
 	OnContextAugment(chid ChannelID) func(context.Context) context.Context
 
-	OnRestartExistingChannelRequestReceived(chid ChannelID) error
+	OnRestartExistingChannelRequestReceived(chid ChannelID)
 }
 
 /*
@@ -126,13 +117,11 @@ type Transport interface {
 	// messages over the channel. Grouping the commands allows the transport
 	// the ability to plan how to execute these updates based on the capabilities
 	// and API of the underlying transport protocol and library
-	UpdateChannel(ctx context.Context, chid ChannelID, update ChannelUpdate) error
+	SendChannelCommand(ctx context.Context, chid ChannelID, command ChannelCommand) error
 	// SetEventHandler sets the handler for events on channels
 	SetEventHandler(events EventsHandler) error
 	// CleanupChannel removes any associated data on a closed channel
 	CleanupChannel(chid ChannelID)
-	// SendMessage sends a data transfer message over the channel to the other peer
-	SendMessage(ctx context.Context, chid ChannelID, msg Message) error
 	// Shutdown unregisters the current EventHandler and ends all active data transfers
 	Shutdown(ctx context.Context) error
 
@@ -153,11 +142,76 @@ type TransportCapabilities struct {
 
 // ChannelUpdate describes updates to a channel - changing it's paused status, closing the transfer,
 // and additional messages to send
-type ChannelUpdate struct {
-	// Paused sets the paused status of the channel. If pause/resumes are not supported, this is a no op
-	Paused bool
-	// Closed sets whether the channel is closed
-	Closed bool
-	// SendMessage sends an additional message
-	SendMessage Message
+type ChannelUpdate interface {
+	Paused() (bool, bool)
+	Closed() (bool, bool)
+	MessageToSend() (Message, bool)
+	DataLimit() (uint64, bool)
+}
+
+type channelUpdate struct {
+	paused           bool
+	hasPaused        bool
+	closed           bool
+	hasClosed        bool
+	messageToSend    Message
+	hasMessageToSend bool
+	dataLimit        uint64
+	hasDataLimit     bool
+}
+
+func (cu channelUpdate) Paused() (bool, bool) {
+	return cu.paused, cu.hasPaused
+}
+
+func (cu channelUpdate) Closed() (bool, bool) {
+	return cu.closed, cu.hasClosed
+}
+
+func (cu channelUpdate) MessageToSend() (Message, bool) {
+	return cu.messageToSend, cu.hasMessageToSend
+}
+
+func (cu channelUpdate) DataLimit() (uint64, bool) {
+	return cu.dataLimit, cu.hasDataLimit
+}
+
+type ChannelCommand struct {
+	cu channelUpdate
+}
+
+func NewCommand() ChannelCommand {
+	return ChannelCommand{}
+}
+
+func (cc ChannelCommand) SetPaused(paused bool) ChannelCommand {
+	cu := cc.cu
+	cu.paused = paused
+	cu.hasPaused = true
+	return ChannelCommand{cu}
+}
+
+func (cc ChannelCommand) SetClosed(closed bool) ChannelCommand {
+	cu := cc.cu
+	cu.closed = true
+	cu.hasClosed = true
+	return ChannelCommand{cu}
+}
+
+func (cc ChannelCommand) SendMessage(msg Message) ChannelCommand {
+	cu := cc.cu
+	cu.messageToSend = msg
+	cu.hasMessageToSend = true
+	return ChannelCommand{cu}
+}
+
+func (cc ChannelCommand) SetDataLimit(datalimit uint64) ChannelCommand {
+	cu := cc.cu
+	cu.dataLimit = datalimit
+	cu.hasDataLimit = true
+	return ChannelCommand{cu}
+}
+
+func (cc ChannelCommand) ChannelUpdate() ChannelUpdate {
+	return cc.cu
 }

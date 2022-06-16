@@ -2,6 +2,7 @@ package channels
 
 import (
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/ipld/go-ipld-prime/datamodel"
 
 	"github.com/filecoin-project/go-statemachine/fsm"
 
@@ -60,10 +61,8 @@ var ChannelEvents = fsm.Events{
 	}),
 
 	fsm.Event(datatransfer.DataReceived).FromAny().ToNoChange().
-		Action(func(chst *internal.ChannelState, rcvdBlocksTotal int64) error {
-			if rcvdBlocksTotal > chst.ReceivedBlocksTotal {
-				chst.ReceivedBlocksTotal = rcvdBlocksTotal
-			}
+		Action(func(chst *internal.ChannelState, receivedIndex datamodel.Node) error {
+			chst.ReceivedIndex = internal.CborGenCompatibleNode{Node: receivedIndex}
 			chst.AddLog("")
 			return nil
 		}),
@@ -77,10 +76,8 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.DataSent).
 		FromMany(transferringStates...).ToNoChange().
 		From(datatransfer.TransferFinished).ToNoChange().
-		Action(func(chst *internal.ChannelState, sentBlocksTotal int64) error {
-			if sentBlocksTotal > chst.SentBlocksTotal {
-				chst.SentBlocksTotal = sentBlocksTotal
-			}
+		Action(func(chst *internal.ChannelState, sentIndex datamodel.Node) error {
+			chst.SentIndex = internal.CborGenCompatibleNode{Node: sentIndex}
 			chst.AddLog("")
 			return nil
 		}),
@@ -95,10 +92,8 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.DataQueued).
 		FromMany(transferringStates...).ToNoChange().
 		From(datatransfer.TransferFinished).ToNoChange().
-		Action(func(chst *internal.ChannelState, queuedBlocksTotal int64) error {
-			if queuedBlocksTotal > chst.QueuedBlocksTotal {
-				chst.QueuedBlocksTotal = queuedBlocksTotal
-			}
+		Action(func(chst *internal.ChannelState, queuedIndex datamodel.Node) error {
+			chst.QueuedIndex = internal.CborGenCompatibleNode{Node: queuedIndex}
 			chst.AddLog("")
 			return nil
 		}),

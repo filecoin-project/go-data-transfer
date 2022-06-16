@@ -123,17 +123,17 @@ type ChannelState interface {
 	// LastVoucherResult returns the last voucher result sent on the channel
 	LastVoucherResult() TypedVoucher
 
-	// ReceivedCidsTotal returns the number of (non-unique) cids received so far
-	// on the channel - note that a block can exist in more than one place in the DAG
-	ReceivedCidsTotal() int64
+	// ReceivedIndex returns the index, a transport specific identifier for "where"
+	// we are in receiving data for a transfer
+	ReceivedIndex() datamodel.Node
 
-	// QueuedCidsTotal returns the number of (non-unique) cids queued so far
-	// on the channel - note that a block can exist in more than one place in the DAG
-	QueuedCidsTotal() int64
+	// QueuedIndex returns the index, a transport specific identifier for "where"
+	// we are in queing data for a transfer
+	QueuedIndex() datamodel.Node
 
-	// SentCidsTotal returns the number of (non-unique) cids sent so far
-	// on the channel - note that a block can exist in more than one place in the DAG
-	SentCidsTotal() int64
+	// SentIndex returns the index, a transport specific identifier for "where"
+	// we are in sending data for a transfer
+	SentIndex() datamodel.Node
 
 	// Queued returns the number of bytes read from the node and queued for sending
 	Queued() uint64

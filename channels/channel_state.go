@@ -50,22 +50,22 @@ func (c channelState) Voucher() datatransfer.TypedVoucher {
 	return datatransfer.TypedVoucher{Voucher: ev.Voucher.Node, Type: ev.Type}
 }
 
-// ReceivedCidsTotal returns the number of (non-unique) cids received so far
-// on the channel - note that a block can exist in more than one place in the DAG
-func (c channelState) ReceivedCidsTotal() int64 {
-	return c.ic.ReceivedBlocksTotal
+// ReceivedIndex returns the index, a transport specific identifier for "where"
+// we are in receiving data for a transfer
+func (c channelState) ReceivedIndex() datamodel.Node {
+	return c.ic.ReceivedIndex.Node
 }
 
-// QueuedCidsTotal returns the number of (non-unique) cids queued so far
-// on the channel - note that a block can exist in more than one place in the DAG
-func (c channelState) QueuedCidsTotal() int64 {
-	return c.ic.QueuedBlocksTotal
+// QueuedIndex returns the index, a transport specific identifier for "where"
+// we are in queing data for a transfer
+func (c channelState) QueuedIndex() datamodel.Node {
+	return c.ic.QueuedIndex.Node
 }
 
-// SentCidsTotal returns the number of (non-unique) cids sent so far
-// on the channel - note that a block can exist in more than one place in the DAG
-func (c channelState) SentCidsTotal() int64 {
-	return c.ic.SentBlocksTotal
+// SentIndex returns the index, a transport specific identifier for "where"
+// we are in sending data for a transfer
+func (c channelState) SentIndex() datamodel.Node {
+	return c.ic.SentIndex.Node
 }
 
 // Sender returns the peer id for the node that is sending data
