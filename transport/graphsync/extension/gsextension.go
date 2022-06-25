@@ -39,10 +39,7 @@ func ToExtensionData(msg datatransfer.Message, supportedExtensions []graphsync.E
 		if err != nil {
 			continue
 		}
-		nd, err := versionedMsg.ToIPLD()
-		if err != nil {
-			return nil, err
-		}
+		nd := versionedMsg.ToIPLD()
 		exts = append(exts, graphsync.ExtensionData{
 			Name: supportedExtension,
 			Data: nd,
