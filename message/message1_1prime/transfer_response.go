@@ -3,13 +3,14 @@ package message1_1
 import (
 	"io"
 
+	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	ipldutils "github.com/filecoin-project/go-data-transfer/v2/ipldutils"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
@@ -96,7 +97,7 @@ func (trsp *TransferResponse1_1) MessageForProtocol(targetProtocol protocol.ID) 
 	}
 }
 
-func (trsp *TransferResponse1_1) toIPLD() (schema.TypedNode, error) {
+func (trsp *TransferResponse1_1) toIPLD() schema.TypedNode {
 	msg := TransferMessage1_1{
 		IsRequest: false,
 		Request:   nil,
@@ -105,19 +106,11 @@ func (trsp *TransferResponse1_1) toIPLD() (schema.TypedNode, error) {
 	return msg.toIPLD()
 }
 
-func (trsp *TransferResponse1_1) ToIPLD() (datamodel.Node, error) {
-	msg, err := trsp.toIPLD()
-	if err != nil {
-		return nil, err
-	}
-	return msg.Representation(), nil
+func (trsp *TransferResponse1_1) ToIPLD() datamodel.Node {
+	return trsp.toIPLD().Representation()
 }
 
 // ToNet serializes a transfer response.
 func (trsp *TransferResponse1_1) ToNet(w io.Writer) error {
-	i, err := trsp.toIPLD()
-	if err != nil {
-		return err
-	}
-	return ipldutils.NodeToWriter(i, w)
+	return ipld.EncodeStreaming(w, trsp.toIPLD(), dagcbor.Encode)
 }

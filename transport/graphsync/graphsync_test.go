@@ -1287,8 +1287,7 @@ func (dtc *dtConfig) extensions(t *testing.T, transferID datatransfer.TransferID
 			} else {
 				msg = testutil.NewDTRequest(t, transferID)
 			}
-			nd, err := msg.ToIPLD()
-			require.NoError(t, err)
+			nd := msg.ToIPLD()
 			extensions[extName] = nd
 		}
 	}
@@ -1335,8 +1334,7 @@ func assertDecodesToMessage(t *testing.T, data datamodel.Node, expected datatran
 }
 
 func assertHasOutgoingMessage(t *testing.T, extensions []graphsync.ExtensionData, expected datatransfer.Message) {
-	nd, err := expected.ToIPLD()
-	require.NoError(t, err)
+	nd := expected.ToIPLD()
 	found := false
 	for _, e := range extensions {
 		if e.Name == extension.ExtensionDataTransfer1_1 {
@@ -1350,8 +1348,7 @@ func assertHasOutgoingMessage(t *testing.T, extensions []graphsync.ExtensionData
 }
 
 func assertHasExtensionMessage(t *testing.T, name graphsync.ExtensionName, extensions []graphsync.ExtensionData, expected datatransfer.Message) {
-	nd, err := expected.ToIPLD()
-	require.NoError(t, err)
+	nd := expected.ToIPLD()
 	found := false
 	for _, e := range extensions {
 		if e.Name == name {
