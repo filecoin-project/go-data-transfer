@@ -1,6 +1,6 @@
 module github.com/filecoin-project/go-data-transfer/v2
 
-go 1.18
+go 1.17
 
 require (
 	github.com/bep/debounce v1.2.0
