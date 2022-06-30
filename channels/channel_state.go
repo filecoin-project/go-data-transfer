@@ -139,6 +139,25 @@ func (c channelState) RequiresFinalization() bool {
 	return c.ic.RequiresFinalization
 }
 
+func (c channelState) InitiatorPaused() bool {
+	return c.ic.InitiatorPaused
+}
+
+func (c channelState) ResponderPaused() bool {
+	return c.ic.ResponderPaused || c.ic.Status == datatransfer.Finalizing
+}
+
+func (c channelState) BothPaused() bool {
+	return c.InitiatorPaused() && c.ResponderPaused()
+}
+
+func (c channelState) SelfPaused() bool {
+	if c.ic.SelfPeer == c.ic.Initiator {
+		return c.InitiatorPaused()
+	}
+	return c.ResponderPaused()
+}
+
 // Stages returns the current ChannelStages object, or an empty object.
 // It is unsafe for the caller to modify the return value, and changes may not
 // be persisted. It should be treated as immutable.

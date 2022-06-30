@@ -160,8 +160,8 @@ func (c *Channels) ChannelOpened(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.Opened)
 }
 
-func (c *Channels) TransferRequestQueued(chid datatransfer.ChannelID) error {
-	return c.send(chid, datatransfer.TransferRequestQueued)
+func (c *Channels) TransferInitiated(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.TransferInitiated)
 }
 
 // Restart marks a data transfer as restarted
@@ -289,6 +289,11 @@ func (c *Channels) SendDataError(chid datatransfer.ChannelID, err error) error {
 // data from the remote peer
 func (c *Channels) ReceiveDataError(chid datatransfer.ChannelID, err error) error {
 	return c.send(chid, datatransfer.ReceiveDataError, err)
+}
+
+// SendMessageError indicates an error sending a message to the transport layer
+func (c *Channels) SendMessageError(chid datatransfer.ChannelID, err error) error {
+	return c.send(chid, datatransfer.SendMessageError, err)
 }
 
 // SetDataLimit means a data limit has been set on this channel

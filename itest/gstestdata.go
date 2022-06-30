@@ -76,6 +76,8 @@ type GraphsyncTestingData struct {
 	GsNet2         gsnet.GraphSyncNetwork
 	DtNet1         network.DataTransferNetwork
 	DtNet2         network.DataTransferNetwork
+	Gs1            graphsync.GraphExchange
+	Gs2            graphsync.GraphExchange
 	OrigBytes      []byte
 	TempDir1       string
 	TempDir2       string
@@ -151,13 +153,17 @@ func NewGraphsyncTestingData(ctx context.Context, t *testing.T, host1Protocols [
 
 // SetupGraphsyncHost1 sets up a new, real graphsync instance on top of the first host
 func (gsData *GraphsyncTestingData) SetupGraphsyncHost1() graphsync.GraphExchange {
+	if gsData.Gs1 != nil {
+		return gsData.Gs1
+	}
 	// setup graphsync
 	if gsData.gs1Cancel != nil {
 		gsData.gs1Cancel()
 	}
 	gsCtx, gsCancel := context.WithCancel(gsData.Ctx)
 	gsData.gs1Cancel = gsCancel
-	return gsimpl.New(gsCtx, gsData.GsNet1, gsData.LinkSystem1)
+	gsData.Gs1 = gsimpl.New(gsCtx, gsData.GsNet1, gsData.LinkSystem1)
+	return gsData.Gs1
 }
 
 // SetupGSTransportHost1 sets up a new grapshync transport over real graphsync on the first host
@@ -172,18 +178,22 @@ func (gsData *GraphsyncTestingData) SetupGSTransportHost1(opts ...gstransport.Op
 		opts = append(opts, gstransport.SupportedExtensions(supportedExtensions))
 	}
 
-	return gstransport.NewTransport(gsData.Host1.ID(), gs, gsData.DtNet1, opts...)
+	return gstransport.NewTransport(gs, gsData.DtNet1, opts...)
 }
 
 // SetupGraphsyncHost2 sets up a new, real graphsync instance on top of the second host
 func (gsData *GraphsyncTestingData) SetupGraphsyncHost2() graphsync.GraphExchange {
+	if gsData.Gs2 != nil {
+		return gsData.Gs2
+	}
 	// setup graphsync
 	if gsData.gs2Cancel != nil {
 		gsData.gs2Cancel()
 	}
 	gsCtx, gsCancel := context.WithCancel(gsData.Ctx)
 	gsData.gs2Cancel = gsCancel
-	return gsimpl.New(gsCtx, gsData.GsNet2, gsData.LinkSystem2)
+	gsData.Gs2 = gsimpl.New(gsCtx, gsData.GsNet2, gsData.LinkSystem2)
+	return gsData.Gs2
 }
 
 // SetupGSTransportHost2 sets up a new grapshync transport over real graphsync on the second host
@@ -197,7 +207,7 @@ func (gsData *GraphsyncTestingData) SetupGSTransportHost2(opts ...gstransport.Op
 		}
 		opts = append(opts, gstransport.SupportedExtensions(supportedExtensions))
 	}
-	return gstransport.NewTransport(gsData.Host2.ID(), gs, gsData.DtNet2, opts...)
+	return gstransport.NewTransport(gs, gsData.DtNet2, opts...)
 }
 
 // LoadUnixFSFile loads a fixtures file we can test dag transfer with

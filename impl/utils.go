@@ -35,6 +35,13 @@ func (m *manager) newRequest(ctx context.Context, selector datamodel.Node, isPul
 	return message.NewRequest(tid, false, isPull, &voucher, baseCid, selector)
 }
 
+func (m *manager) otherPeer(chid datatransfer.ChannelID) peer.ID {
+	if chid.Initiator == m.peerID {
+		return chid.Responder
+	}
+	return chid.Initiator
+}
+
 func (m *manager) resume(chid datatransfer.ChannelID) error {
 	if chid.Initiator == m.peerID {
 		return m.channels.ResumeInitiator(chid)

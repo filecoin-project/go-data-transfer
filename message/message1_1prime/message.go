@@ -76,7 +76,7 @@ func UpdateRequest(id datatransfer.TransferID, isPaused bool) datatransfer.Reque
 }
 
 // VoucherRequest generates a new request for the data transfer protocol
-func VoucherRequest(id datatransfer.TransferID, voucher *datatransfer.TypedVoucher) (datatransfer.Request, error) {
+func VoucherRequest(id datatransfer.TransferID, voucher *datatransfer.TypedVoucher) datatransfer.Request {
 	if voucher == nil {
 		voucher = &emptyTypedVoucher
 	}
@@ -85,11 +85,11 @@ func VoucherRequest(id datatransfer.TransferID, voucher *datatransfer.TypedVouch
 		VoucherPtr:            voucher.Voucher,
 		VoucherTypeIdentifier: voucher.Type,
 		TransferId:            uint64(id),
-	}, nil
+	}
 }
 
 // RestartResponse builds a new Data Transfer response
-func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) (datatransfer.Response, error) {
+func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) datatransfer.Response {
 	if voucherResult == nil {
 		voucherResult = &emptyTypedVoucher
 	}
@@ -100,7 +100,7 @@ func RestartResponse(id datatransfer.TransferID, accepted bool, isPaused bool, v
 		TransferId:            uint64(id),
 		VoucherResultPtr:      voucherResult.Voucher,
 		VoucherTypeIdentifier: voucherResult.Type,
-	}, nil
+	}
 }
 
 // ValidationResultResponse response generates a response based on a validation result
@@ -110,7 +110,7 @@ func ValidationResultResponse(
 	id datatransfer.TransferID,
 	validationResult datatransfer.ValidationResult,
 	validationErr error,
-	paused bool) (datatransfer.Response, error) {
+	paused bool) datatransfer.Response {
 
 	voucherResult := &emptyTypedVoucher
 	if validationResult.VoucherResult != nil {
@@ -125,11 +125,11 @@ func ValidationResultResponse(
 		TransferId:            uint64(id),
 		VoucherTypeIdentifier: voucherResult.Type,
 		VoucherResultPtr:      voucherResult.Voucher,
-	}, nil
+	}
 }
 
 // NewResponse builds a new Data Transfer response
-func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) (datatransfer.Response, error) {
+func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) datatransfer.Response {
 	if voucherResult == nil {
 		voucherResult = &emptyTypedVoucher
 	}
@@ -140,11 +140,11 @@ func NewResponse(id datatransfer.TransferID, accepted bool, isPaused bool, vouch
 		TransferId:            uint64(id),
 		VoucherTypeIdentifier: voucherResult.Type,
 		VoucherResultPtr:      voucherResult.Voucher,
-	}, nil
+	}
 }
 
 // VoucherResultResponse builds a new response for a voucher result
-func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) (datatransfer.Response, error) {
+func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) datatransfer.Response {
 	if voucherResult == nil {
 		voucherResult = &emptyTypedVoucher
 	}
@@ -155,7 +155,7 @@ func VoucherResultResponse(id datatransfer.TransferID, accepted bool, isPaused b
 		TransferId:            uint64(id),
 		VoucherTypeIdentifier: voucherResult.Type,
 		VoucherResultPtr:      voucherResult.Voucher,
-	}, nil
+	}
 }
 
 // UpdateResponse returns a new update response
@@ -176,7 +176,7 @@ func CancelResponse(id datatransfer.TransferID) datatransfer.Response {
 }
 
 // CompleteResponse returns a new complete response message
-func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) (datatransfer.Response, error) {
+func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool, voucherResult *datatransfer.TypedVoucher) datatransfer.Response {
 	if voucherResult == nil {
 		voucherResult = &emptyTypedVoucher
 	}
@@ -187,7 +187,7 @@ func CompleteResponse(id datatransfer.TransferID, isAccepted bool, isPaused bool
 		VoucherTypeIdentifier: voucherResult.Type,
 		VoucherResultPtr:      voucherResult.Voucher,
 		TransferId:            uint64(id),
-	}, nil
+	}
 }
 
 // FromNet can read a network stream to deserialize a GraphSyncMessage

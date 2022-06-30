@@ -104,53 +104,21 @@ func TestChannels(t *testing.T) {
 		err = channelList.Accept(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.Accept)
-		require.Equal(t, state.Status(), datatransfer.Ongoing)
+		require.Equal(t, state.Status(), datatransfer.Queued)
 
 		err = channelList.Accept(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		require.True(t, errors.Is(err, datatransfer.ErrChannelNotFound))
 	})
 
-	t.Run("transfer queued", func(t *testing.T) {
+	t.Run("transfer initiated", func(t *testing.T) {
 		state, err := channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
+		require.Equal(t, state.Status(), datatransfer.Queued)
+
+		err = channelList.TransferInitiated(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
+		require.NoError(t, err)
+		state = checkEvent(ctx, t, received, datatransfer.TransferInitiated)
 		require.Equal(t, state.Status(), datatransfer.Ongoing)
-
-		err = channelList.TransferRequestQueued(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
-		require.NoError(t, err)
-		state = checkEvent(ctx, t, received, datatransfer.TransferRequestQueued)
-		require.Equal(t, state.Status(), datatransfer.Ongoing)
-	})
-
-	t.Run("datasent/queued when transfer is already finished", func(t *testing.T) {
-		ds := dss.MutexWrap(datastore.NewMapDatastore())
-
-		channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
-		require.NoError(t, err)
-		err = channelList.Start(ctx)
-		require.NoError(t, err)
-
-		chid, _, err := channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
-		require.NoError(t, err)
-		checkEvent(ctx, t, received, datatransfer.Open)
-		require.NoError(t, channelList.Accept(chid))
-		checkEvent(ctx, t, received, datatransfer.Accept)
-
-		// move the channel to `TransferFinished` state.
-		require.NoError(t, channelList.FinishTransfer(chid))
-		state := checkEvent(ctx, t, received, datatransfer.FinishTransfer)
-		require.Equal(t, datatransfer.TransferFinished, state.Status())
-
-		// send a data-sent event and ensure it's a no-op
-		err = channelList.DataSent(chid, 1, basicnode.NewInt(1))
-		require.NoError(t, err)
-		state = checkEvent(ctx, t, received, datatransfer.DataSent)
-		require.Equal(t, datatransfer.TransferFinished, state.Status())
-
-		// send a data-queued event and ensure it's a no-op.
-		err = channelList.DataQueued(chid, 1, basicnode.NewInt(1))
-		require.NoError(t, err)
-		state = checkEvent(ctx, t, received, datatransfer.DataQueued)
-		require.Equal(t, datatransfer.TransferFinished, state.Status())
 	})
 
 	t.Run("updating send/receive values", func(t *testing.T) {
@@ -167,6 +135,10 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, datatransfer.Requested, state.Status())
 		require.Equal(t, uint64(0), state.Received())
 		require.Equal(t, uint64(0), state.Sent())
+
+		err = channelList.TransferInitiated(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
+		require.NoError(t, err)
+		_ = checkEvent(ctx, t, received, datatransfer.TransferInitiated)
 
 		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, 50, basicnode.NewInt(1))
 		require.NoError(t, err)
@@ -216,7 +188,7 @@ func TestChannels(t *testing.T) {
 		err = channelList.DataLimitExceeded(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.DataLimitExceeded)
-		require.Equal(t, datatransfer.ResponderPaused, state.Status())
+		require.True(t, state.ResponderPaused())
 
 		err = channelList.SetDataLimit(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, 700)
 		require.NoError(t, err)
@@ -225,16 +197,16 @@ func TestChannels(t *testing.T) {
 
 		err = channelList.ResumeResponder(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		state = checkEvent(ctx, t, received, datatransfer.ResumeResponder)
-		require.Equal(t, datatransfer.Ongoing, state.Status())
+		require.False(t, state.ResponderPaused())
 
 		err = channelList.PauseInitiator(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		state = checkEvent(ctx, t, received, datatransfer.PauseInitiator)
-		require.Equal(t, datatransfer.InitiatorPaused, state.Status())
+		require.True(t, state.InitiatorPaused())
 
 		err = channelList.DataLimitExceeded(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.DataLimitExceeded)
-		require.Equal(t, datatransfer.BothPaused, state.Status())
+		require.True(t, state.BothPaused())
 
 	})
 
@@ -246,17 +218,19 @@ func TestChannels(t *testing.T) {
 		err = channelList.PauseInitiator(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.PauseInitiator)
-		require.Equal(t, datatransfer.InitiatorPaused, state.Status())
+		require.True(t, state.InitiatorPaused())
+		require.False(t, state.BothPaused())
 
 		err = channelList.PauseResponder(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.PauseResponder)
-		require.Equal(t, datatransfer.BothPaused, state.Status())
+		require.True(t, state.BothPaused())
 
 		err = channelList.ResumeInitiator(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.ResumeInitiator)
-		require.Equal(t, datatransfer.ResponderPaused, state.Status())
+		require.True(t, state.ResponderPaused())
+		require.False(t, state.BothPaused())
 
 		err = channelList.ResumeResponder(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1})
 		require.NoError(t, err)

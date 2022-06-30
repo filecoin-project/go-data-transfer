@@ -132,8 +132,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		accepted := false
 		id := datatransfer.TransferID(rand.Int31())
 		voucherResult := testutil.NewTestTypedVoucher()
-		response, err := message.ValidationResultResponse(types.NewMessage, id, datatransfer.ValidationResult{Accepted: accepted, VoucherResult: &voucherResult}, nil, false)
-		require.NoError(t, err)
+		response := message.ValidationResultResponse(types.NewMessage, id, datatransfer.ValidationResult{Accepted: accepted, VoucherResult: &voucherResult}, nil, false)
 		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), "graphsync", response))
 
 		select {

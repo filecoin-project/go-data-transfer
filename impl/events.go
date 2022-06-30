@@ -2,144 +2,88 @@ package impl
 
 import (
 	"context"
+	"errors"
 	"fmt"
-
-	"github.com/ipld/go-ipld-prime"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"golang.org/x/xerrors"
 )
 
 // OnChannelOpened is called when we send a request for data to the other
 // peer on the given channel ID
-func (m *manager) OnChannelOpened(chid datatransfer.ChannelID) error {
-	log.Infof("channel %s: opened", chid)
-
-	// Check if the channel is being tracked
-	has, err := m.channels.HasChannel(chid)
-	if err != nil {
-		return err
-	}
-	if !has {
-		return datatransfer.ErrChannelNotFound
-	}
-
-	// Fire an event
-	return m.channels.ChannelOpened(chid)
-}
-
-// OnDataReceived is called when the transport layer reports that it has
-// received some data from the sender.
-// It fires an event on the channel, updating the sum of received data and reports
-// back a pause to the transport if the data limit is exceeded
-func (m *manager) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
+func (m *manager) OnTransportEvent(chid datatransfer.ChannelID, evt datatransfer.TransportEvent) {
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-	_, span := otel.Tracer("data-transfer").Start(ctx, "dataReceived", trace.WithAttributes(
-		attribute.String("channelID", chid.String()),
-		attribute.String("link", link.String()),
-		attribute.Int64("index", index),
-		attribute.Int64("size", int64(size)),
-	))
-	defer span.End()
-
-	err := m.channels.DataReceived(chid, link.(cidlink.Link).Cid, size, index, unique)
-	// if this channel is now paused, send the pause message
-	if err == datatransfer.ErrPause {
-		msg := message.UpdateResponse(chid.ID, true)
-		ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-		if err := m.transport.SendMessage(ctx, chid, msg); err != nil {
-			return err
+	err := m.processTransferEvent(ctx, chid, evt)
+	if err != nil {
+		log.Infof("error on channel: %s, closing channel", err)
+		err := m.closeChannelWithError(ctx, chid, err)
+		if err != nil {
+			log.Errorf("error closing channel: %s", err)
 		}
 	}
-
-	return err
 }
 
-// OnDataQueued is called when the transport layer reports that it has queued
-// up some data to be sent to the requester.
-// It fires an event on the channel, updating the sum of queued data and reports
-// back a pause to the transport if the data limit is exceeded
-func (m *manager) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) (datatransfer.Message, error) {
-	// The transport layer reports that some data has been queued up to be sent
-	// to the requester, so fire a DataQueued event on the channels state
-	// machine.
-
-	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-	_, span := otel.Tracer("data-transfer").Start(ctx, "dataQueued", trace.WithAttributes(
-		attribute.String("channelID", chid.String()),
-		attribute.String("link", link.String()),
-		attribute.Int64("size", int64(size)),
-	))
-	defer span.End()
-
-	var msg datatransfer.Message
-	err := m.channels.DataQueued(chid, link.(cidlink.Link).Cid, size, index, unique)
-	// if this channel is now paused, send the pause message
-	if err == datatransfer.ErrPause {
-		msg = message.UpdateResponse(chid.ID, true)
-	}
-
-	return msg, err
-}
-
-// OnDataSent is called when the transport layer reports that it has finished
-// sending data to the requester.
-func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
-
-	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
-	_, span := otel.Tracer("data-transfer").Start(ctx, "dataSent", trace.WithAttributes(
-		attribute.String("channelID", chid.String()),
-		attribute.String("link", link.String()),
-		attribute.Int64("size", int64(size)),
-	))
-	defer span.End()
-
-	return m.channels.DataSent(chid, link.(cidlink.Link).Cid, size, index, unique)
-}
-
-// OnRequestReceived is called when a Request message is received from the initiator
-// on the responder
-func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
-
-	// if request is restart request, process as restart
-	if request.IsRestart() {
-		return m.receiveRestartRequest(chid, request)
-	}
-
-	// if request is new request, process as new
-	if request.IsNew() {
-		return m.receiveNewRequest(chid, request)
-	}
-
-	// if request is cancel request, process as cancel
-	if request.IsCancel() {
+func (m *manager) processTransferEvent(ctx context.Context, chid datatransfer.ChannelID, transportEvent datatransfer.TransportEvent) error {
+	switch evt := transportEvent.(type) {
+	case datatransfer.TransportOpenedChannel:
+		return m.channels.ChannelOpened(chid)
+	case datatransfer.TransportInitiatedTransfer:
+		return m.channels.TransferInitiated(chid)
+	case datatransfer.TransportReceivedData:
+		return m.channels.DataReceived(chid, evt.Size, evt.Index)
+	case datatransfer.TransportSentData:
+		return m.channels.DataSent(chid, evt.Size, evt.Index)
+	case datatransfer.TransportQueuedData:
+		return m.channels.DataQueued(chid, evt.Size, evt.Index)
+	case datatransfer.TransportReachedDataLimit:
+		if err := m.channels.DataLimitExceeded(chid); err != nil {
+			return err
+		}
+		msg := message.UpdateResponse(chid.ID, true)
+		return m.transport.SendMessage(ctx, chid, msg)
+	/*case datatransfer.TransportReceivedVoucherRequest:
+		voucher, err := evt.Request.TypedVoucher()
+		if err != nil {
+			return err
+		}
+		return m.channels.NewVoucher(chid, voucher)
+	case datatransfer.TransportReceivedUpdateRequest:
+		if evt.Request.IsPaused() {
+			return m.pauseOther(chid)
+		}
+		return m.resumeOther(chid)
+	case datatransfer.TransportReceivedCancelRequest:
 		log.Infof("channel %s: received cancel request, cleaning up channel", chid)
+		return m.channels.Cancel(chid)
+	case datatransfer.TransportReceivedResponse:
+		return m.receiveResponse(chid, evt.Response)*/
+	case datatransfer.TransportTransferCancelled:
+		log.Warnf("channel %+v was cancelled: %s", chid, evt.ErrorMessage)
+		return m.channels.RequestCancelled(chid, errors.New(evt.ErrorMessage))
 
-		m.transport.CleanupChannel(chid)
-		return nil, m.channels.Cancel(chid)
+	case datatransfer.TransportErrorSendingData:
+		log.Debugf("channel %+v had transport send error: %s", chid, evt.ErrorMessage)
+		return m.channels.SendDataError(chid, errors.New(evt.ErrorMessage))
+	case datatransfer.TransportErrorReceivingData:
+		log.Debugf("channel %+v had transport receive error: %s", chid, evt.ErrorMessage)
+		return m.channels.ReceiveDataError(chid, errors.New(evt.ErrorMessage))
+	case datatransfer.TransportCompletedTransfer:
+		return m.channelCompleted(chid, evt.Success, evt.ErrorMessage)
+	case datatransfer.TransportReceivedRestartExistingChannelRequest:
+		return m.restartExistingChannelRequestReceived(chid)
+	case datatransfer.TransportErrorSendingMessage:
+		return m.channels.SendMessageError(chid, errors.New(evt.ErrorMessage))
+	case datatransfer.TransportPaused:
+		return m.pause(chid)
+	case datatransfer.TransportResumed:
+		return m.resume(chid)
 	}
-
-	// if request contains a new voucher, process updated voucher
-	if request.IsVoucher() {
-		return m.processUpdateVoucher(chid, request)
-	}
-
-	// otherwise process as an "update" message (i.e. a pause or resume)
-	return m.receiveUpdateRequest(chid, request)
+	return nil
 }
 
-// OnTransferQueued is called when the transport layer receives a request but has not yet processed it
-func (m *manager) OnTransferQueued(chid datatransfer.ChannelID) {
-	m.channels.TransferRequestQueued(chid)
-}
-
-// OnRequestReceived is called when a Response message is received from the responder
+// OnResponseReceived is called when a Response message is received from the responder
 // on the initiator
 func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datatransfer.Response) error {
 
@@ -217,34 +161,19 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 	return m.resumeOther(chid)
 }
 
-// OnRequestCancelled is called when a transport reports a channel is cancelled
-func (m *manager) OnRequestCancelled(chid datatransfer.ChannelID, err error) error {
-	log.Warnf("channel %+v was cancelled: %s", chid, err)
-	return m.channels.RequestCancelled(chid, err)
+// OnContextAugment provides an oppurtunity for transports to have data transfer add data to their context (i.e.
+// to tie into tracing, etc)
+func (m *manager) OnContextAugment(chid datatransfer.ChannelID) func(context.Context) context.Context {
+	return func(ctx context.Context) context.Context {
+		ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
+		return ctx
+	}
 }
 
-// OnRequestCancelled is called when a transport reports a channel disconnected
-func (m *manager) OnRequestDisconnected(chid datatransfer.ChannelID, err error) error {
-	log.Warnf("channel %+v has stalled or disconnected: %s", chid, err)
-	return m.channels.Disconnected(chid, err)
-}
-
-// OnSendDataError is called when a transport has a network error sending data
-func (m *manager) OnSendDataError(chid datatransfer.ChannelID, err error) error {
-	log.Debugf("channel %+v had transport send error: %s", chid, err)
-	return m.channels.SendDataError(chid, err)
-}
-
-// OnReceiveDataError is called when a transport has a network error receiving data
-func (m *manager) OnReceiveDataError(chid datatransfer.ChannelID, err error) error {
-	log.Debugf("channel %+v had transport receive error: %s", chid, err)
-	return m.channels.ReceiveDataError(chid, err)
-}
-
-// OnChannelCompleted is called
+// channelCompleted is called
 // - by the requester when all data for a transfer has been received
 // - by the responder when all data for a transfer has been sent
-func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr error) error {
+func (m *manager) channelCompleted(chid datatransfer.ChannelID, success bool, errorMessage string) error {
 
 	// read the channel state
 	chst, err := m.channels.GetByID(context.TODO(), chid)
@@ -253,10 +182,10 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	}
 
 	// If the transferred errored on completion
-	if completeErr != nil {
-		// send an error, but only if we haven't already errored for some reason
-		if chst.Status() != datatransfer.Failing && chst.Status() != datatransfer.Failed {
-			err := xerrors.Errorf("data transfer channel %s failed to transfer data: %w", chid, completeErr)
+	if !success {
+		// send an error, but only if we haven't already errored/finished transfer already for some reason
+		if !chst.Status().TransferComplete() {
+			err := fmt.Errorf("data transfer channel %s failed to transfer data: %s", chid, errorMessage)
 			log.Warnf(err.Error())
 			return m.channels.Error(chid, err)
 		}
@@ -273,16 +202,13 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	log.Infow("received OnChannelCompleted, will send completion message to initiator", "chid", chid)
 
 	// generate and send the final status message
-	msg, err := message.CompleteResponse(chst.TransferID(), true, chst.RequiresFinalization(), nil)
-	if err != nil {
-		return err
-	}
+	msg := message.CompleteResponse(chst.TransferID(), true, chst.RequiresFinalization(), nil)
 	log.Infow("sending completion message to initiator", "chid", chid)
 	ctx, _ := m.spansIndex.SpanForChannel(context.Background(), chid)
 	if err := m.transport.SendMessage(ctx, chid, msg); err != nil {
 		err := xerrors.Errorf("channel %s: failed to send completion message to initiator: %w", chid, err)
 		log.Warnw("failed to send completion message to initiator", "chid", chid, "err", err)
-		return m.OnRequestDisconnected(chid, err)
+		return m.channels.SendMessageError(chid, err)
 	}
 	log.Infow("successfully sent completion message to initiator", "chid", chid)
 
@@ -293,16 +219,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	return m.channels.Complete(chid)
 }
 
-// OnContextAugment provides an oppurtunity for transports to have data transfer add data to their context (i.e.
-// to tie into tracing, etc)
-func (m *manager) OnContextAugment(chid datatransfer.ChannelID) func(context.Context) context.Context {
-	return func(ctx context.Context) context.Context {
-		ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
-		return ctx
-	}
-}
-
-func (m *manager) OnRestartExistingChannelRequestReceived(chid datatransfer.ChannelID) error {
+func (m *manager) restartExistingChannelRequestReceived(chid datatransfer.ChannelID) error {
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
 	// validate channel exists -> in non-terminal state and that the sender matches
 	channel, err := m.channels.GetByID(context.TODO(), chid)
@@ -319,5 +236,6 @@ func (m *manager) OnRestartExistingChannelRequestReceived(chid datatransfer.Chan
 	if err := m.openRestartChannel(ctx, channel); err != nil {
 		return fmt.Errorf("failed to open restart channel %s: %s", chid, err)
 	}
+
 	return nil
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/ipfs/go-datastore"
 	dss "github.com/ipfs/go-datastore/sync"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/ipld/go-ipld-prime/node/basicnode"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
@@ -139,8 +139,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, nil)
-				require.NoError(t, err)
+				response := message.NewResponse(channelID.ID, true, false, nil)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
 			},
@@ -151,8 +150,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, &h.voucherResult)
-				require.NoError(t, err)
+				response := message.NewResponse(channelID.ID, true, false, &h.voucherResult)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
 			},
@@ -163,14 +161,13 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, nil)
-				require.NoError(t, err)
+				response := message.NewResponse(channelID.ID, true, false, nil)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
 				err = h.dt.PauseDataTransferChannel(h.ctx, channelID)
 				require.NoError(t, err)
-				require.Len(t, h.transport.PausedChannels, 1)
-				require.Equal(t, h.transport.PausedChannels[0], channelID)
+				require.Len(t, h.transport.ChannelsUpdated, 1)
+				require.Equal(t, h.transport.ChannelsUpdated[0], channelID)
 				require.Len(t, h.transport.OpenedChannels, 1)
 				require.Len(t, h.transport.MessagesSent, 1)
 				pauseMessage := h.transport.MessagesSent[0].Message
@@ -181,8 +178,8 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Equal(t, pauseMessage.TransferID(), channelID.ID)
 				err = h.dt.ResumeDataTransferChannel(h.ctx, channelID)
 				require.NoError(t, err)
-				require.Len(t, h.transport.ResumedChannels, 1)
-				resumedChannel := h.transport.ResumedChannels[0]
+				require.Len(t, h.transport.ChannelsUpdated, 2)
+				resumedChannel := h.transport.ChannelsUpdated[1]
 				require.Equal(t, resumedChannel, channelID)
 				require.Len(t, h.transport.MessagesSent, 2)
 				resumeMessage := h.transport.MessagesSent[1].Message
@@ -201,8 +198,8 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.NotEmpty(t, channelID)
 				err = h.dt.CloseDataTransferChannel(h.ctx, channelID)
 				require.NoError(t, err)
-				require.Len(t, h.transport.ClosedChannels, 1)
-				require.Equal(t, h.transport.ClosedChannels[0], channelID)
+				require.Len(t, h.transport.ChannelsUpdated, 1)
+				require.Equal(t, h.transport.ChannelsUpdated[0], channelID)
 
 				require.Eventually(t, func() bool {
 					return len(h.transport.MessagesSent) == 1
@@ -221,13 +218,12 @@ func TestDataTransferInitiating(t *testing.T) {
 				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
-				response, err := message.NewResponse(channelID.ID, true, false, nil)
-				require.NoError(t, err)
+				response := message.NewResponse(channelID.ID, true, false, nil)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
 				err = h.dt.PauseDataTransferChannel(h.ctx, channelID)
 				require.NoError(t, err)
-				require.Len(t, h.transport.PausedChannels, 1)
+				require.Len(t, h.transport.ChannelsUpdated, 1)
 				require.Len(t, h.transport.OpenedChannels, 1)
 				require.Len(t, h.transport.MessagesSent, 1)
 				pauseMessage := h.transport.MessagesSent[0].Message
@@ -238,8 +234,8 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Equal(t, pauseMessage.TransferID(), channelID.ID)
 				err = h.dt.ResumeDataTransferChannel(h.ctx, channelID)
 				require.NoError(t, err)
-				require.Len(t, h.transport.ResumedChannels, 1)
-				resumedChannel := h.transport.ResumedChannels[0]
+				require.Len(t, h.transport.ChannelsUpdated, 2)
+				resumedChannel := h.transport.ChannelsUpdated[1]
 				require.Equal(t, resumedChannel, channelID)
 				require.Len(t, h.transport.MessagesSent, 2)
 				resumeMessage := h.transport.MessagesSent[1].Message
@@ -258,8 +254,8 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.NotEmpty(t, channelID)
 				err = h.dt.CloseDataTransferChannel(h.ctx, channelID)
 				require.NoError(t, err)
-				require.Len(t, h.transport.ClosedChannels, 1)
-				require.Equal(t, h.transport.ClosedChannels[0], channelID)
+				require.Len(t, h.transport.ChannelsUpdated, 1)
+				require.Equal(t, h.transport.ChannelsUpdated[0], channelID)
 
 				require.Eventually(t, func() bool {
 					return len(h.transport.MessagesSent) == 1
@@ -353,7 +349,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 		verify         func(t *testing.T, h *harness)
 	}{
 		"RestartDataTransferChannel: Manager Peer Create Pull Restart works": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.DataReceivedProgress, datatransfer.DataReceived, datatransfer.DataReceivedProgress, datatransfer.DataReceived},
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.TransferInitiated, datatransfer.DataReceivedProgress, datatransfer.DataReceived, datatransfer.DataReceivedProgress, datatransfer.DataReceived},
 			verify: func(t *testing.T, h *harness) {
 				// open a pull channel
 				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
@@ -362,11 +358,11 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				require.Len(t, h.transport.OpenedChannels, 1)
 
 				// some cids should already be received
-				testCids := testutil.GenerateCids(2)
 				ev, ok := h.dt.(datatransfer.EventsHandler)
 				require.True(t, ok)
-				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[0]}, 12345, 1, true))
-				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[1]}, 12345, 2, true))
+				ev.OnTransportEvent(channelID, datatransfer.TransportInitiatedTransfer{})
+				ev.OnTransportEvent(channelID, datatransfer.TransportReceivedData{Size: 12345, Index: basicnode.NewInt(1)})
+				ev.OnTransportEvent(channelID, datatransfer.TransportReceivedData{Size: 12345, Index: basicnode.NewInt(2)})
 
 				// restart that pull channel
 				err = h.dt.RestartDataTransferChannel(ctx, channelID)
