@@ -24,12 +24,6 @@ type MessageSent struct {
 	Message   datatransfer.Message
 }
 
-// DataLimitSet records setting a data limit
-type DataLimitSet struct {
-	ChannelID datatransfer.ChannelID
-	DataLimit uint64
-}
-
 // CustomizedTransfer is just a way to record calls made to transport configurer
 type CustomizedTransfer struct {
 	ChannelID datatransfer.ChannelID
@@ -44,12 +38,9 @@ type FakeTransport struct {
 	OpenChannelErr      error
 	RestartedChannels   []RestartedChannel
 	RestartChannelErr   error
-	ClosedChannels      []datatransfer.ChannelID
-	PausedChannels      []datatransfer.ChannelID
-	ResumedChannels     []datatransfer.ChannelID
-	DataLimitsSet       []DataLimitSet
 	MessagesSent        []MessageSent
 	UpdateError         error
+	ChannelsUpdated     []datatransfer.ChannelID
 	CleanedUpChannels   []datatransfer.ChannelID
 	CustomizedTransfers []CustomizedTransfer
 	EventHandler        datatransfer.EventsHandler
@@ -96,34 +87,18 @@ func (ft *FakeTransport) RestartChannel(ctx context.Context, channelState datatr
 }
 
 // WithChannel takes actions on a channel
-func (ft *FakeTransport) SendChannelCommand(ctx context.Context, chid datatransfer.ChannelID, command datatransfer.ChannelCommand) error {
+func (ft *FakeTransport) ChannelUpdated(ctx context.Context, chid datatransfer.ChannelID, msg datatransfer.Message) error {
 
-	update := command.ChannelUpdate()
-	message, sendMessage := update.MessageToSend()
-	if sendMessage {
-		ft.MessagesSent = append(ft.MessagesSent, MessageSent{chid, message})
+	if msg != nil {
+		ft.MessagesSent = append(ft.MessagesSent, MessageSent{chid, msg})
 	}
+	ft.ChannelsUpdated = append(ft.ChannelsUpdated, chid)
+	return nil
+}
 
-	closed, hasClosed := update.Closed()
-	if hasClosed && closed {
-		ft.ClosedChannels = append(ft.ClosedChannels, chid)
-		return ft.UpdateError
-	}
-
-	paused, hasPaused := update.Paused()
-	if hasPaused {
-		if !paused {
-			ft.ResumedChannels = append(ft.ResumedChannels, chid)
-		} else {
-			ft.PausedChannels = append(ft.PausedChannels, chid)
-		}
-	}
-
-	dataLimit, hasDataLimit := update.DataLimit()
-	if hasDataLimit {
-		ft.DataLimitsSet = append(ft.DataLimitsSet, DataLimitSet{chid, dataLimit})
-	}
-
+// SendMessage sends a data transfer message over the channel to the other peer
+func (ft *FakeTransport) SendMessage(ctx context.Context, chid datatransfer.ChannelID, msg datatransfer.Message) error {
+	ft.MessagesSent = append(ft.MessagesSent, MessageSent{chid, msg})
 	return ft.UpdateError
 }
 

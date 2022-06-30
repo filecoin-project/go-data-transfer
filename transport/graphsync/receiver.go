@@ -3,7 +3,6 @@ package graphsync
 import (
 	"context"
 
-	"github.com/ipfs/go-graphsync"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"go.opentelemetry.io/otel"
@@ -11,7 +10,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
 type receiver struct {
@@ -43,9 +41,14 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 		attribute.Bool("isPaused", incoming.IsPaused()),
 	))
 	defer span.End()
+	isNewOrRestart := incoming.IsNew() || incoming.IsRestart()
+	// a graphsync pull request MUST come in via graphsync
+	if isNewOrRestart && incoming.IsPull() {
+		return datatransfer.ErrUnsupported
+	}
 	response, receiveErr := r.transport.events.OnRequestReceived(chid, incoming)
+	initiateGraphsyncRequest := isNewOrRestart && response != nil && receiveErr == nil
 	ch, err := r.transport.getDTChannel(chid)
-	initiateGraphsyncRequest := (response != nil) && (response.IsNew() || response.IsRestart()) && response.Accepted() && !incoming.IsPull()
 	if err != nil {
 		if !initiateGraphsyncRequest {
 			if response != nil {
@@ -56,50 +59,39 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 		ch = r.transport.trackDTChannel(chid)
 	}
 
-	if receiveErr == datatransfer.ErrResume && ch.Paused() {
-
-		var extensions []graphsync.ExtensionData
+	if receiveErr != nil {
 		if response != nil {
-			var err error
-			extensions, err = extension.ToExtensionData(response, r.transport.supportedExtensions)
-			if err != nil {
-				return err
-			}
-		}
-
-		return ch.Resume(ctx, extensions)
-	}
-
-	if response != nil {
-		if initiateGraphsyncRequest {
-			stor, _ := incoming.Selector()
-			if response.IsRestart() {
-				channel, err := r.transport.events.ChannelState(ctx, chid)
-				if err != nil {
-					return err
-				}
-				ch.UpdateReceivedCidsIfGreater(channel.ReceivedCidsTotal())
-			}
-			if err := r.transport.openRequest(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, response); err != nil {
-				return err
-			}
-		} else {
 			if err := r.transport.dtNet.SendMessage(ctx, initiator, transportID, response); err != nil {
 				return err
 			}
+			_ = ch.Close(ctx)
+			return receiveErr
 		}
 	}
 
-	if receiveErr == datatransfer.ErrPause {
-		return ch.Pause(ctx)
+	if isNewOrRestart {
+		r.transport.dtNet.Protect(initiator, chid.String())
+	}
+	chst, err := r.transport.events.ChannelState(ctx, chid)
+	if err != nil {
+		return err
 	}
 
-	if receiveErr != nil {
-		_ = ch.Close(ctx)
-		return receiveErr
+	err = ch.UpdateFromChannelState(chst)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	if initiateGraphsyncRequest {
+		stor, _ := incoming.Selector()
+		if err := r.transport.openRequest(ctx, initiator, chid, cidlink.Link{Cid: incoming.BaseCid()}, stor, response); err != nil {
+			return err
+		}
+		response = nil
+	}
+
+	action := ch.ActionFromChannelState(chst)
+	return r.transport.processAction(ctx, chid, ch, action, response)
 }
 
 // ReceiveResponse handles responses to our  Push or Pull data transfer request.
@@ -134,9 +126,6 @@ func (r *receiver) receiveResponse(
 	ch, err := r.transport.getDTChannel(chid)
 	if err != nil {
 		return err
-	}
-	if receiveErr == datatransfer.ErrPause {
-		return ch.Pause(ctx)
 	}
 	if receiveErr != nil {
 		log.Warnf("closing channel %s after getting error processing response from %s: %s",
@@ -180,9 +169,6 @@ func (r *receiver) ReceiveRestartExistingChannelRequest(ctx context.Context,
 		return
 	}
 
-	err = r.transport.events.OnRestartExistingChannelRequestReceived(ch)
-	if err != nil {
-		log.Errorf(err.Error())
-	}
+	r.transport.events.OnTransportEvent(ch, datatransfer.TransportReceivedRestartExistingChannelRequest{})
 	return
 }

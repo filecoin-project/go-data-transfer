@@ -252,15 +252,10 @@ func (m *manager) SendVoucher(ctx context.Context, channelID datatransfer.Channe
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	updateRequest, err := message.VoucherRequest(channelID.ID, &voucher)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
+	updateRequest := message.VoucherRequest(channelID.ID, &voucher)
 	if err := m.transport.SendMessage(ctx, channelID, updateRequest); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
-		_ = m.OnRequestDisconnected(channelID, err)
+		_ = m.channels.SendMessageError(channelID, err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -287,19 +282,14 @@ func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.
 
 	var updateResponse datatransfer.Response
 	if chst.Status().InFinalization() {
-		updateResponse, err = message.CompleteResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), &voucherResult)
+		updateResponse = message.CompleteResponse(channelID.ID, chst.Status().IsAccepted(), chst.ResponderPaused(), &voucherResult)
 	} else {
-		updateResponse, err = message.VoucherResultResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), &voucherResult)
+		updateResponse = message.VoucherResultResponse(channelID.ID, chst.Status().IsAccepted(), chst.ResponderPaused(), &voucherResult)
 	}
 
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
 	if err := m.transport.SendMessage(ctx, channelID, updateResponse); err != nil {
 		err = fmt.Errorf("Unable to send request: %w", err)
-		_ = m.OnRequestDisconnected(channelID, err)
+		_ = m.channels.SendMessageError(channelID, err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -331,33 +321,16 @@ func (m *manager) updateValidationStatus(ctx context.Context, chid datatransfer.
 		return err
 	}
 
-	// dispatch channel events and generate a response message
-	chst, response, err := m.processValidationUpdate(ctx, chid, result)
-
-	// dispatch transport updates
-	return m.transport.UpdateChannel(ctx, chid, datatransfer.ChannelUpdate{
-		Paused:      result.LeaveRequestPaused(chst),
-		Closed:      err != nil || !result.Accepted,
-		SendMessage: response,
-	})
-}
-
-func (m *manager) processValidationUpdate(ctx context.Context, chid datatransfer.ChannelID, result datatransfer.ValidationResult) (datatransfer.ChannelState, datatransfer.Response, error) {
-
 	// read the channel state
 	chst, err := m.channels.GetByID(context.TODO(), chid)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 
-	// if the request is now rejected, error the channel
-	if !result.Accepted {
-		err = m.recordRejectedValidationEvents(chid, result)
-	} else {
-		err = m.recordAcceptedValidationEvents(chst, result)
-	}
+	// dispatch channel events and generate a response message
+	err = m.processValidationUpdate(ctx, chst, result)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 
 	// generate a response message
@@ -365,100 +338,105 @@ func (m *manager) processValidationUpdate(ctx context.Context, chid datatransfer
 	if chst.Status() == datatransfer.Finalizing {
 		messageType = types.CompleteMessage
 	}
-	response, msgErr := message.ValidationResultResponse(messageType, chst.TransferID(), result, err,
+	response := message.ValidationResultResponse(messageType, chid.ID, result, err,
 		result.LeaveRequestPaused(chst))
-	if msgErr != nil {
-		return nil, nil, msgErr
-	}
 
-	// return the response message and any errors
-	return chst, response, nil
+	// dispatch transport updates
+	return m.transport.ChannelUpdated(ctx, chid, response)
+}
+
+func (m *manager) processValidationUpdate(ctx context.Context, chst datatransfer.ChannelState, result datatransfer.ValidationResult) error {
+	// if the request is now rejected, error the channel
+	if !result.Accepted {
+		return m.recordRejectedValidationEvents(chst.ChannelID(), result)
+	}
+	return m.recordAcceptedValidationEvents(chst, result)
+
 }
 
 // close an open channel (effectively a cancel)
 func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error {
 	log.Infof("close channel %s", chid)
 
-	chst, err := m.channels.GetByID(ctx, chid)
-	if err != nil {
-		return err
-	}
 	ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
 	ctx, span := otel.Tracer("data-transfer").Start(ctx, "closeChannel", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 	))
 	defer span.End()
-	// Close the channel on the local transport
-	err = m.transport.UpdateChannel(ctx, chid, datatransfer.ChannelUpdate{
-		Paused: chst.Status().IsResponderPaused(),
-		Closed: true,
-	})
+
+	err := m.closeChannel(ctx, chid)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Warnf("unable to close channel %s: %s", chid, err)
 	}
+	return err
+}
+
+func (m *manager) closeChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	// Fire a cancel event
+	err := m.channels.Cancel(chid)
+	if err != nil {
+		return xerrors.Errorf("unable to send cancel to channel FSM: %w", err)
+	}
+
+	// Close the channel on the local transport
+	err = m.transport.ChannelUpdated(ctx, chid, nil)
 
 	// Send a cancel message to the remote peer async
 	go func() {
 		sctx, cancel := context.WithTimeout(context.Background(), cancelSendTimeout)
 		defer cancel()
-		log.Infof("%s: sending cancel channel to %s for channel %s", m.peerID, chst.OtherPeer(), chid)
+		log.Infof("%s: sending cancel channel to %s for channel %s", m.peerID, m.otherPeer(chid), chid)
 		err = m.transport.SendMessage(sctx, chid, m.cancelMessage(chid))
 		if err != nil {
 			err = fmt.Errorf("unable to send cancel message for channel %s to peer %s: %w",
 				chid, m.peerID, err)
-			_ = m.OnRequestDisconnected(chid, err)
 			log.Warn(err)
 		}
 	}()
 
-	// Fire a cancel event
-	fsmerr := m.channels.Cancel(chid)
-	if fsmerr != nil {
-		return xerrors.Errorf("unable to send cancel to channel FSM: %w", fsmerr)
-	}
-
-	return nil
+	return err
 }
 
 // close an open channel and fire an error event
 func (m *manager) CloseDataTransferChannelWithError(ctx context.Context, chid datatransfer.ChannelID, cherr error) error {
 	log.Infof("close channel %s with error %s", chid, cherr)
 
-	chst, err := m.channels.GetByID(ctx, chid)
-	if err != nil {
-		return err
-	}
 	ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
 	ctx, span := otel.Tracer("data-transfer").Start(ctx, "closeChannel", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 	))
 	defer span.End()
 
+	err := m.closeChannelWithError(ctx, chid, cherr)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		log.Warnf("unable to close channel %s: %s", chid, err)
+	}
+	return err
+}
+
+func (m *manager) closeChannelWithError(ctx context.Context, chid datatransfer.ChannelID, cherr error) error {
+
+	// Fire an error event
+	if err := m.channels.Error(chid, cherr); err != nil {
+		return xerrors.Errorf("unable to send error %s to channel FSM: %w", cherr, err)
+	}
+
 	// Close transfport and try to send a cancel message to the remote peer.
 	// It's quite likely we aren't able to send the message to the peer because
 	// the channel is already in an error state, which is probably because of
 	// connection issues, so if we cant send the message just log a warning.
-	log.Infof("%s: sending cancel channel to %s for channel %s", m.peerID, chst.OtherPeer(), chid)
-	err = m.transport.UpdateChannel(ctx, chid, datatransfer.ChannelUpdate{
-		Paused:      chst.Status().IsResponderPaused(),
-		Closed:      true,
-		SendMessage: m.cancelMessage(chid),
-	})
-	if err != nil {
+	log.Infof("%s: sending cancel channel to %s for channel %s", m.peerID, m.otherPeer(chid), chid)
+
+	if err := m.transport.ChannelUpdated(ctx, chid, m.cancelMessage(chid)); err != nil {
 		// Just log a warning here because it's important that we fire the
 		// error event with the original error so that it doesn't get masked
 		// by subsequent errors.
 		log.Warnf("unable to close channel %s: %s", chid, err)
 	}
-
-	// Fire an error event
-	err = m.channels.Error(chid, cherr)
-	if err != nil {
-		return xerrors.Errorf("unable to send error %s to channel FSM: %w", cherr, err)
-	}
-
 	return nil
 }
 
@@ -472,15 +450,16 @@ func (m *manager) PauseDataTransferChannel(ctx context.Context, chid datatransfe
 
 	ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
 
-	err := m.transport.UpdateChannel(ctx, chid, datatransfer.ChannelUpdate{
-		Paused:      true,
-		SendMessage: m.pauseMessage(chid),
-	})
-	if err != nil {
-		log.Warnf("Error attempting to pause at transport level: %s", err.Error())
+	// fire the pause
+	if err := m.pause(chid); err != nil {
+		return err
 	}
 
-	return m.pause(chid)
+	// update transport
+	if err := m.transport.ChannelUpdated(ctx, chid, m.pauseMessage(chid)); err != nil {
+		log.Warnf("Error attempting to pause at transport level: %s", err.Error())
+	}
+	return nil
 }
 
 // resume a running data transfer channel
@@ -493,15 +472,16 @@ func (m *manager) ResumeDataTransferChannel(ctx context.Context, chid datatransf
 
 	ctx, _ = m.spansIndex.SpanForChannel(ctx, chid)
 
-	err := m.transport.UpdateChannel(ctx, chid, datatransfer.ChannelUpdate{
-		Paused:      false,
-		SendMessage: m.resumeMessage(chid),
-	})
-	if err != nil {
-		log.Warnf("Error attempting to resume at transport level: %s", err.Error())
+	// fire the resume
+	if err := m.resume(chid); err != nil {
+		return err
 	}
 
-	return m.resume(chid)
+	// update transport
+	if err := m.transport.ChannelUpdated(ctx, chid, m.resumeMessage(chid)); err != nil {
+		log.Warnf("Error attempting to resume at transport level: %s", err.Error())
+	}
+	return nil
 }
 
 // get channel state

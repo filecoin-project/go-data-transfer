@@ -13,7 +13,31 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
-// this file contains methods for processing incoming request messages
+func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
+
+	// if request is restart request, process as restart
+	if request.IsRestart() {
+		return m.receiveRestartRequest(chid, request)
+	}
+
+	// if request is new request, process as new
+	if request.IsNew() {
+		return m.receiveNewRequest(chid, request)
+	}
+
+	// if request is cancel request, process as cancel
+	if request.IsCancel() {
+		log.Infof("channel %s: received cancel request, cleaning up channel", chid)
+
+		return nil, m.channels.Cancel(chid)
+	}
+	// if request contains a new voucher, process updated voucher
+	if request.IsVoucher() {
+		return m.processUpdateVoucher(chid, request)
+	}
+	// otherwise process as an "update" message (i.e. a pause or resume)
+	return m.receiveUpdateRequest(chid, request)
+}
 
 // receiveNewRequest handles an incoming new request message
 func (m *manager) receiveNewRequest(chid datatransfer.ChannelID, incoming datatransfer.Request) (datatransfer.Response, error) {
@@ -23,13 +47,13 @@ func (m *manager) receiveNewRequest(chid datatransfer.ChannelID, incoming datatr
 	result, err := m.acceptRequest(chid, incoming)
 
 	// generate a response message
-	msg, msgErr := message.ValidationResultResponse(types.NewMessage, incoming.TransferID(), result, err, result.ForcePause)
-	if msgErr != nil {
-		return nil, msgErr
-	}
+	msg := message.ValidationResultResponse(types.NewMessage, incoming.TransferID(), result, err, result.ForcePause)
 
-	// return the response message and any errors
-	return msg, m.requestError(result, err, result.ForcePause)
+	// return the channel update
+	if err == nil && !result.Accepted {
+		err = datatransfer.ErrRejected
+	}
+	return msg, err
 }
 
 // acceptRequest performs processing (including validation) on a new incoming request
@@ -126,13 +150,13 @@ func (m *manager) receiveRestartRequest(chid datatransfer.ChannelID, incoming da
 	stayPaused, result, err := m.restartRequest(chid, incoming)
 
 	// generate a response message
-	msg, msgErr := message.ValidationResultResponse(types.RestartMessage, incoming.TransferID(), result, err, stayPaused)
-	if msgErr != nil {
-		return nil, msgErr
-	}
+	msg := message.ValidationResultResponse(types.RestartMessage, incoming.TransferID(), result, err, stayPaused)
 
 	// return the response message and any errors
-	return msg, m.requestError(result, err, result.ForcePause)
+	if err == nil && !result.Accepted {
+		err = datatransfer.ErrRejected
+	}
+	return msg, err
 }
 
 // restartRequest performs processing (including validation) on a incoming restart request
@@ -198,55 +222,6 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 	return stayPaused, result, nil
 }
 
-// processUpdateVoucher handles an incoming request message with an updated voucher
-func (m *manager) processUpdateVoucher(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
-	// decode the voucher and save it on the channel
-	voucher, err := request.TypedVoucher()
-	if err != nil {
-		return nil, err
-	}
-	return nil, m.channels.NewVoucher(chid, voucher)
-}
-
-// receiveUpdateRequest handles an incoming request message change in pause status
-func (m *manager) receiveUpdateRequest(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
-
-	if request.IsPaused() {
-		return nil, m.pauseOther(chid)
-	}
-
-	err := m.resumeOther(chid)
-	if err != nil {
-		return nil, err
-	}
-	chst, err := m.channels.GetByID(context.TODO(), chid)
-	if err != nil {
-		return nil, err
-	}
-	if chst.Status() == datatransfer.ResponderPaused ||
-		chst.Status() == datatransfer.ResponderFinalizing {
-		return nil, datatransfer.ErrPause
-	}
-	return nil, nil
-}
-
-// requestError generates an error message for the transport, adding
-// ErrPause / ErrResume based off the validation result
-// TODO: get away from using ErrPause/ErrResume to indicate pause resume,
-// which would remove the need for most of this method
-func (m *manager) requestError(result datatransfer.ValidationResult, resultErr error, stayPaused bool) error {
-	if resultErr != nil {
-		return resultErr
-	}
-	if !result.Accepted {
-		return datatransfer.ErrRejected
-	}
-	if stayPaused {
-		return datatransfer.ErrPause
-	}
-	return nil
-}
-
 // recordRejectedValidationEvents sends changes based on an reject validation to the state machine
 func (m *manager) recordRejectedValidationEvents(chid datatransfer.ChannelID, result datatransfer.ValidationResult) error {
 	if result.VoucherResult != nil {
@@ -288,14 +263,14 @@ func (m *manager) recordAcceptedValidationEvents(chst datatransfer.ChannelState,
 
 	// pause or resume the request as neccesary
 	if result.LeaveRequestPaused(chst) {
-		if !chst.Status().IsResponderPaused() {
+		if !chst.ResponderPaused() {
 			err := m.channels.PauseResponder(chid)
 			if err != nil {
 				return err
 			}
 		}
 	} else {
-		if chst.Status().IsResponderPaused() {
+		if chst.ResponderPaused() {
 			err := m.channels.ResumeResponder(chid)
 			if err != nil {
 				return err
@@ -304,6 +279,24 @@ func (m *manager) recordAcceptedValidationEvents(chst datatransfer.ChannelState,
 	}
 
 	return nil
+}
+
+// processUpdateVoucher handles an incoming request message with an updated voucher
+func (m *manager) processUpdateVoucher(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
+	// decode the voucher and save it on the channel
+	voucher, err := request.TypedVoucher()
+	if err != nil {
+		return nil, err
+	}
+	return nil, m.channels.NewVoucher(chid, voucher)
+}
+
+// receiveUpdateRequest handles an incoming request message change in pause status
+func (m *manager) receiveUpdateRequest(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
+	if request.IsPaused() {
+		return nil, m.pauseOther(chid)
+	}
+	return nil, m.resumeOther(chid)
 }
 
 // validateRestart looks up the appropriate validator and validates a restart

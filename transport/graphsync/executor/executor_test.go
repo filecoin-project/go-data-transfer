@@ -34,7 +34,7 @@ func TestExecutor(t *testing.T) {
 			responseErrors: []error{errors.New("something went wrong")},
 			expectedEventRecord: fakeEvents{
 				completedChannel: chid,
-				completedError:   fmt.Errorf("channel %s: graphsync request failed to complete: %w", chid, errors.New("something went wrong")),
+				completedError:   fmt.Errorf("channel %s: graphsync request failed to complete: %s", chid, errors.New("something went wrong")),
 			},
 		},
 		"client cancelled request error, no listener": {
@@ -119,16 +119,17 @@ type fakeEvents struct {
 	cancelledErr     error
 }
 
-func (fe *fakeEvents) OnChannelCompleted(chid datatransfer.ChannelID, err error) error {
-	fe.completedChannel = chid
-	fe.completedError = err
-	return nil
-}
-
-func (fe *fakeEvents) OnRequestCancelled(chid datatransfer.ChannelID, err error) error {
-	fe.cancelledChannel = chid
-	fe.cancelledErr = err
-	return nil
+func (fe *fakeEvents) OnTransportEvent(chid datatransfer.ChannelID, transportEvent datatransfer.TransportEvent) {
+	switch evt := transportEvent.(type) {
+	case datatransfer.TransportCompletedTransfer:
+		fe.completedChannel = chid
+		if !evt.Success {
+			fe.completedError = errors.New(evt.ErrorMessage)
+		}
+	case datatransfer.TransportTransferCancelled:
+		fe.cancelledChannel = chid
+		fe.cancelledErr = errors.New(evt.ErrorMessage)
+	}
 }
 
 type fakeCompletedRequestListener struct {

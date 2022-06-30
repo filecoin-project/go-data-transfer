@@ -33,6 +33,7 @@ const (
 
 // Info needed to keep track of a data transfer channel
 type Channel struct {
+	isSender  bool
 	channelID datatransfer.ChannelID
 	gs        graphsync.GraphExchange
 
@@ -46,7 +47,11 @@ type Channel struct {
 	storeLk         sync.RWMutex
 	storeRegistered bool
 
-	receivedCidsTotal int64
+	receivedIndex int64
+	sentIndex     int64
+	queuedIndex   int64
+	dataLimit     uint64
+	progress      uint64
 }
 
 func NewChannel(channelID datatransfer.ChannelID, gs graphsync.GraphExchange) *Channel {
@@ -94,8 +99,8 @@ func (c *Channel) Open(
 	}
 
 	// add do not send cids ext as needed
-	if c.receivedCidsTotal > 0 {
-		data := donotsendfirstblocks.EncodeDoNotSendFirstBlocks(c.receivedCidsTotal)
+	if c.receivedIndex > 0 {
+		data := donotsendfirstblocks.EncodeDoNotSendFirstBlocks(c.receivedIndex)
 		exts = append(exts, graphsync.ExtensionData{
 			Name: graphsync.ExtensionsDoNotSendFirstBlocks,
 			Data: data,
@@ -118,8 +123,8 @@ func (c *Channel) Open(
 
 	// Open a new graphsync request
 	msg := fmt.Sprintf("Opening graphsync request to %s for root %s", dataSender, root)
-	if c.receivedCidsTotal > 0 {
-		msg += fmt.Sprintf(" with %d Blocks already received", c.receivedCidsTotal)
+	if c.receivedIndex > 0 {
+		msg += fmt.Sprintf(" with %d Blocks already received", c.receivedIndex)
 	}
 	log.Info(msg)
 	c.requestID = &requestID
@@ -158,7 +163,7 @@ func (c *Channel) GsReqOpened(sender peer.ID, requestID graphsync.RequestID, hoo
 
 // gsDataRequestRcvd is called when the transport receives an incoming request
 // for data.
-func (c *Channel) GsDataRequestRcvd(sender peer.ID, requestID graphsync.RequestID, pauseRequest bool, hookActions graphsync.IncomingRequestHookActions) {
+func (c *Channel) GsDataRequestRcvd(sender peer.ID, requestID graphsync.RequestID, chst datatransfer.ChannelState, hookActions graphsync.IncomingRequestHookActions) {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 	log.Debugf("%s: received request for data, req_id=%d", c.channelID, requestID)
@@ -184,11 +189,26 @@ func (c *Channel) GsDataRequestRcvd(sender peer.ID, requestID graphsync.RequestI
 	c.requestID = &requestID
 	log.Infow("incoming graphsync request", "peer", sender, "graphsync request id", requestID, "data transfer channel id", c.channelID)
 
-	if pauseRequest {
-		c.state = channelPaused
+	c.state = channelOpen
+
+	err := c.updateFromChannelState(chst)
+	if err != nil {
+		hookActions.TerminateWithError(err)
 		return
 	}
-	c.state = channelOpen
+
+	action := c.actionFromChannelState(chst)
+	switch action {
+	case Pause:
+		c.state = channelPaused
+		hookActions.PauseResponse()
+	case Close:
+		c.state = channelClosed
+		hookActions.TerminateWithError(datatransfer.ErrRejected)
+		return
+	default:
+	}
+	hookActions.ValidateRequest()
 }
 
 func (c *Channel) MarkPaused() {
@@ -262,6 +282,113 @@ func (c *Channel) Resume(ctx context.Context, extensions []graphsync.ExtensionDa
 	return c.gs.Unpause(ctx, *c.requestID, extensions...)
 }
 
+type Action string
+
+const (
+	NoAction Action = ""
+	Close    Action = "close"
+	Pause    Action = "pause"
+	Resume   Action = "resume"
+)
+
+// UpdateFromChannelState updates internal graphsync channel state form a datatransfer
+// channel state
+func (c *Channel) UpdateFromChannelState(chst datatransfer.ChannelState) error {
+	c.lk.Lock()
+	defer c.lk.Unlock()
+	return c.updateFromChannelState(chst)
+}
+
+func (c *Channel) updateFromChannelState(chst datatransfer.ChannelState) error {
+	// read the sent value
+	sentNode := chst.SentIndex()
+	if !sentNode.IsNull() {
+		sentIndex, err := sentNode.AsInt()
+		if err != nil {
+			return err
+		}
+		if sentIndex > c.sentIndex {
+			c.sentIndex = sentIndex
+		}
+	}
+
+	// read the received
+	receivedNode := chst.ReceivedIndex()
+	if !receivedNode.IsNull() {
+		receivedIndex, err := receivedNode.AsInt()
+		if err != nil {
+			return err
+		}
+		if receivedIndex > c.receivedIndex {
+			c.receivedIndex = receivedIndex
+		}
+	}
+
+	// read the queued
+	queuedNode := chst.QueuedIndex()
+	if !queuedNode.IsNull() {
+		queuedIndex, err := queuedNode.AsInt()
+		if err != nil {
+			return err
+		}
+		if queuedIndex > c.queuedIndex {
+			c.queuedIndex = queuedIndex
+		}
+	}
+
+	// set progress
+	var progress uint64
+	if chst.Sender() == chst.SelfPeer() {
+		progress = chst.Queued()
+	} else {
+		progress = chst.Received()
+	}
+	if progress > c.progress {
+		c.progress = progress
+	}
+
+	// set data limit
+	c.dataLimit = chst.DataLimit()
+	return nil
+}
+
+// ActionFromChannelState comparse internal graphsync channel state with the data transfer
+// state and determines what if any action should be taken on graphsync
+func (c *Channel) ActionFromChannelState(chst datatransfer.ChannelState) Action {
+	c.lk.Lock()
+	defer c.lk.Unlock()
+	return c.actionFromChannelState(chst)
+}
+
+func (c *Channel) actionFromChannelState(chst datatransfer.ChannelState) Action {
+	// if the state is closed, and we haven't closed, we need to close
+	if !c.requesterCancelled && c.state != channelClosed && chst.Status().TransferComplete() {
+		return Close
+	}
+
+	// if the state is running, and we're paused, we need to pause
+	if c.requestID != nil && c.state == channelPaused && !chst.SelfPaused() {
+		return Resume
+	}
+
+	// if the state is paused, and the transfer is running, we need to resume
+	if c.requestID != nil && c.state == channelOpen && chst.SelfPaused() {
+		return Pause
+	}
+
+	return NoAction
+}
+
+func (c *Channel) ReconcileChannelState(chst datatransfer.ChannelState) (Action, error) {
+	c.lk.Lock()
+	defer c.lk.Unlock()
+	err := c.updateFromChannelState(chst)
+	if err != nil {
+		return NoAction, err
+	}
+	return c.actionFromChannelState(chst), nil
+}
+
 func (c *Channel) MarkTransferComplete() {
 	c.lk.Lock()
 	defer c.lk.Unlock()
@@ -300,12 +427,45 @@ func (c *Channel) UseStore(lsys ipld.LinkSystem) error {
 	return nil
 }
 
-func (c *Channel) UpdateReceivedCidsIfGreater(nextIdx int64) {
+func (c *Channel) UpdateReceivedIndexIfGreater(nextIdx int64) bool {
 	c.lk.Lock()
 	defer c.lk.Unlock()
-	if c.receivedCidsTotal < nextIdx {
-		c.receivedCidsTotal = nextIdx
+	if c.receivedIndex < nextIdx {
+		c.receivedIndex = nextIdx
+		return true
 	}
+	return false
+}
+
+func (c *Channel) UpdateQueuedIndexIfGreater(nextIdx int64) bool {
+	c.lk.Lock()
+	defer c.lk.Unlock()
+	if c.queuedIndex < nextIdx {
+		c.queuedIndex = nextIdx
+		return true
+	}
+	return false
+}
+
+func (c *Channel) UpdateSentIndexIfGreater(nextIdx int64) bool {
+	c.lk.Lock()
+	defer c.lk.Unlock()
+	if c.sentIndex < nextIdx {
+		c.sentIndex = nextIdx
+		return true
+	}
+	return false
+}
+
+func (c *Channel) UpdateProgress(additionalData uint64) bool {
+	c.lk.Lock()
+	defer c.lk.Unlock()
+	c.progress += additionalData
+	reachedLimit := c.dataLimit != 0 && c.progress >= c.dataLimit
+	if reachedLimit {
+		c.state = channelPaused
+	}
+	return reachedLimit
 }
 
 func (c *Channel) Cleanup() {
