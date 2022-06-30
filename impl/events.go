@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 
+	"golang.org/x/xerrors"
+
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
-	"golang.org/x/xerrors"
 )
 
 // OnChannelOpened is called when we send a request for data to the other

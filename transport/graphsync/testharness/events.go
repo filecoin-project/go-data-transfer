@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/stretchr/testify/require"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
 type ReceivedTransportEvent struct {

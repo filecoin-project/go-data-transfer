@@ -5,18 +5,19 @@ import (
 	"math/rand"
 	"testing"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/message"
-	"github.com/filecoin-project/go-data-transfer/v2/message/types"
-	"github.com/filecoin-project/go-data-transfer/v2/testutil"
-	dtgs "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
-	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/stretchr/testify/require"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
+	dtgs "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
 type harnessConfig struct {
