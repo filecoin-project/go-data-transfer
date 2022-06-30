@@ -23,7 +23,7 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{182}); err != nil {
+	if _, err := w.Write([]byte{184, 24}); err != nil {
 		return err
 	}
 
@@ -425,6 +425,38 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.ResponderPaused (bool) (bool)
+	if len("ResponderPaused") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"ResponderPaused\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("ResponderPaused"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("ResponderPaused")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteBool(w, t.ResponderPaused); err != nil {
+		return err
+	}
+
+	// t.InitiatorPaused (bool) (bool)
+	if len("InitiatorPaused") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"InitiatorPaused\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("InitiatorPaused"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("InitiatorPaused")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteBool(w, t.InitiatorPaused); err != nil {
+		return err
+	}
+
 	// t.Stages (datatransfer.ChannelStages) (struct)
 	if len("Stages") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Stages\" was too long")
@@ -775,6 +807,42 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 				t.RequiresFinalization = false
 			case 21:
 				t.RequiresFinalization = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+			}
+			// t.ResponderPaused (bool) (bool)
+		case "ResponderPaused":
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.ResponderPaused = false
+			case 21:
+				t.ResponderPaused = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+			}
+			// t.InitiatorPaused (bool) (bool)
+		case "InitiatorPaused":
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.InitiatorPaused = false
+			case 21:
+				t.InitiatorPaused = true
 			default:
 				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 			}

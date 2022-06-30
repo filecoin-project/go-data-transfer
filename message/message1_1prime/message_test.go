@@ -159,8 +159,7 @@ func TestTransferRequest_UnmarshalCBOR(t *testing.T) {
 func TestResponses(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucherResult := testutil.NewTestTypedVoucher()
-	response, err := message1_1.NewResponse(id, false, true, &voucherResult) // not accepted
-	require.NoError(t, err)
+	response := message1_1.NewResponse(id, false, true, &voucherResult) // not accepted
 	assert.Equal(t, response.TransferID(), id)
 	assert.False(t, response.Accepted())
 	assert.True(t, response.IsNew())
@@ -182,8 +181,7 @@ func TestResponses(t *testing.T) {
 func TestTransferResponse_MarshalCBOR(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucherResult := testutil.NewTestTypedVoucher()
-	response, err := message1_1.NewResponse(id, true, false, &voucherResult) // accepted
-	require.NoError(t, err)
+	response := message1_1.NewResponse(id, true, false, &voucherResult) // accepted
 
 	// sanity check that we can marshal data
 	wbuf := new(bytes.Buffer)
@@ -195,8 +193,7 @@ func TestTransferResponse_UnmarshalCBOR(t *testing.T) {
 	t.Run("round-trip", func(t *testing.T) {
 		id := datatransfer.TransferID(rand.Int31())
 		voucherResult := testutil.NewTestTypedVoucher()
-		response, err := message1_1.NewResponse(id, true, false, &voucherResult) // accepted
-		require.NoError(t, err)
+		response := message1_1.NewResponse(id, true, false, &voucherResult) // accepted
 
 		wbuf := new(bytes.Buffer)
 		require.NoError(t, response.ToNet(wbuf))
@@ -366,8 +363,7 @@ func TestCancelResponse(t *testing.T) {
 
 func TestCompleteResponse(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	response, err := message1_1.CompleteResponse(id, true, true, nil)
-	require.NoError(t, err)
+	response := message1_1.CompleteResponse(id, true, true, nil)
 	assert.Equal(t, response.TransferID(), id)
 	assert.False(t, response.IsNew())
 	assert.False(t, response.IsUpdate())
@@ -414,8 +410,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		testutil.AssertEqualTestVoucher(t, request, deserializedRequest)
 		testutil.AssertEqualSelector(t, request, deserializedRequest)
 
-		response, err := message1_1.NewResponse(id, accepted, false, &voucherResult)
-		require.NoError(t, err)
+		response := message1_1.NewResponse(id, accepted, false, &voucherResult)
 		err = response.ToNet(buf)
 		require.NoError(t, err)
 		deserialized, err = message1_1.FromNet(buf)
@@ -476,8 +471,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		testutil.AssertEqualTestVoucher(t, request, deserializedRequest)
 		testutil.AssertEqualSelector(t, request, deserializedRequest)
 
-		response, err := message1_1.NewResponse(id, accepted, false, &voucherResult)
-		require.NoError(t, err)
+		response := message1_1.NewResponse(id, accepted, false, &voucherResult)
 		err = response.ToNet(buf)
 		require.NoError(t, err)
 		msg, _ = hex.DecodeString("a36449735271f46752657175657374f668526573706f6e7365a66454797065006441637074f46450617573f4665866657249441a4d65822164565265738178644204cb9a1e34c5f08e9b20aa76090e70020bb56c0ca3d3af7296cd1058a5112890fed218488f084d8df9e4835fb54ad045ffd936e3bf7261b0426c51352a097816ed74482bb9084b4a7ed8adc517f3371e0e0434b511625cd1a41792243dccdcfe88094b64565479706b54657374566f7563686572")
@@ -541,8 +535,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		testutil.AssertEqualTestVoucher(t, request, deserializedRequest)
 		testutil.AssertEqualSelector(t, request, deserializedRequest)
 
-		response, err := message1_1.NewResponse(id, accepted, false, &voucherResult)
-		require.NoError(t, err)
+		response := message1_1.NewResponse(id, accepted, false, &voucherResult)
 		wresponse := response.WrappedForTransport(transportID, transportVersion)
 		err = wresponse.ToNet(buf)
 		require.NoError(t, err)

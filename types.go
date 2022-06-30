@@ -146,6 +146,18 @@ type ChannelState interface {
 	// be left open for a final settlement
 	RequiresFinalization() bool
 
+	// InitiatorPaused indicates whether the initiator of this channel is in a paused state
+	InitiatorPaused() bool
+
+	// ResponderPaused indicates whether the responder of this channel is in a paused state
+	ResponderPaused() bool
+
+	// BothPaused indicates both sides of the transfer have paused the transfer
+	BothPaused() bool
+
+	// SelfPaused indicates whether the local peer for this channel is in a paused state
+	SelfPaused() bool
+
 	// Stages returns the timeline of events this data transfer has gone through,
 	// for observability purposes.
 	//

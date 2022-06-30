@@ -440,7 +440,7 @@ func TestManyReceiversAtOnce(t *testing.T) {
 				destDagService := merkledag.NewDAGService(blockservice.New(altBs, offline.Exchange(altBs)))
 
 				gs := gsimpl.New(gsData.Ctx, gsnet, lsys)
-				gsTransport := tp.NewTransport(host.ID(), gs, dtnet)
+				gsTransport := tp.NewTransport(gs, dtnet)
 
 				dtDs := namespace.Wrap(ds, datastore.NewKey("datatransfer"))
 
@@ -1443,6 +1443,7 @@ func TestPauseAndResume(t *testing.T) {
 			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.Host2.ID(), tp2)
 			require.NoError(t, err)
 			testutil.StartAndWaitForReady(ctx, t, dt2)
+
 			finished := make(chan struct{}, 2)
 			errChan := make(chan struct{}, 2)
 			opened := make(chan struct{}, 2)
@@ -1494,8 +1495,27 @@ func TestPauseAndResume(t *testing.T) {
 			sv := testutil.NewStubbedValidator()
 			sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 			sv.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
-
 			var chid datatransfer.ChannelID
+
+			gsData.Gs1.RegisterOutgoingBlockHook(func(p peer.ID, r graphsync.RequestData, block graphsync.BlockData, ha graphsync.OutgoingBlockHookActions) {
+				if block.Index() == 5 && block.BlockSizeOnWire() > 0 {
+					require.NoError(t, dt1.PauseDataTransferChannel(ctx, chid))
+					go func() {
+						time.Sleep(100 * time.Millisecond)
+						require.NoError(t, dt1.ResumeDataTransferChannel(ctx, chid))
+					}()
+				}
+			})
+			gsData.Gs2.RegisterIncomingBlockHook(func(p peer.ID, r graphsync.ResponseData, block graphsync.BlockData, ha graphsync.IncomingBlockHookActions) {
+				if block.Index() == 5 {
+					require.NoError(t, dt2.PauseDataTransferChannel(ctx, chid))
+					go func() {
+						time.Sleep(50 * time.Millisecond)
+						require.NoError(t, dt2.ResumeDataTransferChannel(ctx, chid))
+					}()
+				}
+			})
+
 			if isPull {
 				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
@@ -1533,18 +1553,8 @@ func TestPauseAndResume(t *testing.T) {
 					resumeResponders++
 				case sentIncrement := <-sent:
 					sentIncrements = append(sentIncrements, sentIncrement)
-					if len(sentIncrements) == 5 {
-						require.NoError(t, dt1.PauseDataTransferChannel(ctx, chid))
-						time.Sleep(100 * time.Millisecond)
-						require.NoError(t, dt1.ResumeDataTransferChannel(ctx, chid))
-					}
 				case receivedIncrement := <-received:
 					receivedIncrements = append(receivedIncrements, receivedIncrement)
-					if len(receivedIncrements) == 10 {
-						require.NoError(t, dt2.PauseDataTransferChannel(ctx, chid))
-						time.Sleep(100 * time.Millisecond)
-						require.NoError(t, dt2.ResumeDataTransferChannel(ctx, chid))
-					}
 				case <-errChan:
 					t.Fatal("received error on data transfer")
 				}
@@ -1805,7 +1815,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 		}
 		requestReceived := messageReceived.message.(datatransfer.Request)
 
-		response, err := message.NewResponse(requestReceived.TransferID(), true, false, &voucherResult)
+		response := message.NewResponse(requestReceived.TransferID(), true, false, &voucherResult)
 		require.NoError(t, err)
 		nd := response.ToIPLD()
 		request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, selectorparse.CommonSelector_ExploreAllRecursively, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
@@ -1823,7 +1833,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	})
 
 	t.Run("when no request is initiated", func(t *testing.T) {
-		response, err := message.NewResponse(datatransfer.TransferID(rand.Uint32()), true, false, &voucher)
+		response := message.NewResponse(datatransfer.TransferID(rand.Uint32()), true, false, &voucher)
 		require.NoError(t, err)
 		nd := response.ToIPLD()
 		request := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, selectorparse.CommonSelector_ExploreAllRecursively, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
@@ -1865,7 +1875,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 	gsData.GsNet2.SetDelegate(gsr)
 
 	gs1 := gsData.SetupGraphsyncHost1()
-	tp1 := tp.NewTransport(host1.ID(), gs1, gsData.DtNet1)
+	tp1 := tp.NewTransport(gs1, gsData.DtNet1)
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.Host1.ID(), tp1)
 	require.NoError(t, err)
 	testutil.StartAndWaitForReady(ctx, t, dt1)

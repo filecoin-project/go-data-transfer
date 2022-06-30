@@ -36,12 +36,10 @@ var defaultSupportedExtensions = []graphsync.ExtensionName{
 
 var incomingReqExtensions = []graphsync.ExtensionName{
 	extension.ExtensionIncomingRequest1_1,
-	extension.ExtensionDataTransfer1_1,
 }
 
 var outgoingBlkExtensions = []graphsync.ExtensionName{
 	extension.ExtensionOutgoingBlock1_1,
-	extension.ExtensionDataTransfer1_1,
 }
 
 // Option is an option for setting up the graphsync transport
@@ -91,11 +89,11 @@ type Transport struct {
 }
 
 // NewTransport makes a new hooks manager with the given hook events interface
-func NewTransport(peerID peer.ID, gs graphsync.GraphExchange, dtNet network.DataTransferNetwork, options ...Option) *Transport {
+func NewTransport(gs graphsync.GraphExchange, dtNet network.DataTransferNetwork, options ...Option) *Transport {
 	t := &Transport{
 		gs:                   gs,
 		dtNet:                dtNet,
-		peerID:               peerID,
+		peerID:               dtNet.ID(),
 		supportedExtensions:  defaultSupportedExtensions,
 		dtChannels:           make(map[datatransfer.ChannelID]*dtchannel.Channel),
 		requestIDToChannelID: newRequestIDToChannelIDMap(),
@@ -128,6 +126,7 @@ func (t *Transport) OpenChannel(
 	channel datatransfer.Channel,
 	req datatransfer.Request) error {
 	t.dtNet.Protect(channel.OtherPeer(), channel.ChannelID().String())
+	t.trackDTChannel(channel.ChannelID())
 	if channel.IsPull() {
 		return t.openRequest(ctx,
 			channel.Sender(),
@@ -157,8 +156,13 @@ func (t *Transport) RestartChannel(
 	t.dtNet.Protect(channelState.OtherPeer(), channelState.ChannelID().String())
 
 	ch := t.trackDTChannel(channelState.ChannelID())
-	ch.UpdateReceivedCidsIfGreater(channelState.ReceivedCidsTotal())
+	err = ch.UpdateFromChannelState(channelState)
+	if err != nil {
+		return err
+	}
+
 	if channelState.IsPull() {
+
 		return t.openRequest(ctx,
 			channelState.Sender(),
 			channelState.ChannelID(),
@@ -203,49 +207,59 @@ func (t *Transport) openRequest(
 	return nil
 }
 
-// UpdateChannel sends one or more updates the transport channel at once,
-// such as pausing/resuming, closing the transfer, or sending additional
-// messages over the channel. Grouping the commands allows the transport
-// the ability to plan how to execute these updates
-func (t *Transport) UpdateChannel(ctx context.Context, chid datatransfer.ChannelID, update datatransfer.ChannelUpdate) error {
-
+func (t *Transport) reconcileChannelStates(ctx context.Context, chid datatransfer.ChannelID) (*dtchannel.Channel, dtchannel.Action, error) {
+	chst, err := t.events.ChannelState(ctx, chid)
+	if err != nil {
+		return nil, dtchannel.NoAction, err
+	}
 	ch, err := t.getDTChannel(chid)
 	if err != nil {
-		if update.SendMessage != nil && !update.Closed {
-			return t.dtNet.SendMessage(ctx, t.otherPeer(chid), transportID, update.SendMessage)
+		return nil, dtchannel.NoAction, err
+	}
+	action, err := ch.ReconcileChannelState(chst)
+	return ch, action, err
+}
+
+// ChannelUpdated notifies the transport that state of the channel has been updated,
+// along with an optional message to send over the transport to tell
+// the other peer about the update
+func (t *Transport) ChannelUpdated(ctx context.Context, chid datatransfer.ChannelID, message datatransfer.Message) error {
+	ch, action, err := t.reconcileChannelStates(ctx, chid)
+	if err != nil {
+		if message != nil {
+			return t.dtNet.SendMessage(ctx, t.otherPeer(chid), transportID, message)
 		}
 		return err
 	}
+	return t.processAction(ctx, chid, ch, action, message)
+}
 
-	if !update.Paused && ch.Paused() {
-
+func (t *Transport) processAction(ctx context.Context, chid datatransfer.ChannelID, ch *dtchannel.Channel, action dtchannel.Action, message datatransfer.Message) error {
+	if action == dtchannel.Resume {
 		var extensions []graphsync.ExtensionData
-		if update.SendMessage != nil {
+		if message != nil {
 			var err error
-			extensions, err = extension.ToExtensionData(update.SendMessage, t.supportedExtensions)
+			extensions, err = extension.ToExtensionData(message, t.supportedExtensions)
 			if err != nil {
 				return err
 			}
 		}
-
 		return ch.Resume(ctx, extensions)
 	}
 
-	if update.SendMessage != nil {
-		if err := t.dtNet.SendMessage(ctx, t.otherPeer(chid), transportID, update.SendMessage); err != nil {
+	if message != nil {
+		if err := t.dtNet.SendMessage(ctx, t.otherPeer(chid), transportID, message); err != nil {
 			return err
 		}
 	}
-
-	if update.Closed {
+	switch action {
+	case dtchannel.Close:
 		return ch.Close(ctx)
-	}
-
-	if update.Paused && !ch.Paused() {
+	case dtchannel.Pause:
 		return ch.Pause(ctx)
+	default:
+		return nil
 	}
-
-	return nil
 }
 
 // SendMessage sends a data transfer message over the channel to the other peer
@@ -284,15 +298,16 @@ func (t *Transport) SetEventHandler(events datatransfer.EventsHandler) error {
 	}
 	t.events = events
 
-	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterIncomingRequestQueuedHook(t.gsReqQueuedHook))
+	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterIncomingRequestProcessingListener(t.gsRequestProcessingListener))
+	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterOutgoingRequestProcessingListener(t.gsRequestProcessingListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterIncomingRequestHook(t.gsReqRecdHook))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterCompletedResponseListener(t.gsCompletedResponseListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterIncomingBlockHook(t.gsIncomingBlockHook))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterOutgoingBlockHook(t.gsOutgoingBlockHook))
-	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterBlockSentListener(t.gsBlockSentHook))
+	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterBlockSentListener(t.gsBlockSentListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterOutgoingRequestHook(t.gsOutgoingRequestHook))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterIncomingResponseHook(t.gsIncomingResponseHook))
-	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterRequestUpdatedHook(t.gsRequestUpdatedHook))
+	//t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterRequestUpdatedHook(t.gsRequestUpdatedHook))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterRequestorCancelledListener(t.gsRequestorCancelledListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterNetworkErrorListener(t.gsNetworkSendErrorListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterReceiverNetworkErrorListener(t.gsNetworkReceiveErrorListener))

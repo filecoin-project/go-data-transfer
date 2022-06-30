@@ -14,8 +14,7 @@ import (
 func TestResponseMessageForVersion(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
 	voucherResult := testutil.NewTestTypedVoucher()
-	response, err := message1_1.NewResponse(id, false, true, &voucherResult) // not accepted
-	require.NoError(t, err)
+	response := message1_1.NewResponse(id, false, true, &voucherResult) // not accepted
 
 	// v1.2 new protocol
 	out, err := response.MessageForVersion(datatransfer.DataTransfer1_2)

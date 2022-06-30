@@ -12,12 +12,11 @@ import (
 	dss "github.com/ipfs/go-datastore/sync"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/ipld/go-ipld-prime/node/basicnode"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	. "github.com/filecoin-project/go-data-transfer/v2/impl"
@@ -107,7 +106,7 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				response, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pushRequest)
-				require.EqualError(t, err, datatransfer.ErrPause.Error())
+				require.NoError(t, err)
 				require.True(t, response.Accepted())
 				require.Equal(t, response.TransferID(), h.id)
 				require.False(t, response.IsUpdate())
@@ -185,7 +184,7 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				response, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
-				require.EqualError(t, err, datatransfer.ErrPause.Error())
+				require.NoError(t, err)
 				require.True(t, response.Accepted())
 				require.Equal(t, response.TransferID(), h.id)
 				require.False(t, response.IsUpdate())
@@ -302,7 +301,7 @@ func TestDataTransferResponding(t *testing.T) {
 				err = h.dt.PauseDataTransferChannel(h.ctx, channelID(h.id, h.peers))
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.resumeUpdate)
-				require.EqualError(t, err, datatransfer.ErrPause.Error())
+				require.NoError(t, err)
 			},
 		},
 		"receive cancel": {
@@ -322,8 +321,6 @@ func TestDataTransferResponding(t *testing.T) {
 				_, _ = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pushRequest)
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.cancelUpdate)
 				require.NoError(t, err)
-				require.Len(t, h.transport.CleanedUpChannels, 1)
-				require.Equal(t, channelID(h.id, h.peers), h.transport.CleanedUpChannels[0])
 			},
 		},
 		"validate and revalidate successfully, push": {
@@ -332,6 +329,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
+				datatransfer.TransferInitiated,
 				datatransfer.DataReceivedProgress,
 				datatransfer.DataReceived,
 				datatransfer.DataLimitExceeded,
@@ -347,8 +345,9 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				_, _ = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pushRequest)
-				err := h.transport.EventHandler.OnDataReceived(channelID(h.id, h.peers), cidlink.Link{Cid: testutil.GenerateCids(1)[0]}, 12345, 1, true)
-				require.EqualError(t, err, datatransfer.ErrPause.Error())
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportInitiatedTransfer{})
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportReceivedData{Size: 12345, Index: basicnode.NewInt(1)})
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportReachedDataLimit{})
 				require.Len(t, h.transport.MessagesSent, 1)
 				response, ok := h.transport.MessagesSent[0].Message.(datatransfer.Response)
 				require.True(t, ok)
@@ -357,14 +356,14 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.True(t, response.IsPaused())
 				require.False(t, response.IsValidationResult())
-				response, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.voucherUpdate)
-				require.NoError(t, err, nil)
+				response, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.voucherUpdate)
+				require.NoError(t, err)
 				require.Nil(t, response)
 				vr := testutil.NewTestTypedVoucher()
 				err = h.dt.UpdateValidationStatus(ctx, channelID(h.id, h.peers), datatransfer.ValidationResult{Accepted: true, DataLimit: 50000, VoucherResult: &vr})
 				require.NoError(t, err)
-				require.Len(t, h.transport.ResumedChannels, 1)
-				require.Equal(t, h.transport.ResumedChannels[0], channelID(h.id, h.peers))
+				require.Len(t, h.transport.ChannelsUpdated, 1)
+				require.Equal(t, h.transport.ChannelsUpdated[0], channelID(h.id, h.peers))
 				require.Len(t, h.transport.MessagesSent, 2)
 				response, ok = h.transport.MessagesSent[1].Message.(datatransfer.Response)
 				require.True(t, ok)
@@ -383,6 +382,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
+				datatransfer.TransferInitiated,
 				datatransfer.DataReceivedProgress,
 				datatransfer.DataReceived,
 				datatransfer.DataLimitExceeded,
@@ -398,8 +398,9 @@ func TestDataTransferResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				_, _ = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pushRequest)
-				err := h.transport.EventHandler.OnDataReceived(channelID(h.id, h.peers), cidlink.Link{Cid: testutil.GenerateCids(1)[0]}, 12345, 1, true)
-				require.EqualError(t, err, datatransfer.ErrPause.Error())
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportInitiatedTransfer{})
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportReceivedData{Size: 12345, Index: basicnode.NewInt(1)})
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportReachedDataLimit{})
 				require.Len(t, h.transport.MessagesSent, 1)
 				response, ok := h.transport.MessagesSent[0].Message.(datatransfer.Response)
 				require.True(t, ok)
@@ -408,14 +409,14 @@ func TestDataTransferResponding(t *testing.T) {
 				require.False(t, response.IsCancel())
 				require.True(t, response.IsPaused())
 				require.False(t, response.IsValidationResult())
-				response, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.voucherUpdate)
-				require.NoError(t, err, nil)
+				response, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.voucherUpdate)
+				require.NoError(t, err)
 				require.Nil(t, response)
 				vr := testutil.NewTestTypedVoucher()
 				err = h.dt.UpdateValidationStatus(ctx, channelID(h.id, h.peers), datatransfer.ValidationResult{Accepted: false, VoucherResult: &vr})
 				require.NoError(t, err)
-				require.Len(t, h.transport.ClosedChannels, 1)
-				require.Equal(t, h.transport.ClosedChannels[0], channelID(h.id, h.peers))
+				require.Len(t, h.transport.ChannelsUpdated, 1)
+				require.Equal(t, h.transport.ChannelsUpdated[0], channelID(h.id, h.peers))
 				require.Len(t, h.transport.MessagesSent, 2)
 				response, ok = h.transport.MessagesSent[1].Message.(datatransfer.Response)
 				require.True(t, ok)
@@ -434,6 +435,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetDataLimit,
+				datatransfer.TransferInitiated,
 				datatransfer.DataQueuedProgress,
 				datatransfer.DataQueued,
 				datatransfer.DataLimitExceeded,
@@ -450,12 +452,11 @@ func TestDataTransferResponding(t *testing.T) {
 			verify: func(t *testing.T, h *receiverHarness) {
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
 				require.NoError(t, err)
-				msg, err := h.transport.EventHandler.OnDataQueued(
-					channelID(h.id, h.peers),
-					cidlink.Link{Cid: testutil.GenerateCids(1)[0]},
-					12345, 1, true)
-				require.EqualError(t, err, datatransfer.ErrPause.Error())
-				response, ok := msg.(datatransfer.Response)
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportInitiatedTransfer{})
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportQueuedData{Size: 12345, Index: basicnode.NewInt(1)})
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportReachedDataLimit{})
+				require.Len(t, h.transport.MessagesSent, 1)
+				response, ok := h.transport.MessagesSent[0].Message.(datatransfer.Response)
 				require.True(t, ok)
 				require.Equal(t, response.TransferID(), h.id)
 				require.True(t, response.IsUpdate())
@@ -468,10 +469,10 @@ func TestDataTransferResponding(t *testing.T) {
 				vr := testutil.NewTestTypedVoucher()
 				err = h.dt.UpdateValidationStatus(ctx, channelID(h.id, h.peers), datatransfer.ValidationResult{Accepted: true, DataLimit: 50000, VoucherResult: &vr})
 				require.NoError(t, err)
-				require.Len(t, h.transport.ResumedChannels, 1)
-				require.Equal(t, h.transport.ResumedChannels[0], channelID(h.id, h.peers))
-				require.Len(t, h.transport.MessagesSent, 1)
-				response, ok = h.transport.MessagesSent[0].Message.(datatransfer.Response)
+				require.Len(t, h.transport.ChannelsUpdated, 1)
+				require.Equal(t, h.transport.ChannelsUpdated[0], channelID(h.id, h.peers))
+				require.Len(t, h.transport.MessagesSent, 2)
+				response, ok = h.transport.MessagesSent[1].Message.(datatransfer.Response)
 				require.True(t, ok)
 				require.True(t, response.Accepted())
 				require.Equal(t, response.TransferID(), h.id)
@@ -488,6 +489,7 @@ func TestDataTransferResponding(t *testing.T) {
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
 				datatransfer.SetRequiresFinalization,
+				datatransfer.TransferInitiated,
 				datatransfer.BeginFinalizing,
 				datatransfer.NewVoucher,
 				datatransfer.NewVoucherResult,
@@ -503,8 +505,8 @@ func TestDataTransferResponding(t *testing.T) {
 			verify: func(t *testing.T, h *receiverHarness) {
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
 				require.NoError(t, err)
-				err = h.transport.EventHandler.OnChannelCompleted(channelID(h.id, h.peers), nil)
-				require.NoError(t, err)
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportInitiatedTransfer{})
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportCompletedTransfer{Success: true})
 				require.Len(t, h.transport.MessagesSent, 1)
 				response, ok := h.transport.MessagesSent[0].Message.(datatransfer.Response)
 				require.True(t, ok)
@@ -544,8 +546,7 @@ func TestDataTransferResponding(t *testing.T) {
 			verify: func(t *testing.T, h *receiverHarness) {
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
 				require.NoError(t, err)
-				err = h.transport.EventHandler.OnChannelCompleted(channelID(h.id, h.peers), xerrors.Errorf("err"))
-				require.NoError(t, err)
+				h.transport.EventHandler.OnTransportEvent(channelID(h.id, h.peers), datatransfer.TransportCompletedTransfer{Success: false, ErrorMessage: "something went wrong"})
 			},
 		},
 		"new push request, customized transport": {
@@ -631,7 +632,7 @@ func TestDataTransferResponding(t *testing.T) {
 			h.resumeUpdate = message.UpdateRequest(h.id, false)
 			require.NoError(t, err)
 			updateVoucher := testutil.NewTestTypedVoucher()
-			h.voucherUpdate, err = message.VoucherRequest(h.id, &updateVoucher)
+			h.voucherUpdate = message.VoucherRequest(h.id, &updateVoucher)
 			h.cancelUpdate = message.CancelRequest(h.id)
 			require.NoError(t, err)
 			h.sv = testutil.NewStubbedValidator()
@@ -662,8 +663,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 
-				response, err := message.RestartResponse(channelID.ID, true, false, nil)
-				require.NoError(t, err)
+				response := message.RestartResponse(channelID.ID, true, false, nil)
 				err = h.transport.EventHandler.OnResponseReceived(channelID, response)
 				require.NoError(t, err)
 			},
@@ -673,6 +673,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				datatransfer.Open,
 				datatransfer.Accept,
 				datatransfer.NewVoucherResult,
+				datatransfer.TransferInitiated,
 				datatransfer.DataReceivedProgress,
 				datatransfer.DataReceived,
 				datatransfer.DataReceivedProgress,
@@ -695,11 +696,9 @@ func TestDataTransferRestartResponding(t *testing.T) {
 
 				// some cids are received
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
-				testCids := testutil.GenerateCids(2)
-				ev, ok := h.dt.(datatransfer.EventsHandler)
-				require.True(t, ok)
-				require.NoError(t, ev.OnDataReceived(chid, cidlink.Link{Cid: testCids[0]}, 12345, 1, true))
-				require.NoError(t, ev.OnDataReceived(chid, cidlink.Link{Cid: testCids[1]}, 12345, 2, true))
+				h.transport.EventHandler.OnTransportEvent(chid, datatransfer.TransportInitiatedTransfer{})
+				h.transport.EventHandler.OnTransportEvent(chid, datatransfer.TransportReceivedData{Size: 12345, Index: basicnode.NewInt(1)})
+				h.transport.EventHandler.OnTransportEvent(chid, datatransfer.TransportReceivedData{Size: 12345, Index: basicnode.NewInt(2)})
 
 				// receive restart push request
 				req, err := message.NewRequest(h.pushRequest.TransferID(), true, false, &h.voucher, h.baseCid, h.stor)
@@ -894,6 +893,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 		"ReceiveRestartExistingChannelRequest: Reopen Pull Channel": {
 			expectedEvents: []datatransfer.EventCode{
 				datatransfer.Open,
+				datatransfer.TransferInitiated,
 				datatransfer.DataReceivedProgress,
 				datatransfer.DataReceived,
 				datatransfer.DataReceivedProgress,
@@ -908,15 +908,13 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NotEmpty(t, channelID)
 
 				// some cids should already be received
-				testCids := testutil.GenerateCids(2)
-				ev, ok := h.dt.(datatransfer.EventsHandler)
-				require.True(t, ok)
-				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[0]}, 12345, 1, true))
-				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[1]}, 12345, 2, true))
+				// some cids are received
+				h.transport.EventHandler.OnTransportEvent(channelID, datatransfer.TransportInitiatedTransfer{})
+				h.transport.EventHandler.OnTransportEvent(channelID, datatransfer.TransportReceivedData{Size: 12345, Index: basicnode.NewInt(1)})
+				h.transport.EventHandler.OnTransportEvent(channelID, datatransfer.TransportReceivedData{Size: 12345, Index: basicnode.NewInt(2)})
 
 				// send a request to restart the same pull channel
-				err = h.transport.EventHandler.OnRestartExistingChannelRequestReceived(channelID)
-				require.NoError(t, err)
+				h.transport.EventHandler.OnTransportEvent(channelID, datatransfer.TransportReceivedRestartExistingChannelRequest{})
 
 				require.Len(t, h.transport.OpenedChannels, 1)
 				require.Len(t, h.transport.RestartedChannels, 1)
@@ -927,7 +925,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.Equal(t, restartedChannel.Channel.Sender(), h.peers[1])
 				require.Equal(t, restartedChannel.Channel.BaseCID(), h.baseCid)
 				require.Equal(t, restartedChannel.Channel.Selector(), h.stor)
-				require.EqualValues(t, len(testCids), restartedChannel.Channel.ReceivedCidsTotal())
+				require.EqualValues(t, basicnode.NewInt(2), restartedChannel.Channel.ReceivedIndex())
 
 				// assert a restart request is in the channel
 				request := restartedChannel.Message
@@ -958,7 +956,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NotEmpty(t, channelID)
 
 				// send a request to restart the same push request
-				err = h.transport.EventHandler.OnRestartExistingChannelRequestReceived(channelID)
+				h.transport.EventHandler.OnTransportEvent(channelID, datatransfer.TransportReceivedRestartExistingChannelRequest{})
 				require.NoError(t, err)
 
 				require.Len(t, h.transport.OpenedChannels, 1)

@@ -13,8 +13,7 @@ var log = logging.Logger("dt_graphsync")
 
 // EventsHandler are the data transfer events that can be dispatched by the execetor
 type EventsHandler interface {
-	OnRequestCancelled(datatransfer.ChannelID, error) error
-	OnChannelCompleted(datatransfer.ChannelID, error) error
+	OnTransportEvent(datatransfer.ChannelID, datatransfer.TransportEvent)
 }
 
 // Executor handles consuming channels on an outgoing GraphSync request
@@ -74,9 +73,7 @@ func (e *Executor) executeRequest(
 	if _, ok := lastError.(graphsync.RequestClientCancelledErr); ok {
 		terr := fmt.Errorf("graphsync request cancelled")
 		log.Warnf("channel %s: %s", e.channelID, terr)
-		if err := events.OnRequestCancelled(e.channelID, terr); err != nil {
-			log.Error(err)
-		}
+		events.OnTransportEvent(e.channelID, datatransfer.TransportTransferCancelled{ErrorMessage: terr.Error()})
 		return
 	}
 
@@ -102,8 +99,11 @@ func (e *Executor) executeRequest(
 	if completedRequestListener != nil {
 		completedRequestListener(e.channelID)
 	}
-	err := events.OnChannelCompleted(e.channelID, completeErr)
-	if err != nil {
-		log.Errorf("channel %s: processing OnChannelCompleted: %s", e.channelID, err)
+
+	if completeErr == nil {
+		events.OnTransportEvent(e.channelID, datatransfer.TransportCompletedTransfer{Success: true})
+	} else {
+		events.OnTransportEvent(e.channelID, datatransfer.TransportCompletedTransfer{Success: false, ErrorMessage: completeErr.Error()})
 	}
+
 }

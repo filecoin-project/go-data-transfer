@@ -40,6 +40,9 @@ func (vr ValidationResult) Equals(vr2 ValidationResult) bool {
 
 // LeaveRequestPaused indicates whether all conditions are met to resume a request
 func (vr ValidationResult) LeaveRequestPaused(chst ChannelState) bool {
+	if chst == nil {
+		return false
+	}
 	if vr.ForcePause {
 		return true
 	}
