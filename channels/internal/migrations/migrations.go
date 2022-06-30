@@ -5,10 +5,11 @@ import (
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
 	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
 	"github.com/filecoin-project/go-ds-versioning/pkg/versioned"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
 )
 
 //go:generate cbor-gen-for --map-encoding ChannelStateV2
