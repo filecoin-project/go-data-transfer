@@ -65,7 +65,9 @@ const (
 	Queued
 
 	// AwaitingAcceptance indicates a transfer request is actively being processed by the transport
-	// even if the remote has not yet responded that it's accepted the transfer
+	// even if the remote has not yet responded that it's accepted the transfer. Such a state can
+	// occur, for example, in a requestor-initiated transfer that starts processing prior to receiving
+	// acceptance from the server.
 	AwaitingAcceptance
 )
 
