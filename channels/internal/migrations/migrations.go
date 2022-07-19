@@ -76,6 +76,12 @@ func MigrateChannelState2To3(oldChannelState *ChannelStateV2) (*internal.Channel
 	sentIndex := basicnode.NewInt(oldChannelState.SentBlocksTotal)
 	queuedIndex := basicnode.NewInt(oldChannelState.QueuedBlocksTotal)
 
+	responderPaused := oldChannelState.Status == datatransfer.ResponderPaused || oldChannelState.Status == datatransfer.BothPaused
+	initiatorPaused := oldChannelState.Status == datatransfer.InitiatorPaused || oldChannelState.Status == datatransfer.BothPaused
+	newStatus := oldChannelState.Status
+	if newStatus == datatransfer.ResponderPaused || newStatus == datatransfer.InitiatorPaused || newStatus == datatransfer.BothPaused {
+		newStatus = datatransfer.Ongoing
+	}
 	return &internal.ChannelState{
 		SelfPeer:             oldChannelState.SelfPeer,
 		TransferID:           oldChannelState.TransferID,
@@ -86,7 +92,7 @@ func MigrateChannelState2To3(oldChannelState *ChannelStateV2) (*internal.Channel
 		Sender:               oldChannelState.Sender,
 		Recipient:            oldChannelState.Recipient,
 		TotalSize:            oldChannelState.TotalSize,
-		Status:               oldChannelState.Status,
+		Status:               newStatus,
 		Queued:               oldChannelState.Queued,
 		Sent:                 oldChannelState.Sent,
 		Received:             oldChannelState.Received,
@@ -98,6 +104,8 @@ func MigrateChannelState2To3(oldChannelState *ChannelStateV2) (*internal.Channel
 		QueuedIndex:          internal.CborGenCompatibleNode{Node: queuedIndex},
 		DataLimit:            oldChannelState.DataLimit,
 		RequiresFinalization: oldChannelState.RequiresFinalization,
+		InitiatorPaused:      initiatorPaused,
+		ResponderPaused:      responderPaused,
 		Stages:               oldChannelState.Stages,
 	}, nil
 }

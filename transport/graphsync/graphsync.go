@@ -227,7 +227,9 @@ func (t *Transport) ChannelUpdated(ctx context.Context, chid datatransfer.Channe
 	ch, action, err := t.reconcileChannelStates(ctx, chid)
 	if err != nil {
 		if message != nil {
-			return t.dtNet.SendMessage(ctx, t.otherPeer(chid), transportID, message)
+			if sendErr := t.dtNet.SendMessage(ctx, t.otherPeer(chid), transportID, message); sendErr != nil {
+				return sendErr
+			}
 		}
 		return err
 	}

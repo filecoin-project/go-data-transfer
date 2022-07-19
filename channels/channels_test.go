@@ -1,11 +1,15 @@
 package channels_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"math/rand"
 	"testing"
 	"time"
 
+	versionedds "github.com/filecoin-project/go-ds-versioning/pkg/datastore"
+	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	dss "github.com/ipfs/go-datastore/sync"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
@@ -16,7 +20,10 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
+	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
+	"github.com/filecoin-project/go-data-transfer/v2/channels/internal/migrations"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
+	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
 )
 
 func TestChannels(t *testing.T) {
@@ -390,6 +397,153 @@ func TestIsChannelCleaningUp(t *testing.T) {
 	require.True(t, channels.IsChannelCleaningUp(datatransfer.Failing))
 	require.True(t, channels.IsChannelCleaningUp(datatransfer.Completing))
 	require.False(t, channels.IsChannelCleaningUp(datatransfer.Cancelled))
+}
+
+func TestMigrations(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
+	received := make(chan event)
+	notifier := func(evt datatransfer.Event, chst datatransfer.ChannelState) {
+		received <- event{evt, chst}
+	}
+	numChannels := 5
+	transferIDs := make([]datatransfer.TransferID, numChannels)
+	initiators := make([]peer.ID, numChannels)
+	responders := make([]peer.ID, numChannels)
+	baseCids := make([]cid.Cid, numChannels)
+
+	totalSizes := make([]uint64, numChannels)
+	sents := make([]uint64, numChannels)
+	receiveds := make([]uint64, numChannels)
+
+	messages := make([]string, numChannels)
+	vouchers := make([]datatransfer.TypedVoucher, numChannels)
+	voucherResults := make([]datatransfer.TypedVoucher, numChannels)
+	sentIndex := make([]int64, numChannels)
+	receivedIndex := make([]int64, numChannels)
+	queuedIndex := make([]int64, numChannels)
+	allSelector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
+	selfPeer := testutil.GeneratePeers(1)[0]
+
+	list, err := migrations.GetChannelStateMigrations(selfPeer)
+	require.NoError(t, err)
+	vds, up := versionedds.NewVersionedDatastore(ds, list, versioning.VersionKey("2"))
+	require.NoError(t, up(ctx))
+
+	initialStatuses := []datatransfer.Status{
+		datatransfer.Requested,
+		datatransfer.InitiatorPaused,
+		datatransfer.ResponderPaused,
+		datatransfer.BothPaused,
+		datatransfer.Ongoing,
+	}
+	for i := 0; i < numChannels; i++ {
+		transferIDs[i] = datatransfer.TransferID(rand.Uint64())
+		initiators[i] = testutil.GeneratePeers(1)[0]
+		responders[i] = testutil.GeneratePeers(1)[0]
+		baseCids[i] = testutil.GenerateCids(1)[0]
+		totalSizes[i] = rand.Uint64()
+		sents[i] = rand.Uint64()
+		receiveds[i] = rand.Uint64()
+		messages[i] = string(testutil.RandomBytes(20))
+		vouchers[i] = testutil.NewTestTypedVoucher()
+		voucherResults[i] = testutil.NewTestTypedVoucher()
+		sentIndex[i] = rand.Int63()
+		receivedIndex[i] = rand.Int63()
+		queuedIndex[i] = rand.Int63()
+		channel := migrations.ChannelStateV2{
+			TransferID: transferIDs[i],
+			Initiator:  initiators[i],
+			Responder:  responders[i],
+			BaseCid:    baseCids[i],
+			Selector: internal.CborGenCompatibleNode{
+				Node: allSelector,
+			},
+			Sender:    initiators[i],
+			Recipient: responders[i],
+			TotalSize: totalSizes[i],
+			Status:    initialStatuses[i],
+			Sent:      sents[i],
+			Received:  receiveds[i],
+			Message:   messages[i],
+			Vouchers: []internal.EncodedVoucher{
+				{
+					Type: vouchers[i].Type,
+					Voucher: internal.CborGenCompatibleNode{
+						Node: vouchers[i].Voucher,
+					},
+				},
+			},
+			VoucherResults: []internal.EncodedVoucherResult{
+				{
+					Type: voucherResults[i].Type,
+					VoucherResult: internal.CborGenCompatibleNode{
+						Node: voucherResults[i].Voucher,
+					},
+				},
+			},
+			SentBlocksTotal:     sentIndex[i],
+			ReceivedBlocksTotal: receivedIndex[i],
+			QueuedBlocksTotal:   queuedIndex[i],
+			SelfPeer:            selfPeer,
+		}
+		buf := new(bytes.Buffer)
+		err = channel.MarshalCBOR(buf)
+		require.NoError(t, err)
+		err = vds.Put(ctx, datastore.NewKey(datatransfer.ChannelID{
+			Initiator: initiators[i],
+			Responder: responders[i],
+			ID:        transferIDs[i],
+		}.String()), buf.Bytes())
+		require.NoError(t, err)
+	}
+
+	channelList, err := channels.New(ds, notifier, &fakeEnv{}, selfPeer)
+	require.NoError(t, err)
+	err = channelList.Start(ctx)
+	require.NoError(t, err)
+
+	expectedStatuses := []datatransfer.Status{
+		datatransfer.Requested,
+		datatransfer.Ongoing,
+		datatransfer.Ongoing,
+		datatransfer.Ongoing,
+		datatransfer.Ongoing,
+	}
+
+	expectedInitiatorPaused := []bool{false, true, false, true, false}
+	expectedResponderPaused := []bool{false, false, true, true, false}
+	for i := 0; i < numChannels; i++ {
+
+		channel, err := channelList.GetByID(ctx, datatransfer.ChannelID{
+			Initiator: initiators[i],
+			Responder: responders[i],
+			ID:        transferIDs[i],
+		})
+		require.NoError(t, err)
+		require.Equal(t, selfPeer, channel.SelfPeer())
+		require.Equal(t, transferIDs[i], channel.TransferID())
+		require.Equal(t, baseCids[i], channel.BaseCID())
+		require.Equal(t, allSelector, channel.Selector())
+		require.Equal(t, initiators[i], channel.Sender())
+		require.Equal(t, responders[i], channel.Recipient())
+		require.Equal(t, totalSizes[i], channel.TotalSize())
+		require.Equal(t, sents[i], channel.Sent())
+		require.Equal(t, receiveds[i], channel.Received())
+		require.Equal(t, messages[i], channel.Message())
+		require.Equal(t, vouchers[i], channel.LastVoucher())
+		require.Equal(t, voucherResults[i], channel.LastVoucherResult())
+		require.Equal(t, expectedStatuses[i], channel.Status())
+		require.Equal(t, expectedInitiatorPaused[i], channel.InitiatorPaused())
+		require.Equal(t, expectedResponderPaused[i], channel.ResponderPaused())
+		require.Equal(t, basicnode.NewInt(sentIndex[i]), channel.SentIndex())
+		require.Equal(t, basicnode.NewInt(receivedIndex[i]), channel.ReceivedIndex())
+		require.Equal(t, basicnode.NewInt(queuedIndex[i]), channel.QueuedIndex())
+
+	}
 }
 
 type event struct {
