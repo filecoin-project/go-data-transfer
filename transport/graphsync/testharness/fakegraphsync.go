@@ -124,6 +124,10 @@ type FakeGraphSync struct {
 	BlockSentListener                 graphsync.OnBlockSentListener
 	NetworkErrorListener              graphsync.OnNetworkErrorListener
 	ReceiverNetworkErrorListener      graphsync.OnReceiverNetworkErrorListener
+	ReturnedCancelError               error
+	ReturnedPauseError                error
+	ReturnedResumeError               error
+	ReturnedSendUpdateError           error
 }
 
 // NewFakeGraphSync returns a new fake graphsync implementation
@@ -253,13 +257,13 @@ func (fgs *FakeGraphSync) RegisterCompletedResponseListener(listener graphsync.O
 // Unpause unpauses a request that was paused in a block hook based on request ID
 func (fgs *FakeGraphSync) Unpause(ctx context.Context, requestID graphsync.RequestID, extensions ...graphsync.ExtensionData) error {
 	fgs.Resumes = append(fgs.Resumes, Resume{requestID, extensions})
-	return nil
+	return fgs.ReturnedResumeError
 }
 
 // Pause pauses a request based on request ID
 func (fgs *FakeGraphSync) Pause(ctx context.Context, requestID graphsync.RequestID) error {
 	fgs.Pauses = append(fgs.Pauses, requestID)
-	return nil
+	return fgs.ReturnedPauseError
 }
 
 func (fgs *FakeGraphSync) Cancel(ctx context.Context, requestID graphsync.RequestID) error {
@@ -274,7 +278,7 @@ func (fgs *FakeGraphSync) Cancel(ctx context.Context, requestID graphsync.Reques
 		}
 	}
 	fgs.Cancels = append(fgs.Cancels, requestID)
-	return nil
+	return fgs.ReturnedCancelError
 }
 
 // RegisterRequestorCancelledListener adds a listener on the responder for requests cancelled by the requestor
@@ -322,7 +326,7 @@ func (fgs *FakeGraphSync) RegisterOutgoingRequestProcessingListener(listener gra
 
 func (fgs *FakeGraphSync) SendUpdate(ctx context.Context, id graphsync.RequestID, extensions ...graphsync.ExtensionData) error {
 	fgs.Updates = append(fgs.Updates, Update{RequestID: id, Extensions: extensions})
-	return nil
+	return fgs.ReturnedSendUpdateError
 }
 
 var _ graphsync.GraphExchange = &FakeGraphSync{}
@@ -547,6 +551,14 @@ func (fa *FakeIncomingRequestHookActions) AssertAugmentedContextKey(t *testing.T
 		ctx = f(ctx)
 	}
 	require.Equal(t, value, ctx.Value(key))
+}
+
+func (fa *FakeIncomingRequestHookActions) RefuteAugmentedContextKey(t *testing.T, key interface{}) {
+	ctx := context.Background()
+	for _, f := range fa.CtxAugFuncs {
+		ctx = f(ctx)
+	}
+	require.Nil(t, ctx.Value(key))
 }
 
 func (fa *FakeIncomingRequestHookActions) DTMessage(t *testing.T) datatransfer.Message {

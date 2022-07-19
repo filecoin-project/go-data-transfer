@@ -43,22 +43,6 @@ func (m *manager) processTransferEvent(ctx context.Context, chid datatransfer.Ch
 		}
 		msg := message.UpdateResponse(chid.ID, true)
 		return m.transport.SendMessage(ctx, chid, msg)
-	/*case datatransfer.TransportReceivedVoucherRequest:
-		voucher, err := evt.Request.TypedVoucher()
-		if err != nil {
-			return err
-		}
-		return m.channels.NewVoucher(chid, voucher)
-	case datatransfer.TransportReceivedUpdateRequest:
-		if evt.Request.IsPaused() {
-			return m.pauseOther(chid)
-		}
-		return m.resumeOther(chid)
-	case datatransfer.TransportReceivedCancelRequest:
-		log.Infof("channel %s: received cancel request, cleaning up channel", chid)
-		return m.channels.Cancel(chid)
-	case datatransfer.TransportReceivedResponse:
-		return m.receiveResponse(chid, evt.Response)*/
 	case datatransfer.TransportTransferCancelled:
 		log.Warnf("channel %+v was cancelled: %s", chid, evt.ErrorMessage)
 		return m.channels.RequestCancelled(chid, errors.New(evt.ErrorMessage))

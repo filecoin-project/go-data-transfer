@@ -52,25 +52,6 @@ type TransportQueuedData struct {
 // TransportReachedDataLimit occurs when a channel hits a previously set data limit
 type TransportReachedDataLimit struct{}
 
-/*
-type TransportReceivedVoucherRequest struct {
-	Request Request
-}
-
-type TransportReceivedUpdateRequest struct {
-	Request Request
-}
-
-type TransportReceivedCancelRequest struct {
-	Request Request
-}
-
-// TransportReceivedResponse occurs when we receive a response to a request
-type TransportReceivedResponse struct {
-	Response Response
-}
-*/
-
 // TransportTransferCancelled occurs when a request we opened (with the given channel Id) to
 // receive data is cancelled by us.
 type TransportTransferCancelled struct {
@@ -110,13 +91,6 @@ type EventsHandler interface {
 	// ChannelState queries for the current channel state
 	ChannelState(ctx context.Context, chid ChannelID) (ChannelState, error)
 
-	// OnRequestReceived occurs when we receive a  request for the given channel ID
-	// return values are a message to send an error if the transport should be closed
-	OnRequestReceived(chid ChannelID, msg Request) (Response, error)
-
-	// OnRequestReceived occurs when we receive a response to a request
-	OnResponseReceived(chid ChannelID, msg Response) error
-
 	// OnTransportEvent is dispatched when an event occurs on the transport
 	// It MAY be dispatched asynchronously by the transport to the time the
 	// event occurs
@@ -125,6 +99,17 @@ type EventsHandler interface {
 	// the handler to process all events before calling the other functions which
 	// have a synchronous return
 	OnTransportEvent(chid ChannelID, event TransportEvent)
+
+	// OnRequestReceived occurs when we receive a  request for the given channel ID
+	// return values are a message to send an error if the transport should be closed
+	// TODO: in a future improvement, a received request should become a
+	// just TransportEvent, and should be handled asynchronously
+	OnRequestReceived(chid ChannelID, msg Request) (Response, error)
+
+	// OnRequestReceived occurs when we receive a response to a request
+	// TODO: in a future improvement, a received response should become a
+	// just TransportEvent, and should be handled asynchronously
+	OnResponseReceived(chid ChannelID, msg Response) error
 
 	// OnContextAugment allows the transport to attach data transfer tracing information
 	// to its local context, in order to create a hierarchical trace
@@ -192,17 +177,12 @@ type TransportCapabilities struct {
 	Pausable bool
 }
 
-func (TransportOpenedChannel) transportEvent()     {}
-func (TransportInitiatedTransfer) transportEvent() {}
-func (TransportReceivedData) transportEvent()      {}
-func (TransportSentData) transportEvent()          {}
-func (TransportQueuedData) transportEvent()        {}
-func (TransportReachedDataLimit) transportEvent()  {}
-
-/*func (TransportReceivedVoucherRequest) transportEvent()                {}
-func (TransportReceivedUpdateRequest) transportEvent()                 {}
-func (TransportReceivedCancelRequest) transportEvent()                 {}
-func (TransportReceivedResponse) transportEvent()                      {}*/
+func (TransportOpenedChannel) transportEvent()                         {}
+func (TransportInitiatedTransfer) transportEvent()                     {}
+func (TransportReceivedData) transportEvent()                          {}
+func (TransportSentData) transportEvent()                              {}
+func (TransportQueuedData) transportEvent()                            {}
+func (TransportReachedDataLimit) transportEvent()                      {}
 func (TransportTransferCancelled) transportEvent()                     {}
 func (TransportErrorSendingData) transportEvent()                      {}
 func (TransportErrorReceivingData) transportEvent()                    {}

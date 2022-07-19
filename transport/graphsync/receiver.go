@@ -30,7 +30,10 @@ func (r *receiver) ReceiveRequest(
 
 func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incoming datatransfer.Request) error {
 	chid := datatransfer.ChannelID{Initiator: initiator, Responder: r.transport.peerID, ID: incoming.TransferID()}
-	ctx = r.transport.events.OnContextAugment(chid)(ctx)
+	ctxAugment := r.transport.events.OnContextAugment(chid)
+	if ctxAugment != nil {
+		ctx = ctxAugment(ctx)
+	}
 	ctx, span := otel.Tracer("gs-data-transfer").Start(ctx, "receiveRequest", trace.WithAttributes(
 		attribute.String("channelID", chid.String()),
 		attribute.String("baseCid", incoming.BaseCid().String()),
@@ -50,9 +53,12 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 	initiateGraphsyncRequest := isNewOrRestart && response != nil && receiveErr == nil
 	ch, err := r.transport.getDTChannel(chid)
 	if err != nil {
-		if !initiateGraphsyncRequest {
+		if !initiateGraphsyncRequest || receiveErr != nil {
 			if response != nil {
-				return r.transport.dtNet.SendMessage(ctx, initiator, transportID, response)
+				if sendErr := r.transport.dtNet.SendMessage(ctx, initiator, transportID, response); sendErr != nil {
+					return sendErr
+				}
+				return receiveErr
 			}
 			return receiveErr
 		}

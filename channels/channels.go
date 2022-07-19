@@ -58,7 +58,7 @@ func New(ds datastore.Batching,
 		StateEntryFuncs: ChannelStateEntryFuncs,
 		Notifier:        c.dispatch,
 		FinalityStates:  ChannelFinalityStates,
-	}, channelMigrations, versioning.VersionKey("2"))
+	}, channelMigrations, versioning.VersionKey("3"))
 	if err != nil {
 		return nil, err
 	}

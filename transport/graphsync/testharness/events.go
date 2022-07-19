@@ -3,6 +3,7 @@ package testharness
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -36,6 +37,17 @@ func (fe *FakeEvents) OnTransportEvent(chid datatransfer.ChannelID, evt datatran
 
 func (fe *FakeEvents) AssertTransportEvent(t *testing.T, chid datatransfer.ChannelID, evt datatransfer.TransportEvent) {
 	require.Contains(t, fe.ReceivedTransportEvents, ReceivedTransportEvent{chid, evt})
+}
+
+func (fe *FakeEvents) AssertTransportEventEventually(t *testing.T, chid datatransfer.ChannelID, evt datatransfer.TransportEvent) {
+	require.Eventually(t, func() bool {
+		for _, receivedEvent := range fe.ReceivedTransportEvents {
+			if (receivedEvent == ReceivedTransportEvent{chid, evt}) {
+				return true
+			}
+		}
+		return false
+	}, time.Second, time.Millisecond)
 }
 
 func (fe *FakeEvents) RefuteTransportEvent(t *testing.T, chid datatransfer.ChannelID, evt datatransfer.TransportEvent) {
