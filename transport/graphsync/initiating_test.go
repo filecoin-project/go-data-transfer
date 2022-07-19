@@ -161,7 +161,7 @@ func TestInitiatingPullRequestSuccessFlow(t *testing.T) {
 		case <-ctx.Done():
 			t.Fatalf("did not complete request")
 		}
-		th.Events.AssertTransportEvent(t, th.Channel.ChannelID(), datatransfer.TransportCompletedTransfer{Success: true})
+		th.Events.AssertTransportEventEventually(t, th.Channel.ChannelID(), datatransfer.TransportCompletedTransfer{Success: true})
 	})
 
 	t.Run("cleanup request", func(t *testing.T) {

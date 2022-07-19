@@ -11,6 +11,7 @@ import (
 	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/dtchannel"
 	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
@@ -199,8 +200,17 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 		hookActions.TerminateWithError(err)
 	}
 
+	var ch *dtchannel.Channel
+	if msg.IsRequest() {
+		ch = t.trackDTChannel(chid)
+	} else {
+		ch, err = t.getDTChannel(chid)
+		if err != nil {
+			hookActions.TerminateWithError(err)
+			return
+		}
+	}
 	t.requestIDToChannelID.set(request.ID(), true, chid)
-	ch := t.trackDTChannel(chid)
 	ch.GsDataRequestRcvd(p, request.ID(), chst, hookActions)
 }
 
