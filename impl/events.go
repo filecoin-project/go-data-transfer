@@ -12,8 +12,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/message"
 )
 
-// OnChannelOpened is called when we send a request for data to the other
-// peer on the given channel ID
+// OnTransportEvent is dispatched when an event occurs on the transport
 func (m *manager) OnTransportEvent(chid datatransfer.ChannelID, evt datatransfer.TransportEvent) {
 	ctx, _ := m.spansIndex.SpanForChannel(context.TODO(), chid)
 	err := m.processTransferEvent(ctx, chid, evt)
