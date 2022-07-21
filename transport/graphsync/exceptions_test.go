@@ -7,17 +7,18 @@ import (
 	"testing"
 	"time"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
-	"github.com/filecoin-project/go-data-transfer/v2/message"
-	"github.com/filecoin-project/go-data-transfer/v2/testutil"
-	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
-	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/testharness"
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/rand"
+
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/testharness"
 )
 
 func TestTransferExceptions(t *testing.T) {

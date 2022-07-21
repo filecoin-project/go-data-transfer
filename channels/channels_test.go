@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	versionedds "github.com/filecoin-project/go-ds-versioning/pkg/datastore"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	dss "github.com/ipfs/go-datastore/sync"
@@ -18,12 +17,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/xerrors"
 
+	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
+	versionedds "github.com/filecoin-project/go-ds-versioning/pkg/datastore"
+
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
 	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
 	"github.com/filecoin-project/go-data-transfer/v2/channels/internal/migrations"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
-	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
 )
 
 func TestChannels(t *testing.T) {
