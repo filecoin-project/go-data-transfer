@@ -1,4 +1,4 @@
-package testutil
+package itest
 
 import (
 	"bytes"
@@ -30,35 +30,29 @@ import (
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	basicnode "github.com/ipld/go-ipld-prime/node/basic"
-	"github.com/ipld/go-ipld-prime/traversal/selector"
-	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/network"
-	gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
-	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	gstransport "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/helpers/network"
 )
 
-var allSelector ipld.Node
-
 const loremFile = "lorem.txt"
+const loremFileTransferBytes = 20439
 
-func init() {
-	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
-	allSelector = ssb.ExploreRecursive(selector.RecursionLimitNone(),
-		ssb.ExploreAll(ssb.ExploreRecursiveEdge())).Node()
-}
+const loremLargeFile = "lorem_large.txt"
+const loremLargeFileTransferBytes = 217452
 
 const unixfsChunkSize uint64 = 1 << 10
 const unixfsLinksPerLevel = 1024
 
 var extsForProtocol = map[protocol.ID]graphsync.ExtensionName{
-	datatransfer.ProtocolDataTransfer1_2: extension.ExtensionDataTransfer1_1,
+	network.ProtocolDataTransfer1_2:    extension.ExtensionDataTransfer1_1,
+	network.ProtocolFilDataTransfer1_2: extension.ExtensionDataTransfer1_1,
 }
 
 // GraphsyncTestingData is a test harness for testing data transfer on top of
@@ -82,7 +76,8 @@ type GraphsyncTestingData struct {
 	GsNet2         gsnet.GraphSyncNetwork
 	DtNet1         network.DataTransferNetwork
 	DtNet2         network.DataTransferNetwork
-	AllSelector    ipld.Node
+	Gs1            graphsync.GraphExchange
+	Gs2            graphsync.GraphExchange
 	OrigBytes      []byte
 	TempDir1       string
 	TempDir2       string
@@ -151,7 +146,6 @@ func NewGraphsyncTestingData(ctx context.Context, t *testing.T, host1Protocols [
 	require.NoError(t, err)
 	gsData.TempDir2 = tempdir
 	// create a selector for the whole UnixFS dag
-	gsData.AllSelector = allSelector
 	gsData.host1Protocols = host1Protocols
 	gsData.host2Protocols = host2Protocols
 	return gsData
@@ -159,13 +153,17 @@ func NewGraphsyncTestingData(ctx context.Context, t *testing.T, host1Protocols [
 
 // SetupGraphsyncHost1 sets up a new, real graphsync instance on top of the first host
 func (gsData *GraphsyncTestingData) SetupGraphsyncHost1() graphsync.GraphExchange {
+	if gsData.Gs1 != nil {
+		return gsData.Gs1
+	}
 	// setup graphsync
 	if gsData.gs1Cancel != nil {
 		gsData.gs1Cancel()
 	}
 	gsCtx, gsCancel := context.WithCancel(gsData.Ctx)
 	gsData.gs1Cancel = gsCancel
-	return gsimpl.New(gsCtx, gsData.GsNet1, gsData.LinkSystem1)
+	gsData.Gs1 = gsimpl.New(gsCtx, gsData.GsNet1, gsData.LinkSystem1)
+	return gsData.Gs1
 }
 
 // SetupGSTransportHost1 sets up a new grapshync transport over real graphsync on the first host
@@ -180,18 +178,22 @@ func (gsData *GraphsyncTestingData) SetupGSTransportHost1(opts ...gstransport.Op
 		opts = append(opts, gstransport.SupportedExtensions(supportedExtensions))
 	}
 
-	return gstransport.NewTransport(gsData.Host1.ID(), gs, opts...)
+	return gstransport.NewTransport(gs, gsData.DtNet1, opts...)
 }
 
 // SetupGraphsyncHost2 sets up a new, real graphsync instance on top of the second host
 func (gsData *GraphsyncTestingData) SetupGraphsyncHost2() graphsync.GraphExchange {
+	if gsData.Gs2 != nil {
+		return gsData.Gs2
+	}
 	// setup graphsync
 	if gsData.gs2Cancel != nil {
 		gsData.gs2Cancel()
 	}
 	gsCtx, gsCancel := context.WithCancel(gsData.Ctx)
 	gsData.gs2Cancel = gsCancel
-	return gsimpl.New(gsCtx, gsData.GsNet2, gsData.LinkSystem2)
+	gsData.Gs2 = gsimpl.New(gsCtx, gsData.GsNet2, gsData.LinkSystem2)
+	return gsData.Gs2
 }
 
 // SetupGSTransportHost2 sets up a new grapshync transport over real graphsync on the second host
@@ -205,7 +207,7 @@ func (gsData *GraphsyncTestingData) SetupGSTransportHost2(opts ...gstransport.Op
 		}
 		opts = append(opts, gstransport.SupportedExtensions(supportedExtensions))
 	}
-	return gstransport.NewTransport(gsData.Host2.ID(), gs, opts...)
+	return gstransport.NewTransport(gs, gsData.DtNet2, opts...)
 }
 
 // LoadUnixFSFile loads a fixtures file we can test dag transfer with

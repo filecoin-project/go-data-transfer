@@ -7,13 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 var ch1 = datatransfer.ChannelID{
@@ -31,9 +30,6 @@ func TestChannelMonitorAutoRestart(t *testing.T) {
 	testCases := []testCase{{
 		name: "attempt restart",
 	}, {
-		name:         "fail to reconnect to peer",
-		errReconnect: true,
-	}, {
 		name:              "fail to send restart message",
 		errSendRestartMsg: true,
 	}}
@@ -41,8 +37,8 @@ func TestChannelMonitorAutoRestart(t *testing.T) {
 	runTest := func(name string, isPush bool) {
 		for _, tc := range testCases {
 			t.Run(name+": "+tc.name, func(t *testing.T) {
-				ch := &mockChannelState{chid: ch1}
-				mockAPI := newMockMonitorAPI(ch, tc.errReconnect, tc.errSendRestartMsg)
+				ch := testutil.NewMockChannelState(testutil.MockChannelStateParams{ChannelID: ch1})
+				mockAPI := newMockMonitorAPI(ch, tc.errSendRestartMsg)
 
 				triggerErrorEvent := func() {
 					if isPush {
@@ -60,9 +56,9 @@ func TestChannelMonitorAutoRestart(t *testing.T) {
 
 				var mch *monitoredChannel
 				if isPush {
-					mch = m.AddPushChannel(ch1)
+					mch = m.AddChannel(ch1, false)
 				} else {
-					mch = m.AddPullChannel(ch1)
+					mch = m.AddChannel(ch1, true)
 				}
 
 				// Simulate the responder sending Accept
@@ -115,8 +111,8 @@ func TestChannelMonitorAutoRestart(t *testing.T) {
 func TestChannelMonitorMaxConsecutiveRestarts(t *testing.T) {
 	runTest := func(name string, isPush bool) {
 		t.Run(name, func(t *testing.T) {
-			ch := &mockChannelState{chid: ch1}
-			mockAPI := newMockMonitorAPI(ch, false, false)
+			ch := testutil.NewMockChannelState(testutil.MockChannelStateParams{ChannelID: ch1})
+			mockAPI := newMockMonitorAPI(ch, false)
 
 			triggerErrorEvent := func() {
 				if isPush {
@@ -135,12 +131,12 @@ func TestChannelMonitorMaxConsecutiveRestarts(t *testing.T) {
 
 			var mch *monitoredChannel
 			if isPush {
-				mch = m.AddPushChannel(ch1)
+				mch = m.AddChannel(ch1, false)
 
 				mockAPI.dataQueued(10)
 				mockAPI.dataSent(5)
 			} else {
-				mch = m.AddPullChannel(ch1)
+				mch = m.AddChannel(ch1, true)
 
 				mockAPI.dataReceived(5)
 			}
@@ -198,8 +194,8 @@ func awaitRestartComplete(mch *monitoredChannel) error {
 func TestChannelMonitorQueuedRestart(t *testing.T) {
 	runTest := func(name string, isPush bool) {
 		t.Run(name, func(t *testing.T) {
-			ch := &mockChannelState{chid: ch1}
-			mockAPI := newMockMonitorAPI(ch, false, false)
+			ch := testutil.NewMockChannelState(testutil.MockChannelStateParams{ChannelID: ch1})
+			mockAPI := newMockMonitorAPI(ch, false)
 
 			triggerErrorEvent := func() {
 				if isPush {
@@ -217,12 +213,12 @@ func TestChannelMonitorQueuedRestart(t *testing.T) {
 			})
 
 			if isPush {
-				m.AddPushChannel(ch1)
+				m.AddChannel(ch1, false)
 
 				mockAPI.dataQueued(10)
 				mockAPI.dataSent(5)
 			} else {
-				m.AddPullChannel(ch1)
+				m.AddChannel(ch1, true)
 
 				mockAPI.dataReceived(5)
 			}
@@ -285,8 +281,8 @@ func TestChannelMonitorTimeouts(t *testing.T) {
 	runTest := func(name string, isPush bool) {
 		for _, tc := range testCases {
 			t.Run(name+": "+tc.name, func(t *testing.T) {
-				ch := &mockChannelState{chid: ch1}
-				mockAPI := newMockMonitorAPI(ch, false, false)
+				ch := testutil.NewMockChannelState(testutil.MockChannelStateParams{ChannelID: ch1})
+				mockAPI := newMockMonitorAPI(ch, false)
 
 				verifyClosedAndShutdown := func(chCtx context.Context, timeout time.Duration) {
 					mockAPI.verifyChannelClosed(t, true)
@@ -311,10 +307,10 @@ func TestChannelMonitorTimeouts(t *testing.T) {
 
 				var chCtx context.Context
 				if isPush {
-					mch := m.AddPushChannel(ch1)
+					mch := m.AddChannel(ch1, false)
 					chCtx = mch.ctx
 				} else {
-					mch := m.AddPullChannel(ch1)
+					mch := m.AddChannel(ch1, true)
 					chCtx = mch.ctx
 				}
 
@@ -370,8 +366,7 @@ func verifyChannelShutdown(t *testing.T, shutdownCtx context.Context) {
 }
 
 type mockMonitorAPI struct {
-	ch              *mockChannelState
-	connectErrors   bool
+	ch              *testutil.MockChannelState
 	restartErrors   bool
 	restartMessages chan struct{}
 	closeErr        chan error
@@ -380,10 +375,9 @@ type mockMonitorAPI struct {
 	subscribers map[int]datatransfer.Subscriber
 }
 
-func newMockMonitorAPI(ch *mockChannelState, errOnReconnect, errOnRestart bool) *mockMonitorAPI {
+func newMockMonitorAPI(ch *testutil.MockChannelState, errOnRestart bool) *mockMonitorAPI {
 	return &mockMonitorAPI{
 		ch:              ch,
-		connectErrors:   errOnReconnect,
 		restartErrors:   errOnRestart,
 		restartMessages: make(chan struct{}, 100),
 		closeErr:        make(chan error, 1),
@@ -413,13 +407,6 @@ func (m *mockMonitorAPI) fireEvent(e datatransfer.Event, state datatransfer.Chan
 	for _, subscriber := range m.subscribers {
 		subscriber(e, state)
 	}
-}
-
-func (m *mockMonitorAPI) ConnectTo(ctx context.Context, id peer.ID) error {
-	if m.connectErrors {
-		return xerrors.Errorf("connect err")
-	}
-	return nil
 }
 
 func (m *mockMonitorAPI) PeerID() peer.ID {
@@ -482,17 +469,17 @@ func (m *mockMonitorAPI) accept() {
 }
 
 func (m *mockMonitorAPI) dataQueued(n uint64) {
-	m.ch.queued = n
+	m.ch.SetQueued(n)
 	m.fireEvent(datatransfer.Event{Code: datatransfer.DataQueued}, m.ch)
 }
 
 func (m *mockMonitorAPI) dataSent(n uint64) {
-	m.ch.sent = n
+	m.ch.SetSent(n)
 	m.fireEvent(datatransfer.Event{Code: datatransfer.DataSent}, m.ch)
 }
 
 func (m *mockMonitorAPI) dataReceived(n uint64) {
-	m.ch.received = n
+	m.ch.SetReceived(n)
 	m.fireEvent(datatransfer.Event{Code: datatransfer.DataReceived}, m.ch)
 }
 
@@ -501,7 +488,7 @@ func (m *mockMonitorAPI) finishTransfer() {
 }
 
 func (m *mockMonitorAPI) completed() {
-	m.ch.complete = true
+	m.ch.SetComplete(true)
 	m.fireEvent(datatransfer.Event{Code: datatransfer.Complete}, m.ch)
 }
 
@@ -511,113 +498,4 @@ func (m *mockMonitorAPI) sendDataErrorEvent() {
 
 func (m *mockMonitorAPI) receiveDataErrorEvent() {
 	m.fireEvent(datatransfer.Event{Code: datatransfer.ReceiveDataError}, m.ch)
-}
-
-type mockChannelState struct {
-	chid     datatransfer.ChannelID
-	queued   uint64
-	sent     uint64
-	received uint64
-	complete bool
-}
-
-var _ datatransfer.ChannelState = (*mockChannelState)(nil)
-
-func (m *mockChannelState) Queued() uint64 {
-	return m.queued
-}
-
-func (m *mockChannelState) Sent() uint64 {
-	return m.sent
-}
-
-func (m *mockChannelState) Received() uint64 {
-	return m.received
-}
-
-func (m *mockChannelState) ChannelID() datatransfer.ChannelID {
-	return m.chid
-}
-
-func (m *mockChannelState) Status() datatransfer.Status {
-	if m.complete {
-		return datatransfer.Completed
-	}
-	return datatransfer.Ongoing
-}
-
-func (m *mockChannelState) TransferID() datatransfer.TransferID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) BaseCID() cid.Cid {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Selector() ipld.Node {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Voucher() datatransfer.Voucher {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Sender() peer.ID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Recipient() peer.ID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) TotalSize() uint64 {
-	panic("implement me")
-}
-
-func (m *mockChannelState) IsPull() bool {
-	panic("implement me")
-}
-
-func (m *mockChannelState) OtherPeer() peer.ID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) SelfPeer() peer.ID {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Message() string {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Vouchers() []datatransfer.Voucher {
-	panic("implement me")
-}
-
-func (m *mockChannelState) VoucherResults() []datatransfer.VoucherResult {
-	panic("implement me")
-}
-
-func (m *mockChannelState) LastVoucher() datatransfer.Voucher {
-	panic("implement me")
-}
-
-func (m *mockChannelState) LastVoucherResult() datatransfer.VoucherResult {
-	panic("implement me")
-}
-
-func (m *mockChannelState) Stages() *datatransfer.ChannelStages {
-	panic("implement me")
-}
-
-func (m *mockChannelState) ReceivedCidsTotal() int64 {
-	panic("implement me")
-}
-
-func (m *mockChannelState) QueuedCidsTotal() int64 {
-	panic("implement me")
-}
-
-func (m *mockChannelState) SentCidsTotal() int64 {
-	panic("implement me")
 }

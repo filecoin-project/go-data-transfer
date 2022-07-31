@@ -61,7 +61,7 @@ const (
 	// initiator
 	BeginFinalizing
 
-	// Disconnected emits when we are not able to connect to the other party
+	// DEPRECATED in favor of SendMessageError
 	Disconnected
 
 	// Complete is emitted when a data transfer is complete
@@ -91,7 +91,7 @@ const (
 	// data has been received.
 	DataReceivedProgress
 
-	// Deprecated in favour of RequestCancelled
+	// DEPRECATED in favour of RequestCancelled
 	RequestTimedOut
 
 	// SendDataError indicates that the transport layer had an error trying
@@ -102,7 +102,7 @@ const (
 	// receiving data from the remote peer
 	ReceiveDataError
 
-	// TransferRequestQueued indicates that a new data transfer request has been queued in the transport layer
+	// DEPRECATED in favor of TransferInitiated
 	TransferRequestQueued
 
 	// RequestCancelled indicates that a transport layer request was cancelled by the request opener
@@ -110,6 +110,25 @@ const (
 
 	// Opened is fired when a request for data is sent from this node to a peer
 	Opened
+
+	// SetDataLimit is fired when a responder sets a limit for data it will allow
+	// before pausing the request
+	SetDataLimit
+
+	// SetRequiresFinalization is fired when a responder sets a limit for data it will allow
+	// before pausing the request
+	SetRequiresFinalization
+
+	// DataLimitExceeded is fired when a request exceeds it's data limit. It has the effect of
+	// pausing the responder, but is distinct from PauseResponder to indicate why the pause
+	// happened
+	DataLimitExceeded
+
+	// TransferInitiated indicates the transport has begun transferring data
+	TransferInitiated
+
+	// SendMessageError indicates an error sending a data transfer message
+	SendMessageError
 )
 
 // Events are human readable names for data transfer events
@@ -144,6 +163,12 @@ var Events = map[EventCode]string{
 	ReceiveDataError:            "ReceiveDataError",
 	TransferRequestQueued:       "TransferRequestQueued",
 	RequestCancelled:            "RequestCancelled",
+	Opened:                      "Opened",
+	SetDataLimit:                "SetDataLimit",
+	SetRequiresFinalization:     "SetRequiresFinalization",
+	DataLimitExceeded:           "DataLimitExceeded",
+	TransferInitiated:           "TransferInitiated",
+	SendMessageError:            "SendMessageError",
 }
 
 // Event is a struct containing information about a data transfer event

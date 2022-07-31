@@ -3,24 +3,23 @@ package testutil
 import (
 	"context"
 
-	"github.com/ipld/go-ipld-prime"
-	"github.com/libp2p/go-libp2p-core/peer"
-
-	datatransfer "github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
 // OpenedChannel records a call to open a channel
 type OpenedChannel struct {
-	DataSender peer.ID
-	ChannelID  datatransfer.ChannelID
-	Root       ipld.Link
-	Selector   ipld.Node
-	Channel    datatransfer.ChannelState
-	Message    datatransfer.Message
+	Channel datatransfer.Channel
+	Message datatransfer.Request
 }
 
-// ResumedChannel records a call to resume a channel
-type ResumedChannel struct {
+// RestartedChannel records a call to restart a channel
+type RestartedChannel struct {
+	Channel datatransfer.ChannelState
+	Message datatransfer.Request
+}
+
+// MessageSent records a message sent
+type MessageSent struct {
 	ChannelID datatransfer.ChannelID
 	Message   datatransfer.Message
 }
@@ -28,19 +27,20 @@ type ResumedChannel struct {
 // CustomizedTransfer is just a way to record calls made to transport configurer
 type CustomizedTransfer struct {
 	ChannelID datatransfer.ChannelID
-	Voucher   datatransfer.Voucher
+	Voucher   datatransfer.TypedVoucher
 }
+
+var _ datatransfer.Transport = &FakeTransport{}
 
 // FakeTransport is a fake transport with mocked results
 type FakeTransport struct {
 	OpenedChannels      []OpenedChannel
 	OpenChannelErr      error
-	ClosedChannels      []datatransfer.ChannelID
-	CloseChannelErr     error
-	PausedChannels      []datatransfer.ChannelID
-	PauseChannelErr     error
-	ResumedChannels     []ResumedChannel
-	ResumeChannelErr    error
+	RestartedChannels   []RestartedChannel
+	RestartChannelErr   error
+	MessagesSent        []MessageSent
+	UpdateError         error
+	ChannelsUpdated     []datatransfer.ChannelID
 	CleanedUpChannels   []datatransfer.ChannelID
 	CustomizedTransfers []CustomizedTransfer
 	EventHandler        datatransfer.EventsHandler
@@ -52,20 +52,54 @@ func NewFakeTransport() *FakeTransport {
 	return &FakeTransport{}
 }
 
+// ID is a unique identifier for this transport
+func (ft *FakeTransport) ID() datatransfer.TransportID {
+	return "fake"
+}
+
+// Versions indicates what versions of this transport are supported
+func (ft *FakeTransport) Versions() []datatransfer.Version {
+	return []datatransfer.Version{{Major: 1, Minor: 1, Patch: 0}}
+}
+
+// Capabilities tells datatransfer what kinds of capabilities this transport supports
+func (ft *FakeTransport) Capabilities() datatransfer.TransportCapabilities {
+	return datatransfer.TransportCapabilities{
+		Restartable: true,
+		Pausable:    true,
+	}
+}
+
 // OpenChannel initiates an outgoing request for the other peer to send data
 // to us on this channel
 // Note: from a data transfer symantic standpoint, it doesn't matter if the
 // request is push or pull -- OpenChannel is called by the party that is
 // intending to receive data
-func (ft *FakeTransport) OpenChannel(ctx context.Context, dataSender peer.ID, channelID datatransfer.ChannelID, root ipld.Link, stor ipld.Node, channel datatransfer.ChannelState, msg datatransfer.Message) error {
-	ft.OpenedChannels = append(ft.OpenedChannels, OpenedChannel{dataSender, channelID, root, stor, channel, msg})
+func (ft *FakeTransport) OpenChannel(ctx context.Context, channel datatransfer.Channel, msg datatransfer.Request) error {
+	ft.OpenedChannels = append(ft.OpenedChannels, OpenedChannel{channel, msg})
 	return ft.OpenChannelErr
 }
 
-// CloseChannel closes the given channel
-func (ft *FakeTransport) CloseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ft.ClosedChannels = append(ft.ClosedChannels, chid)
-	return ft.CloseChannelErr
+// RestartChannel restarts a channel
+func (ft *FakeTransport) RestartChannel(ctx context.Context, channelState datatransfer.ChannelState, msg datatransfer.Request) error {
+	ft.RestartedChannels = append(ft.RestartedChannels, RestartedChannel{channelState, msg})
+	return ft.RestartChannelErr
+}
+
+// WithChannel takes actions on a channel
+func (ft *FakeTransport) ChannelUpdated(ctx context.Context, chid datatransfer.ChannelID, msg datatransfer.Message) error {
+
+	if msg != nil {
+		ft.MessagesSent = append(ft.MessagesSent, MessageSent{chid, msg})
+	}
+	ft.ChannelsUpdated = append(ft.ChannelsUpdated, chid)
+	return nil
+}
+
+// SendMessage sends a data transfer message over the channel to the other peer
+func (ft *FakeTransport) SendMessage(ctx context.Context, chid datatransfer.ChannelID, msg datatransfer.Message) error {
+	ft.MessagesSent = append(ft.MessagesSent, MessageSent{chid, msg})
+	return ft.UpdateError
 }
 
 // SetEventHandler sets the handler for events on channels
@@ -74,20 +108,9 @@ func (ft *FakeTransport) SetEventHandler(events datatransfer.EventsHandler) erro
 	return ft.SetEventHandlerErr
 }
 
+// Shutdown close this transport
 func (ft *FakeTransport) Shutdown(ctx context.Context) error {
 	return nil
-}
-
-// PauseChannel paused the given channel ID
-func (ft *FakeTransport) PauseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	ft.PausedChannels = append(ft.PausedChannels, chid)
-	return ft.PauseChannelErr
-}
-
-// ResumeChannel resumes the given channel
-func (ft *FakeTransport) ResumeChannel(ctx context.Context, msg datatransfer.Message, chid datatransfer.ChannelID) error {
-	ft.ResumedChannels = append(ft.ResumedChannels, ResumedChannel{chid, msg})
-	return ft.ResumeChannelErr
 }
 
 // CleanupChannel cleans up the given channel
@@ -95,6 +118,6 @@ func (ft *FakeTransport) CleanupChannel(chid datatransfer.ChannelID) {
 	ft.CleanedUpChannels = append(ft.CleanedUpChannels, chid)
 }
 
-func (ft *FakeTransport) RecordCustomizedTransfer(chid datatransfer.ChannelID, voucher datatransfer.Voucher) {
+func (ft *FakeTransport) RecordCustomizedTransfer(chid datatransfer.ChannelID, voucher datatransfer.TypedVoucher) {
 	ft.CustomizedTransfers = append(ft.CustomizedTransfers, CustomizedTransfer{chid, voucher})
 }

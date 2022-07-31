@@ -17,14 +17,6 @@ const ErrHandlerNotSet = errorType("event handler has not been set")
 // ErrChannelNotFound means the channel this command was issued for does not exist
 const ErrChannelNotFound = errorType("channel not found")
 
-// ErrPause is a special error that the DataReceived / DataSent hooks can
-// use to pause the channel
-const ErrPause = errorType("pause channel")
-
-// ErrResume is a special error that the RequestReceived / ResponseReceived hooks can
-// use to resume the channel
-const ErrResume = errorType("resume channel")
-
 // ErrRejected indicates a request was not accepted
 const ErrRejected = errorType("response rejected")
 

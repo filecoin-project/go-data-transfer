@@ -18,10 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message"
-	"github.com/filecoin-project/go-data-transfer/network"
-	"github.com/filecoin-project/go-data-transfer/testutil"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/helpers/network"
 )
 
 // Receiver is an interface for receiving messages from the DataTransferNetwork.
@@ -90,8 +91,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 		messageReceived: make(chan struct{}),
 		connectedPeers:  make(chan peer.ID, 2),
 	}
-	dtnet1.SetDelegate(r)
-	dtnet2.SetDelegate(r)
+	dtnet1.SetDelegate("graphsync", []datatransfer.Version{datatransfer.LegacyTransportVersion}, r)
+	dtnet2.SetDelegate("graphsync", []datatransfer.Version{datatransfer.LegacyTransportVersion}, r)
 
 	err = dtnet1.ConnectTo(ctx, host2.ID())
 	require.NoError(t, err)
@@ -101,10 +102,10 @@ func TestMessageSendAndReceive(t *testing.T) {
 		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
-		voucher := testutil.NewFakeDTType()
-		request, err := message.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+		voucher := testutil.NewTestTypedVoucher()
+		request, err := message.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 		require.NoError(t, err)
-		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
+		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), "graphsync", request))
 
 		select {
 		case <-ctx.Done():
@@ -123,17 +124,16 @@ func TestMessageSendAndReceive(t *testing.T) {
 		assert.Equal(t, request.IsPull(), receivedRequest.IsPull())
 		assert.Equal(t, request.IsRequest(), receivedRequest.IsRequest())
 		assert.True(t, receivedRequest.BaseCid().Equals(request.BaseCid()))
-		testutil.AssertEqualFakeDTVoucher(t, request, receivedRequest)
+		testutil.AssertEqualTestVoucher(t, request, receivedRequest)
 		testutil.AssertEqualSelector(t, request, receivedRequest)
 	})
 
 	t.Run("Send Response", func(t *testing.T) {
 		accepted := false
 		id := datatransfer.TransferID(rand.Int31())
-		voucherResult := testutil.NewFakeDTType()
-		response, err := message.NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
-		require.NoError(t, err)
-		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), response))
+		voucherResult := testutil.NewTestTypedVoucher()
+		response := message.ValidationResultResponse(types.NewMessage, id, datatransfer.ValidationResult{Accepted: accepted, VoucherResult: &voucherResult}, nil, false)
+		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), "graphsync", response))
 
 		select {
 		case <-ctx.Done():
@@ -150,7 +150,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		assert.Equal(t, response.TransferID(), receivedResponse.TransferID())
 		assert.Equal(t, response.Accepted(), receivedResponse.Accepted())
 		assert.Equal(t, response.IsRequest(), receivedResponse.IsRequest())
-		testutil.AssertEqualFakeDTVoucherResult(t, response, receivedResponse)
+		testutil.AssertEqualTestVoucherResult(t, response, receivedResponse)
 	})
 
 	t.Run("Send Restart Request", func(t *testing.T) {
@@ -160,7 +160,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 			Responder: peers[1], ID: id}
 
 		request := message.RestartExistingChannelRequest(chId)
-		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
+		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), "graphsync", request))
 
 		select {
 		case <-ctx.Done():
@@ -262,8 +262,8 @@ func TestSendMessageRetry(t *testing.T) {
 				messageReceived: make(chan struct{}),
 				connectedPeers:  make(chan peer.ID, 2),
 			}
-			dtnet1.SetDelegate(r)
-			dtnet2.SetDelegate(r)
+			dtnet1.SetDelegate("graphsync", []datatransfer.Version{datatransfer.LegacyTransportVersion}, r)
+			dtnet2.SetDelegate("graphsync", []datatransfer.Version{datatransfer.LegacyTransportVersion}, r)
 
 			err = dtnet1.ConnectTo(ctx, host2.ID())
 			require.NoError(t, err)
@@ -272,11 +272,11 @@ func TestSendMessageRetry(t *testing.T) {
 			selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 			isPull := false
 			id := datatransfer.TransferID(rand.Int31())
-			voucher := testutil.NewFakeDTType()
-			request, err := message.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+			voucher := testutil.NewTestTypedVoucher()
+			request, err := message.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 			require.NoError(t, err)
 
-			err = dtnet1.SendMessage(ctx, host2.ID(), request)
+			err = dtnet1.SendMessage(ctx, host2.ID(), "graphsync", request)
 			if !tcase.expSuccess {
 				require.Error(t, err)
 				return

@@ -11,8 +11,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/channels"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/channels"
 )
 
 var log = logging.Logger("dt-chanmon")
@@ -21,7 +21,6 @@ type monitorAPI interface {
 	SubscribeToEvents(subscriber datatransfer.Subscriber) datatransfer.Unsubscribe
 	RestartDataTransferChannel(ctx context.Context, chid datatransfer.ChannelID) error
 	CloseDataTransferChannelWithError(ctx context.Context, chid datatransfer.ChannelID, cherr error) error
-	ConnectTo(context.Context, peer.ID) error
 	PeerID() peer.ID
 }
 
@@ -84,18 +83,8 @@ func checkConfig(cfg *Config) {
 	}
 }
 
-// AddPushChannel adds a push channel to the channel monitor
-func (m *Monitor) AddPushChannel(chid datatransfer.ChannelID) *monitoredChannel {
-	return m.addChannel(chid, true)
-}
-
-// AddPullChannel adds a pull channel to the channel monitor
-func (m *Monitor) AddPullChannel(chid datatransfer.ChannelID) *monitoredChannel {
-	return m.addChannel(chid, false)
-}
-
-// addChannel adds a channel to the channel monitor
-func (m *Monitor) addChannel(chid datatransfer.ChannelID, isPush bool) *monitoredChannel {
+// AddChannel adds a channel to the channel monitor
+func (m *Monitor) AddChannel(chid datatransfer.ChannelID, isPull bool) *monitoredChannel {
 	if !m.enabled() {
 		return nil
 	}
@@ -106,7 +95,7 @@ func (m *Monitor) addChannel(chid datatransfer.ChannelID, isPush bool) *monitore
 	// Check if there is already a monitor for this channel
 	if _, ok := m.channels[chid]; ok {
 		tp := "push"
-		if !isPush {
+		if isPull {
 			tp = "pull"
 		}
 		log.Warnf("ignoring add %s channel %s: %s channel with that id already exists",
@@ -454,22 +443,11 @@ func (mc *monitoredChannel) doRestartChannel() error {
 }
 
 func (mc *monitoredChannel) sendRestartMessage(restartCount int) error {
-	// Establish a connection to the peer, in case the connection went down.
-	// Note that at the networking layer there is logic to retry if a network
-	// connection cannot be established, so this may take some time.
 	p := mc.chid.OtherParty(mc.mgr.PeerID())
-	log.Debugf("%s: re-establishing connection to %s", mc.chid, p)
-	start := time.Now()
-	err := mc.mgr.ConnectTo(mc.ctx, p)
-	if err != nil {
-		return xerrors.Errorf("%s: failed to reconnect to peer %s after %s: %w",
-			mc.chid, p, time.Since(start), err)
-	}
-	log.Debugf("%s: re-established connection to %s in %s", mc.chid, p, time.Since(start))
 
 	// Send a restart message for the channel
 	log.Debugf("%s: sending restart message to %s (%d consecutive restarts)", mc.chid, p, restartCount)
-	err = mc.mgr.RestartDataTransferChannel(mc.ctx, mc.chid)
+	err := mc.mgr.RestartDataTransferChannel(mc.ctx, mc.chid)
 	if err != nil {
 		return xerrors.Errorf("%s: failed to send restart message to %s: %w", mc.chid, p, err)
 	}

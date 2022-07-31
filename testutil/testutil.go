@@ -4,20 +4,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
-	"github.com/ipld/go-ipld-prime"
-	basicnode "github.com/ipld/go-ipld-prime/node/basic"
-	"github.com/ipld/go-ipld-prime/traversal/selector"
-	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/jbenet/go-random"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
 var blockGenerator = blocksutil.NewBlockGenerator()
@@ -101,13 +98,6 @@ func AssertEqualSelector(t *testing.T, expectedRequest datatransfer.Request, req
 	require.Equal(t, expectedSelector, selector)
 }
 
-// AllSelector just returns a new instance of a "whole dag selector"
-func AllSelector() ipld.Node {
-	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
-	return ssb.ExploreRecursive(selector.RecursionLimitNone(),
-		ssb.ExploreAll(ssb.ExploreRecursiveEdge())).Node()
-}
-
 // StartAndWaitForReady is a utility function to start a module and verify it reaches the ready state
 func StartAndWaitForReady(ctx context.Context, t *testing.T, manager datatransfer.Manager) {
 	ready := make(chan error, 1)
@@ -121,4 +111,10 @@ func StartAndWaitForReady(ctx context.Context, t *testing.T, manager datatransfe
 	case err := <-ready:
 		require.NoError(t, err)
 	}
+}
+
+// GenerateChannelID generates a new data transfer channel id for use in tests
+func GenerateChannelID() datatransfer.ChannelID {
+	p := GeneratePeers(2)
+	return datatransfer.ChannelID{Initiator: p[0], Responder: p[1], ID: datatransfer.TransferID(rand.Int31())}
 }

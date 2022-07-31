@@ -1,4 +1,4 @@
-package impl_test
+package itest
 
 import (
 	"context"
@@ -10,14 +10,15 @@ import (
 	ipldformat "github.com/ipfs/go-ipld-format"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 	"golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	. "github.com/filecoin-project/go-data-transfer/impl"
-	"github.com/filecoin-project/go-data-transfer/testutil"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	. "github.com/filecoin-project/go-data-transfer/v2/impl"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 const totalIncrements = 204
@@ -41,8 +42,8 @@ func TestRestartPush(t *testing.T) {
 		"Restart peer create push": {
 			stopAt: 20,
 			openPushF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.FakeDTType{Data: "applesauce"}
-				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, &voucher, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -51,9 +52,9 @@ func TestRestartPush(t *testing.T) {
 				require.NoError(t, rh.dt1.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp1 := rh.gsData.SetupGSTransportHost1()
-				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1)
+				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.Host1.ID(), tp1)
 				require.NoError(rh.t, err)
-				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
+				require.NoError(rh.t, rh.dt1.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
 				rh.dt1.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt1.RestartDataTransferChannel(rh.testCtx, chId))
@@ -83,8 +84,8 @@ func TestRestartPush(t *testing.T) {
 		"Restart peer receive push": {
 			stopAt: 20,
 			openPushF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.FakeDTType{Data: "applesauce"}
-				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, &voucher, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -93,9 +94,9 @@ func TestRestartPush(t *testing.T) {
 				require.NoError(t, rh.dt2.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp2 := rh.gsData.SetupGSTransportHost2()
-				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.DtNet2, tp2)
+				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.Host2.ID(), tp2)
 				require.NoError(rh.t, err)
-				require.NoError(rh.t, rh.dt2.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
+				require.NoError(rh.t, rh.dt2.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 				rh.dt2.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt2.RestartDataTransferChannel(rh.testCtx, chId))
@@ -108,7 +109,8 @@ func TestRestartPush(t *testing.T) {
 				// initiator: abort GS response
 				"transfer(0)->response(0)->abortRequest(0)",
 				// initiator: receive restart request and send restart channel message
-				"transfer(0)->receiveRequest(0)->sendMessage(0)",
+				"transfer(0)->receiveRequest(0)",
+				"transfer(0)->sendMessage(1)",
 				// initiator: receive second GS request in response to restart channel message
 				// and execute GS response
 				"transfer(0)->response(1)->executeTask(0)",
@@ -134,6 +136,10 @@ func TestRestartPush(t *testing.T) {
 
 			// START DATA TRANSFER INSTANCES
 			rh.sv.ExpectSuccessPush()
+			rh.sv.StubResult(datatransfer.ValidationResult{Accepted: true})
+			rh.sv.ExpectSuccessValidateRestart()
+			rh.sv.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
+
 			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
 			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 
@@ -254,7 +260,7 @@ func TestRestartPush(t *testing.T) {
 
 			// verify all cids are present on the receiver
 
-			testutil.VerifyHasFile(rh.testCtx, t, rh.destDagService, rh.root, rh.origBytes)
+			VerifyHasFile(rh.testCtx, t, rh.destDagService, rh.root, rh.origBytes)
 			rh.sv.VerifyExpectations(t)
 
 			// we should ONLY see two opens and two completes
@@ -290,8 +296,8 @@ func TestRestartPull(t *testing.T) {
 		"Restart peer create pull": {
 			stopAt: 40,
 			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.FakeDTType{Data: "applesauce"}
-				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, &voucher, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -300,9 +306,9 @@ func TestRestartPull(t *testing.T) {
 				require.NoError(t, rh.dt2.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp2 := rh.gsData.SetupGSTransportHost2()
-				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.DtNet2, tp2)
+				rh.dt2, err = NewDataTransfer(rh.gsData.DtDs2, rh.gsData.Host2.ID(), tp2)
 				require.NoError(rh.t, err)
-				require.NoError(rh.t, rh.dt2.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
+				require.NoError(rh.t, rh.dt2.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 				rh.dt2.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt2.RestartDataTransferChannel(rh.testCtx, chId))
@@ -329,8 +335,8 @@ func TestRestartPull(t *testing.T) {
 		"Restart peer receive pull": {
 			stopAt: 40,
 			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
-				voucher := testutil.FakeDTType{Data: "applesauce"}
-				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, &voucher, rh.rootCid, rh.gsData.AllSelector)
+				voucher := testutil.NewTestTypedVoucherWith("applesauce")
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -339,9 +345,9 @@ func TestRestartPull(t *testing.T) {
 				require.NoError(t, rh.dt1.Stop(rh.testCtx))
 				time.Sleep(100 * time.Millisecond)
 				tp1 := rh.gsData.SetupGSTransportHost1()
-				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.DtNet1, tp1)
+				rh.dt1, err = NewDataTransfer(rh.gsData.DtDs1, rh.gsData.Host1.ID(), tp1)
 				require.NoError(rh.t, err)
-				require.NoError(rh.t, rh.dt1.RegisterVoucherType(&testutil.FakeDTType{}, rh.sv))
+				require.NoError(rh.t, rh.dt1.RegisterVoucherType(testutil.TestVoucherType, rh.sv))
 				testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
 				rh.dt1.SubscribeToEvents(subscriber)
 				require.NoError(rh.t, rh.dt1.RestartDataTransferChannel(rh.testCtx, chId))
@@ -352,7 +358,8 @@ func TestRestartPull(t *testing.T) {
 				// initiator: initial outgoing gs request terminates
 				"transfer(0)->request(0)->terminateRequest(0)",
 				// initiator: respond to restart request and send second GS request
-				"transfer(0)->receiveRequest(0)->request(0)",
+				"transfer(0)->receiveRequest(0)",
+				"transfer(0)->request(1)->executeTask(0)",
 				// initiator: receive completion message from responder that they sent all the data
 				"transfer(0)->receiveResponse(0)",
 				// responder: receive GS request and execute response
@@ -378,6 +385,10 @@ func TestRestartPull(t *testing.T) {
 
 			// START DATA TRANSFER INSTANCES
 			rh.sv.ExpectSuccessPull()
+			rh.sv.StubResult(datatransfer.ValidationResult{Accepted: true})
+			rh.sv.ExpectSuccessValidateRestart()
+			rh.sv.StubRestartResult(datatransfer.ValidationResult{Accepted: true})
+
 			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt1)
 			testutil.StartAndWaitForReady(rh.testCtx, t, rh.dt2)
 
@@ -492,7 +503,7 @@ func TestRestartPull(t *testing.T) {
 			_, _, err = waitF(10*time.Second, 2)
 			require.NoError(t, err)
 
-			testutil.VerifyHasFile(rh.testCtx, t, rh.destDagService, rh.root, rh.origBytes)
+			VerifyHasFile(rh.testCtx, t, rh.destDagService, rh.root, rh.origBytes)
 			rh.sv.VerifyExpectations(t)
 
 			// we should ONLY see two opens and two completes
@@ -526,7 +537,7 @@ type restartHarness struct {
 	peer1          peer.ID
 	peer2          peer.ID
 
-	gsData *testutil.GraphsyncTestingData
+	gsData *GraphsyncTestingData
 	dt1    datatransfer.Manager
 	dt2    datatransfer.Manager
 	sv     *testutil.StubbedValidator
@@ -543,7 +554,7 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 
 	// Setup host
-	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+	gsData := NewGraphsyncTestingData(ctx, t, nil, nil)
 	host1 := gsData.Host1 // initiator, data sender
 	host2 := gsData.Host2 // data recipient
 	peer1 := host1.ID()
@@ -555,18 +566,18 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	tp1 := gsData.SetupGSTransportHost1()
 	tp2 := gsData.SetupGSTransportHost2()
 
-	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1)
+	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.Host1.ID(), tp1)
 	require.NoError(t, err)
 
-	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2)
+	dt2, err := NewDataTransfer(gsData.DtDs2, gsData.Host2.ID(), tp2)
 	require.NoError(t, err)
 
 	sv := testutil.NewStubbedValidator()
-	require.NoError(t, dt1.RegisterVoucherType(&testutil.FakeDTType{}, sv))
-	require.NoError(t, dt2.RegisterVoucherType(&testutil.FakeDTType{}, sv))
+	require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
+	require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
 
 	sourceDagService := gsData.DagService1
-	root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService, largeFile)
+	root, origBytes := LoadUnixFSFile(ctx, t, sourceDagService, largeFile)
 	rootCid := root.(cidlink.Link).Cid
 	destDagService := gsData.DagService2
 

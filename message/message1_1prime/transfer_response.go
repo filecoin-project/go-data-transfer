@@ -3,15 +3,14 @@ package message1_1
 import (
 	"io"
 
+	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	xerrors "golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/message/types"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
 // TransferResponse1_1 is a private struct that satisfies the datatransfer.Response interface
@@ -21,7 +20,7 @@ type TransferResponse1_1 struct {
 	RequestAccepted       bool
 	Paused                bool
 	TransferId            uint64
-	VoucherResultPtr      *datamodel.Node
+	VoucherResultPtr      datamodel.Node
 	VoucherTypeIdentifier datatransfer.TypeIdentifier
 }
 
@@ -59,7 +58,7 @@ func (trsp *TransferResponse1_1) IsComplete() bool {
 	return trsp.MessageType == uint64(types.CompleteMessage)
 }
 
-func (trsp *TransferResponse1_1) IsVoucherResult() bool {
+func (trsp *TransferResponse1_1) IsValidationResult() bool {
 	return trsp.MessageType == uint64(types.VoucherResultMessage) || trsp.MessageType == uint64(types.NewMessage) || trsp.MessageType == uint64(types.CompleteMessage) ||
 		trsp.MessageType == uint64(types.RestartMessage)
 }
@@ -73,11 +72,11 @@ func (trsp *TransferResponse1_1) VoucherResultType() datatransfer.TypeIdentifier
 	return trsp.VoucherTypeIdentifier
 }
 
-func (trsp *TransferResponse1_1) VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error) {
+func (trsp *TransferResponse1_1) VoucherResult() (datamodel.Node, error) {
 	if trsp.VoucherResultPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
-	return decoder.DecodeFromNode(*trsp.VoucherResultPtr)
+	return trsp.VoucherResultPtr, nil
 }
 
 func (trq *TransferResponse1_1) IsRestart() bool {
@@ -88,15 +87,26 @@ func (trsp *TransferResponse1_1) EmptyVoucherResult() bool {
 	return trsp.VoucherTypeIdentifier == datatransfer.EmptyTypeIdentifier
 }
 
-func (trsp *TransferResponse1_1) MessageForProtocol(targetProtocol protocol.ID) (datatransfer.Message, error) {
-	switch targetProtocol {
-	case datatransfer.ProtocolDataTransfer1_2:
+func (trsp *TransferResponse1_1) MessageForVersion(version datatransfer.Version) (datatransfer.Message, error) {
+	switch version {
+	case datatransfer.DataTransfer1_2:
 		return trsp, nil
 	default:
-		return nil, xerrors.Errorf("protocol %s not supported", targetProtocol)
+		return nil, xerrors.Errorf("protocol %s not supported", version)
 	}
 }
 
+func (trsp *TransferResponse1_1) Version() datatransfer.Version {
+	return datatransfer.DataTransfer1_2
+}
+
+func (trsp *TransferResponse1_1) WrappedForTransport(transportID datatransfer.TransportID, transportVersion datatransfer.Version) datatransfer.TransportedMessage {
+	return &WrappedTransferResponse1_1{
+		TransferResponse1_1: trsp,
+		transportID:         string(transportID),
+		transportVersion:    transportVersion,
+	}
+}
 func (trsp *TransferResponse1_1) toIPLD() schema.TypedNode {
 	msg := TransferMessage1_1{
 		IsRequest: false,
@@ -106,11 +116,47 @@ func (trsp *TransferResponse1_1) toIPLD() schema.TypedNode {
 	return msg.toIPLD()
 }
 
-func (trsp *TransferResponse1_1) ToIPLD() (datamodel.Node, error) {
-	return trsp.toIPLD().Representation(), nil
+func (trsp *TransferResponse1_1) ToIPLD() datamodel.Node {
+	return trsp.toIPLD().Representation()
 }
 
 // ToNet serializes a transfer response.
 func (trsp *TransferResponse1_1) ToNet(w io.Writer) error {
-	return dagcbor.Encode(trsp.toIPLD().Representation(), w)
+	return ipld.EncodeStreaming(w, trsp.toIPLD(), dagcbor.Encode)
+}
+
+// WrappedTransferResponse1_1 is used to serialize a response along with a
+// transport id
+type WrappedTransferResponse1_1 struct {
+	*TransferResponse1_1
+	transportID      string
+	transportVersion datatransfer.Version
+}
+
+func (trsp *WrappedTransferResponse1_1) TransportID() datatransfer.TransportID {
+	return datatransfer.TransportID(trsp.transportID)
+}
+func (trsp *WrappedTransferResponse1_1) TransportVersion() datatransfer.Version {
+	return trsp.transportVersion
+}
+
+func (trsp *WrappedTransferResponse1_1) toIPLD() schema.TypedNode {
+	msg := WrappedTransferMessage1_1{
+		TransportID:      trsp.transportID,
+		TransportVersion: trsp.transportVersion,
+		Message: TransferMessage1_1{
+			IsRequest: false,
+			Request:   nil,
+			Response:  trsp.TransferResponse1_1,
+		},
+	}
+	return msg.toIPLD()
+}
+
+func (trsp *WrappedTransferResponse1_1) ToIPLD() datamodel.Node {
+	return trsp.toIPLD().Representation()
+}
+
+func (trsp *WrappedTransferResponse1_1) ToNet(w io.Writer) error {
+	return ipld.EncodeStreaming(w, trsp.toIPLD(), dagcbor.Encode)
 }

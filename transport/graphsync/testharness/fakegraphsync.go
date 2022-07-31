@@ -1,4 +1,4 @@
-package testutil
+package testharness
 
 import (
 	"context"
@@ -13,18 +13,20 @@ import (
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/traversal"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message"
-	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
-func matchDtMessage(t *testing.T, extensions []graphsync.ExtensionData) datatransfer.Message {
+func matchDtMessage(t *testing.T, extensions []graphsync.ExtensionData, extName graphsync.ExtensionName) datatransfer.Message {
 	var matchedExtension *graphsync.ExtensionData
 	for _, ext := range extensions {
-		if ext.Name == extension.ExtensionDataTransfer1_1 {
+		if ext.Name == extName {
 			matchedExtension = &ext
 			break
 		}
@@ -40,15 +42,43 @@ type ReceivedGraphSyncRequest struct {
 	Ctx             context.Context
 	P               peer.ID
 	Root            ipld.Link
-	Selector        ipld.Node
+	Selector        datamodel.Node
 	Extensions      []graphsync.ExtensionData
 	ResponseChan    chan graphsync.ResponseProgress
 	ResponseErrChan chan error
 }
 
+func (gsRequest ReceivedGraphSyncRequest) ToRequestData(t *testing.T) graphsync.RequestData {
+	extensions := make(map[graphsync.ExtensionName]datamodel.Node)
+	for _, extension := range gsRequest.Extensions {
+		extensions[extension.Name] = extension.Data
+	}
+	requestID, ok := gsRequest.requestID()
+	require.True(t, ok)
+	return NewFakeRequest(requestID, extensions, graphsync.RequestTypeNew)
+}
+
+func (gsRequest ReceivedGraphSyncRequest) Response(t *testing.T, incomingRequestMsg datatransfer.Message, blockMessage datatransfer.Message, code graphsync.ResponseStatusCode) graphsync.ResponseData {
+	extensions := make(map[graphsync.ExtensionName]datamodel.Node)
+	if incomingRequestMsg != nil {
+		extensions[extension.ExtensionIncomingRequest1_1] = incomingRequestMsg.ToIPLD()
+	}
+	if blockMessage != nil {
+		extensions[extension.ExtensionOutgoingBlock1_1] = blockMessage.ToIPLD()
+	}
+	requestID, ok := gsRequest.requestID()
+	require.True(t, ok)
+	return NewFakeResponse(requestID, extensions, code)
+}
+
+func (gsRequest ReceivedGraphSyncRequest) requestID() (graphsync.RequestID, bool) {
+	request, ok := gsRequest.Ctx.Value(graphsync.RequestIDContextKey{}).(graphsync.RequestID)
+	return request, ok
+}
+
 // DTMessage returns the data transfer message among the graphsync extensions sent with this request
 func (gsRequest ReceivedGraphSyncRequest) DTMessage(t *testing.T) datatransfer.Message {
-	return matchDtMessage(t, gsRequest.Extensions)
+	return matchDtMessage(t, gsRequest.Extensions, extension.ExtensionDataTransfer1_1)
 }
 
 type Resume struct {
@@ -58,7 +88,7 @@ type Resume struct {
 
 // DTMessage returns the data transfer message among the graphsync extensions sent with this request
 func (resume Resume) DTMessage(t *testing.T) datatransfer.Message {
-	return matchDtMessage(t, resume.Extensions)
+	return matchDtMessage(t, resume.Extensions, extension.ExtensionDataTransfer1_1)
 }
 
 type Update struct {
@@ -68,111 +98,47 @@ type Update struct {
 
 // DTMessage returns the data transfer message among the graphsync extensions sent with this request
 func (update Update) DTMessage(t *testing.T) datatransfer.Message {
-	return matchDtMessage(t, update.Extensions)
+	return matchDtMessage(t, update.Extensions, extension.ExtensionDataTransfer1_1)
 }
 
 // FakeGraphSync implements a GraphExchange but does nothing
 type FakeGraphSync struct {
-	requests                     chan ReceivedGraphSyncRequest // records calls to fakeGraphSync.Request
-	pauses                       chan graphsync.RequestID
-	resumes                      chan Resume
-	cancels                      chan graphsync.RequestID
-	updates                      chan Update
-	persistenceOptionsLk         sync.RWMutex
-	persistenceOptions           map[string]ipld.LinkSystem
-	leaveRequestsOpen            bool
-	OutgoingRequestHook          graphsync.OnOutgoingRequestHook
-	IncomingBlockHook            graphsync.OnIncomingBlockHook
-	OutgoingBlockHook            graphsync.OnOutgoingBlockHook
-	IncomingRequestQueuedHook    graphsync.OnIncomingRequestQueuedHook
-	IncomingRequestHook          graphsync.OnIncomingRequestHook
-	CompletedResponseListener    graphsync.OnResponseCompletedListener
-	RequestUpdatedHook           graphsync.OnRequestUpdatedHook
-	IncomingResponseHook         graphsync.OnIncomingResponseHook
-	RequestorCancelledListener   graphsync.OnRequestorCancelledListener
-	BlockSentListener            graphsync.OnBlockSentListener
-	NetworkErrorListener         graphsync.OnNetworkErrorListener
-	ReceiverNetworkErrorListener graphsync.OnReceiverNetworkErrorListener
+	ReceivedRequests                  []ReceivedGraphSyncRequest // records calls to fakeGraphSync.Request
+	Pauses                            []graphsync.RequestID
+	Resumes                           []Resume
+	Cancels                           []graphsync.RequestID
+	Updates                           []Update
+	persistenceOptionsLk              sync.RWMutex
+	persistenceOptions                map[string]ipld.LinkSystem
+	leaveRequestsOpen                 bool
+	OutgoingRequestHook               graphsync.OnOutgoingRequestHook
+	IncomingBlockHook                 graphsync.OnIncomingBlockHook
+	OutgoingBlockHook                 graphsync.OnOutgoingBlockHook
+	IncomingRequestProcessingListener graphsync.OnRequestProcessingListener
+	OutgoingRequestProcessingListener graphsync.OnRequestProcessingListener
+	IncomingRequestHook               graphsync.OnIncomingRequestHook
+	CompletedResponseListener         graphsync.OnResponseCompletedListener
+	RequestUpdatedHook                graphsync.OnRequestUpdatedHook
+	IncomingResponseHook              graphsync.OnIncomingResponseHook
+	RequestorCancelledListener        graphsync.OnRequestorCancelledListener
+	BlockSentListener                 graphsync.OnBlockSentListener
+	NetworkErrorListener              graphsync.OnNetworkErrorListener
+	ReceiverNetworkErrorListener      graphsync.OnReceiverNetworkErrorListener
+	ReturnedCancelError               error
+	ReturnedPauseError                error
+	ReturnedResumeError               error
+	ReturnedSendUpdateError           error
 }
 
 // NewFakeGraphSync returns a new fake graphsync implementation
 func NewFakeGraphSync() *FakeGraphSync {
 	return &FakeGraphSync{
-		requests:           make(chan ReceivedGraphSyncRequest, 2),
-		pauses:             make(chan graphsync.RequestID, 1),
-		resumes:            make(chan Resume, 1),
-		cancels:            make(chan graphsync.RequestID, 1),
-		updates:            make(chan Update, 1),
 		persistenceOptions: make(map[string]ipld.LinkSystem),
 	}
 }
 
 func (fgs *FakeGraphSync) LeaveRequestsOpen() {
 	fgs.leaveRequestsOpen = true
-}
-
-// AssertNoRequestReceived asserts that no requests should ahve been received by this graphsync implementation
-func (fgs *FakeGraphSync) AssertNoRequestReceived(t *testing.T) {
-	require.Empty(t, fgs.requests, "should not receive request")
-}
-
-// AssertRequestReceived asserts a request should be received before the context closes (and returns said request)
-func (fgs *FakeGraphSync) AssertRequestReceived(ctx context.Context, t *testing.T) ReceivedGraphSyncRequest {
-	var requestReceived ReceivedGraphSyncRequest
-	select {
-	case <-ctx.Done():
-		t.Fatal("did not receive message sent")
-	case requestReceived = <-fgs.requests:
-	}
-	return requestReceived
-}
-
-// AssertNoPauseReceived asserts that no pause requests should ahve been received by this graphsync implementation
-func (fgs *FakeGraphSync) AssertNoPauseReceived(t *testing.T) {
-	require.Empty(t, fgs.pauses, "should not receive pause request")
-}
-
-// AssertPauseReceived asserts a pause request should be received before the context closes (and returns said request)
-func (fgs *FakeGraphSync) AssertPauseReceived(ctx context.Context, t *testing.T) graphsync.RequestID {
-	var pauseReceived graphsync.RequestID
-	select {
-	case <-ctx.Done():
-		t.Fatal("did not receive message sent")
-	case pauseReceived = <-fgs.pauses:
-	}
-	return pauseReceived
-}
-
-// AssertNoResumeReceived asserts that no resume requests should ahve been received by this graphsync implementation
-func (fgs *FakeGraphSync) AssertNoResumeReceived(t *testing.T) {
-	require.Empty(t, fgs.resumes, "should not receive resume request")
-}
-
-// AssertResumeReceived asserts a resume request should be received before the context closes (and returns said request)
-func (fgs *FakeGraphSync) AssertResumeReceived(ctx context.Context, t *testing.T) Resume {
-	var resumeReceived Resume
-	select {
-	case <-ctx.Done():
-		t.Fatal("did not receive message sent")
-	case resumeReceived = <-fgs.resumes:
-	}
-	return resumeReceived
-}
-
-// AssertNoCancelReceived asserts that no requests were cancelled by thiss graphsync implementation
-func (fgs *FakeGraphSync) AssertNoCancelReceived(t *testing.T) {
-	require.Empty(t, fgs.cancels, "should not cancel request")
-}
-
-// AssertCancelReceived asserts a requests was cancelled before the context closes (and returns said request id)
-func (fgs *FakeGraphSync) AssertCancelReceived(ctx context.Context, t *testing.T) graphsync.RequestID {
-	var cancelReceived graphsync.RequestID
-	select {
-	case <-ctx.Done():
-		t.Fatal("did not receive message sent")
-	case cancelReceived = <-fgs.cancels:
-	}
-	return cancelReceived
 }
 
 // AssertHasPersistenceOption verifies that a persistence option was registered
@@ -193,10 +159,10 @@ func (fgs *FakeGraphSync) AssertDoesNotHavePersistenceOption(t *testing.T, name 
 }
 
 // Request initiates a new GraphSync request to the given peer using the given selector spec.
-func (fgs *FakeGraphSync) Request(ctx context.Context, p peer.ID, root ipld.Link, selector ipld.Node, extensions ...graphsync.ExtensionData) (<-chan graphsync.ResponseProgress, <-chan error) {
-	errors := make(chan error)
-	responses := make(chan graphsync.ResponseProgress)
-	fgs.requests <- ReceivedGraphSyncRequest{ctx, p, root, selector, extensions, responses, errors}
+func (fgs *FakeGraphSync) Request(ctx context.Context, p peer.ID, root ipld.Link, selector datamodel.Node, extensions ...graphsync.ExtensionData) (<-chan graphsync.ResponseProgress, <-chan error) {
+	errors := make(chan error, 1)
+	responses := make(chan graphsync.ResponseProgress, 1)
+	fgs.ReceivedRequests = append(fgs.ReceivedRequests, ReceivedGraphSyncRequest{ctx, p, root, selector, extensions, responses, errors})
 	if !fgs.leaveRequestsOpen {
 		close(responses)
 		close(errors)
@@ -232,11 +198,11 @@ func (fgs *FakeGraphSync) RegisterIncomingRequestHook(hook graphsync.OnIncomingR
 	}
 }
 
-// RegisterIncomingRequestQueuedHook adds a hook that runs when an incoming GS request is queued.
-func (fgs *FakeGraphSync) RegisterIncomingRequestQueuedHook(hook graphsync.OnIncomingRequestQueuedHook) graphsync.UnregisterHookFunc {
-	fgs.IncomingRequestQueuedHook = hook
+// RegisterIncomingRequestProcessingListener adds a hook that runs when an incoming GS request begins processing
+func (fgs *FakeGraphSync) RegisterIncomingRequestProcessingListener(hook graphsync.OnRequestProcessingListener) graphsync.UnregisterHookFunc {
+	fgs.IncomingRequestProcessingListener = hook
 	return func() {
-		fgs.IncomingRequestQueuedHook = nil
+		fgs.IncomingRequestProcessingListener = nil
 	}
 }
 
@@ -290,19 +256,29 @@ func (fgs *FakeGraphSync) RegisterCompletedResponseListener(listener graphsync.O
 
 // Unpause unpauses a request that was paused in a block hook based on request ID
 func (fgs *FakeGraphSync) Unpause(ctx context.Context, requestID graphsync.RequestID, extensions ...graphsync.ExtensionData) error {
-	fgs.resumes <- Resume{requestID, extensions}
-	return nil
+	fgs.Resumes = append(fgs.Resumes, Resume{requestID, extensions})
+	return fgs.ReturnedResumeError
 }
 
 // Pause pauses a request based on request ID
 func (fgs *FakeGraphSync) Pause(ctx context.Context, requestID graphsync.RequestID) error {
-	fgs.pauses <- requestID
-	return nil
+	fgs.Pauses = append(fgs.Pauses, requestID)
+	return fgs.ReturnedPauseError
 }
 
 func (fgs *FakeGraphSync) Cancel(ctx context.Context, requestID graphsync.RequestID) error {
-	fgs.cancels <- requestID
-	return nil
+	if fgs.leaveRequestsOpen {
+		for _, rr := range fgs.ReceivedRequests {
+			existingRequestID, has := rr.requestID()
+			if has && requestID.String() == existingRequestID.String() {
+				close(rr.ResponseChan)
+				rr.ResponseErrChan <- graphsync.RequestClientCancelledErr{}
+				close(rr.ResponseErrChan)
+			}
+		}
+	}
+	fgs.Cancels = append(fgs.Cancels, requestID)
+	return fgs.ReturnedCancelError
 }
 
 // RegisterRequestorCancelledListener adds a listener on the responder for requests cancelled by the requestor
@@ -341,22 +317,25 @@ func (fgs *FakeGraphSync) Stats() graphsync.Stats {
 	return graphsync.Stats{}
 }
 
-func (fgs *FakeGraphSync) RegisterOutgoingRequestProcessingListener(graphsync.OnOutgoingRequestProcessingListener) graphsync.UnregisterHookFunc {
-	// TODO: just a stub for now, hopefully nobody needs this
-	return func() {}
+func (fgs *FakeGraphSync) RegisterOutgoingRequestProcessingListener(listener graphsync.OnRequestProcessingListener) graphsync.UnregisterHookFunc {
+	fgs.OutgoingRequestProcessingListener = listener
+	return func() {
+		fgs.OutgoingRequestProcessingListener = nil
+	}
 }
 
 func (fgs *FakeGraphSync) SendUpdate(ctx context.Context, id graphsync.RequestID, extensions ...graphsync.ExtensionData) error {
-	fgs.updates <- Update{RequestID: id, Extensions: extensions}
-	return nil
+	fgs.Updates = append(fgs.Updates, Update{RequestID: id, Extensions: extensions})
+	return fgs.ReturnedSendUpdateError
 }
 
 var _ graphsync.GraphExchange = &FakeGraphSync{}
 
 type fakeBlkData struct {
-	link  ipld.Link
-	size  uint64
-	index int64
+	link   ipld.Link
+	size   uint64
+	onWire bool
+	index  int64
 }
 
 func (fbd fakeBlkData) Link() ipld.Link {
@@ -368,7 +347,10 @@ func (fbd fakeBlkData) BlockSize() uint64 {
 }
 
 func (fbd fakeBlkData) BlockSizeOnWire() uint64 {
-	return fbd.size
+	if fbd.onWire {
+		return fbd.size
+	}
+	return 0
 }
 
 func (fbd fakeBlkData) Index() int64 {
@@ -376,18 +358,19 @@ func (fbd fakeBlkData) Index() int64 {
 }
 
 // NewFakeBlockData returns a fake block that matches the block data interface
-func NewFakeBlockData() graphsync.BlockData {
+func NewFakeBlockData(size uint64, index int64, onWire bool) graphsync.BlockData {
 	return &fakeBlkData{
-		link:  cidlink.Link{Cid: GenerateCids(1)[0]},
-		size:  rand.Uint64(),
-		index: int64(rand.Uint32()),
+		link:   cidlink.Link{Cid: testutil.GenerateCids(1)[0]},
+		size:   size,
+		index:  index,
+		onWire: onWire,
 	}
 }
 
 type fakeRequest struct {
 	id          graphsync.RequestID
 	root        cid.Cid
-	selector    ipld.Node
+	selector    datamodel.Node
 	priority    graphsync.Priority
 	requestType graphsync.RequestType
 	extensions  map[graphsync.ExtensionName]datamodel.Node
@@ -404,7 +387,7 @@ func (fr *fakeRequest) Root() cid.Cid {
 }
 
 // Selector returns the byte representation of the selector for this request
-func (fr *fakeRequest) Selector() ipld.Node {
+func (fr *fakeRequest) Selector() datamodel.Node {
 	return fr.selector
 }
 
@@ -426,14 +409,14 @@ func (fr *fakeRequest) Type() graphsync.RequestType {
 }
 
 // NewFakeRequest returns a fake request that matches the request data interface
-func NewFakeRequest(id graphsync.RequestID, extensions map[graphsync.ExtensionName]datamodel.Node) graphsync.RequestData {
+func NewFakeRequest(id graphsync.RequestID, extensions map[graphsync.ExtensionName]datamodel.Node, requestType graphsync.RequestType) graphsync.RequestData {
 	return &fakeRequest{
 		id:          id,
-		root:        GenerateCids(1)[0],
-		selector:    allSelector,
+		root:        testutil.GenerateCids(1)[0],
+		selector:    selectorparse.CommonSelector_ExploreAllRecursively,
 		priority:    graphsync.Priority(rand.Int()),
 		extensions:  extensions,
-		requestType: graphsync.RequestTypeNew,
+		requestType: requestType,
 	}
 }
 
@@ -532,6 +515,7 @@ type FakeIncomingRequestHookActions struct {
 	Validated         bool
 	SentExtensions    []graphsync.ExtensionData
 	Paused            bool
+	CtxAugFuncs       []func(context.Context) context.Context
 }
 
 func (fa *FakeIncomingRequestHookActions) SendExtensionData(ext graphsync.ExtensionData) {
@@ -555,6 +539,30 @@ func (fa *FakeIncomingRequestHookActions) ValidateRequest() {
 
 func (fa *FakeIncomingRequestHookActions) PauseResponse() {
 	fa.Paused = true
+}
+
+func (fa *FakeIncomingRequestHookActions) AugmentContext(ctxAugFunc func(reqCtx context.Context) context.Context) {
+	fa.CtxAugFuncs = append(fa.CtxAugFuncs, ctxAugFunc)
+}
+
+func (fa *FakeIncomingRequestHookActions) AssertAugmentedContextKey(t *testing.T, key interface{}, value interface{}) {
+	ctx := context.Background()
+	for _, f := range fa.CtxAugFuncs {
+		ctx = f(ctx)
+	}
+	require.Equal(t, value, ctx.Value(key))
+}
+
+func (fa *FakeIncomingRequestHookActions) RefuteAugmentedContextKey(t *testing.T, key interface{}) {
+	ctx := context.Background()
+	for _, f := range fa.CtxAugFuncs {
+		ctx = f(ctx)
+	}
+	require.Nil(t, ctx.Value(key))
+}
+
+func (fa *FakeIncomingRequestHookActions) DTMessage(t *testing.T) datatransfer.Message {
+	return matchDtMessage(t, fa.SentExtensions, extension.ExtensionIncomingRequest1_1)
 }
 
 var _ graphsync.IncomingRequestHookActions = &FakeIncomingRequestHookActions{}
@@ -593,13 +601,3 @@ func (fa *FakeIncomingResponseHookActions) UpdateRequestWithExtensions(extension
 }
 
 var _ graphsync.IncomingResponseHookActions = &FakeIncomingResponseHookActions{}
-
-type FakeRequestQueuedHookActions struct {
-	ctxAugFuncs []func(context.Context) context.Context
-}
-
-func (fa *FakeRequestQueuedHookActions) AugmentContext(ctxAugFunc func(reqCtx context.Context) context.Context) {
-	fa.ctxAugFuncs = append(fa.ctxAugFuncs, ctxAugFunc)
-}
-
-var _ graphsync.RequestQueuedHookActions = &FakeRequestQueuedHookActions{}

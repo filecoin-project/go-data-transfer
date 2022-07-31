@@ -18,12 +18,12 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	tn "github.com/filecoin-project/go-data-transfer/benchmarks/testnet"
-	dtimpl "github.com/filecoin-project/go-data-transfer/impl"
-	dtnet "github.com/filecoin-project/go-data-transfer/network"
-	"github.com/filecoin-project/go-data-transfer/testutil"
-	gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	tn "github.com/filecoin-project/go-data-transfer/v2/benchmarks/testnet"
+	dtimpl "github.com/filecoin-project/go-data-transfer/v2/impl"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
+	gstransport "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
+	dtnet "github.com/filecoin-project/go-data-transfer/v2/transport/helpers/network"
 )
 
 // TempDirGenerator is any interface that can generate temporary directories
@@ -164,8 +164,8 @@ func NewInstance(ctx context.Context, net tn.Network, tempDir string, diskBasedD
 
 	linkSystem := storeutil.LinkSystemForBlockstore(bstore)
 	gs := gsimpl.New(ctx, gsNet, linkSystem, gsimpl.RejectAllRequestsByDefault())
-	transport := gstransport.NewTransport(p, gs)
-	dt, err := dtimpl.NewDataTransfer(namespace.Wrap(dstore, datastore.NewKey("/data-transfers/transfers")), dtNet, transport)
+	transport := gstransport.NewTransport(gs, dtNet)
+	dt, err := dtimpl.NewDataTransfer(namespace.Wrap(dstore, datastore.NewKey("/data-transfers/transfers")), p, transport)
 	if err != nil {
 		return Instance{}, err
 	}
@@ -188,8 +188,7 @@ func NewInstance(ctx context.Context, net tn.Network, tempDir string, diskBasedD
 	sv := testutil.NewStubbedValidator()
 	sv.StubSuccessPull()
 	sv.StubSuccessPush()
-	dt.RegisterVoucherType(testutil.NewFakeDTType(), sv)
-	dt.RegisterVoucherResultType(testutil.NewFakeDTType())
+	dt.RegisterVoucherType(testutil.TestVoucherType, sv)
 	return Instance{
 		Adapter:         dtNet,
 		Peer:            p,

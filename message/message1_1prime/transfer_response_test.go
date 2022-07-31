@@ -6,30 +6,36 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	message1_1 "github.com/filecoin-project/go-data-transfer/message/message1_1prime"
-	"github.com/filecoin-project/go-data-transfer/testutil"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	message1_1 "github.com/filecoin-project/go-data-transfer/v2/message/message1_1prime"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
-func TestResponseMessageForProtocol(t *testing.T) {
+func TestResponseMessageForVersion(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	voucherResult := testutil.NewFakeDTType()
-	response, err := message1_1.NewResponse(id, false, true, voucherResult.Type(), voucherResult) // not accepted
-	require.NoError(t, err)
+	voucherResult := testutil.NewTestTypedVoucher()
+	response := message1_1.NewResponse(id, false, true, &voucherResult) // not accepted
 
-	// v1.2 protocol
-	out, err := response.MessageForProtocol(datatransfer.ProtocolDataTransfer1_2)
+	// v1.2 new protocol
+	out, err := response.MessageForVersion(datatransfer.DataTransfer1_2)
 	require.NoError(t, err)
 	require.Equal(t, response, out)
 
 	resp, ok := (out).(datatransfer.Response)
 	require.True(t, ok)
 	require.True(t, resp.IsPaused())
-	require.Equal(t, voucherResult.Type(), resp.VoucherResultType())
-	require.True(t, resp.IsVoucherResult())
+	require.Equal(t, testutil.TestVoucherType, resp.VoucherResultType())
+	require.True(t, resp.IsValidationResult())
 
-	// random protocol
-	out, err = response.MessageForProtocol("RAND")
+	wrappedOut := out.WrappedForTransport(datatransfer.LegacyTransportID, datatransfer.LegacyTransportVersion)
+	require.Equal(t, datatransfer.LegacyTransportID, wrappedOut.TransportID())
+	require.Equal(t, datatransfer.LegacyTransportVersion, wrappedOut.TransportVersion())
+
+	// random protocol should fail
+	_, err = response.MessageForVersion(datatransfer.Version{
+		Major: rand.Uint64(),
+		Minor: rand.Uint64(),
+		Patch: rand.Uint64(),
+	})
 	require.Error(t, err)
-	require.Nil(t, out)
 }

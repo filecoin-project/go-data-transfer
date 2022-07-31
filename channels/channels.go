@@ -7,9 +7,8 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	peer "github.com/libp2p/go-libp2p-core/peer"
-	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
 	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
@@ -17,28 +16,12 @@ import (
 	"github.com/filecoin-project/go-statemachine"
 	"github.com/filecoin-project/go-statemachine/fsm"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/channels/internal"
-	"github.com/filecoin-project/go-data-transfer/channels/internal/migrations"
-	"github.com/filecoin-project/go-data-transfer/encoding"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
+	"github.com/filecoin-project/go-data-transfer/v2/channels/internal/migrations"
 )
 
-type DecoderByTypeFunc func(identifier datatransfer.TypeIdentifier) (encoding.Decoder, bool)
-
 type Notifier func(datatransfer.Event, datatransfer.ChannelState)
-
-// ErrNotFound is returned when a channel cannot be found with a given channel ID
-type ErrNotFound struct {
-	ChannelID datatransfer.ChannelID
-}
-
-func (e *ErrNotFound) Error() string {
-	return "No channel for channel ID " + e.ChannelID.String()
-}
-
-func NewErrNotFound(chid datatransfer.ChannelID) error {
-	return &ErrNotFound{ChannelID: chid}
-}
 
 // ErrWrongType is returned when a caller attempts to change the type of implementation data after setting it
 var ErrWrongType = errors.New("Cannot change type of implementation specific data after setting it")
@@ -46,17 +29,12 @@ var ErrWrongType = errors.New("Cannot change type of implementation specific dat
 // Channels is a thread safe list of channels
 type Channels struct {
 	notifier             Notifier
-	voucherDecoder       DecoderByTypeFunc
-	voucherResultDecoder DecoderByTypeFunc
-	blockIndexCache      *blockIndexCache
 	stateMachines        fsm.Group
 	migrateStateMachines func(context.Context) error
 }
 
 // ChannelEnvironment -- just a proxy for DTNetwork for now
 type ChannelEnvironment interface {
-	Protect(id peer.ID, tag string)
-	Unprotect(id peer.ID, tag string) bool
 	ID() peer.ID
 	CleanupChannel(chid datatransfer.ChannelID)
 }
@@ -64,17 +42,10 @@ type ChannelEnvironment interface {
 // New returns a new thread safe list of channels
 func New(ds datastore.Batching,
 	notifier Notifier,
-	voucherDecoder DecoderByTypeFunc,
-	voucherResultDecoder DecoderByTypeFunc,
 	env ChannelEnvironment,
 	selfPeer peer.ID) (*Channels, error) {
 
-	c := &Channels{
-		notifier:             notifier,
-		voucherDecoder:       voucherDecoder,
-		voucherResultDecoder: voucherResultDecoder,
-	}
-	c.blockIndexCache = newBlockIndexCache()
+	c := &Channels{notifier: notifier}
 	channelMigrations, err := migrations.GetChannelStateMigrations(selfPeer)
 	if err != nil {
 		return nil, err
@@ -87,7 +58,7 @@ func New(ds datastore.Batching,
 		StateEntryFuncs: ChannelStateEntryFuncs,
 		Notifier:        c.dispatch,
 		FinalityStates:  ChannelFinalityStates,
-	}, channelMigrations, versioning.VersionKey("2"))
+	}, channelMigrations, versioning.VersionKey("3"))
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +90,7 @@ func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 
 // CreateNew creates a new channel id and channel state and saves to channels.
 // returns error if the channel exists already.
-func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector ipld.Node, voucher datatransfer.Voucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, error) {
+func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, baseCid cid.Cid, selector datamodel.Node, voucher datatransfer.TypedVoucher, initiator, dataSender, dataReceiver peer.ID) (datatransfer.ChannelID, datatransfer.Channel, error) {
 	var responder peer.ID
 	if dataSender == initiator {
 		responder = dataReceiver
@@ -127,40 +98,31 @@ func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, base
 		responder = dataSender
 	}
 	chid := datatransfer.ChannelID{Initiator: initiator, Responder: responder, ID: tid}
-	voucherBytes, err := encoding.Encode(voucher)
-	if err != nil {
-		return datatransfer.ChannelID{}, err
-	}
-	selBytes, err := encoding.Encode(selector)
-	if err != nil {
-		return datatransfer.ChannelID{}, err
-	}
-	err = c.stateMachines.Begin(chid, &internal.ChannelState{
+	channel := &internal.ChannelState{
 		SelfPeer:   selfPeer,
 		TransferID: tid,
 		Initiator:  initiator,
 		Responder:  responder,
 		BaseCid:    baseCid,
-		Selector:   &cbg.Deferred{Raw: selBytes},
+		Selector:   internal.CborGenCompatibleNode{Node: selector},
 		Sender:     dataSender,
 		Recipient:  dataReceiver,
 		Stages:     &datatransfer.ChannelStages{},
 		Vouchers: []internal.EncodedVoucher{
 			{
-				Type: voucher.Type(),
-				Voucher: &cbg.Deferred{
-					Raw: voucherBytes,
-				},
+				Type:    voucher.Type,
+				Voucher: internal.CborGenCompatibleNode{voucher.Voucher},
 			},
 		},
 		Status: datatransfer.Requested,
-	})
+	}
+	err := c.stateMachines.Begin(chid, channel)
 	if err != nil {
 		log.Errorw("failed to create new tracking channel for data-transfer", "channelID", chid, "err", err)
-		return datatransfer.ChannelID{}, err
+		return datatransfer.ChannelID{}, nil, err
 	}
 	log.Debugw("created tracking channel for data-transfer, emitting channel Open event", "channelID", chid)
-	return chid, c.stateMachines.Send(chid, datatransfer.Open)
+	return chid, c.fromInternalChannelState(*channel), c.stateMachines.Send(chid, datatransfer.Open)
 }
 
 // InProgress returns a list of in progress channels
@@ -184,7 +146,7 @@ func (c *Channels) GetByID(ctx context.Context, chid datatransfer.ChannelID) (da
 	var internalChannel internal.ChannelState
 	err := c.stateMachines.GetSync(ctx, chid, &internalChannel)
 	if err != nil {
-		return nil, NewErrNotFound(chid)
+		return nil, datatransfer.ErrChannelNotFound
 	}
 	return c.fromInternalChannelState(internalChannel), nil
 }
@@ -198,8 +160,8 @@ func (c *Channels) ChannelOpened(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.Opened)
 }
 
-func (c *Channels) TransferRequestQueued(chid datatransfer.ChannelID) error {
-	return c.send(chid, datatransfer.TransferRequestQueued)
+func (c *Channels) TransferInitiated(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.TransferInitiated)
 }
 
 // Restart marks a data transfer as restarted
@@ -207,46 +169,29 @@ func (c *Channels) Restart(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.Restart)
 }
 
+// CompleteCleanupOnRestart tells a channel to restart
 func (c *Channels) CompleteCleanupOnRestart(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.CompleteCleanupOnRestart)
 }
 
-func (c *Channels) getQueuedIndex(chid datatransfer.ChannelID) (int64, error) {
-	chst, err := c.GetByID(context.TODO(), chid)
-	if err != nil {
-		return 0, err
-	}
-	return chst.QueuedCidsTotal(), nil
+// DataSent records data being sent
+func (c *Channels) DataSent(chid datatransfer.ChannelID, delta uint64, index datamodel.Node) error {
+	return c.fireProgressEvent(chid, datatransfer.DataSent, datatransfer.DataSentProgress, delta, index)
 }
 
-func (c *Channels) getReceivedIndex(chid datatransfer.ChannelID) (int64, error) {
-	chst, err := c.GetByID(context.TODO(), chid)
-	if err != nil {
-		return 0, err
-	}
-	return chst.ReceivedCidsTotal(), nil
+// DataQueued records data being queued
+func (c *Channels) DataQueued(chid datatransfer.ChannelID, delta uint64, index datamodel.Node) error {
+	return c.fireProgressEvent(chid, datatransfer.DataQueued, datatransfer.DataQueuedProgress, delta, index)
 }
 
-func (c *Channels) getSentIndex(chid datatransfer.ChannelID) (int64, error) {
-	chst, err := c.GetByID(context.TODO(), chid)
-	if err != nil {
-		return 0, err
-	}
-	return chst.SentCidsTotal(), nil
+// DataReceived records data being received
+func (c *Channels) DataReceived(chid datatransfer.ChannelID, delta uint64, index datamodel.Node) error {
+	return c.fireProgressEvent(chid, datatransfer.DataReceived, datatransfer.DataReceivedProgress, delta, index)
 }
 
-func (c *Channels) DataSent(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) (bool, error) {
-	return c.fireProgressEvent(chid, datatransfer.DataSent, datatransfer.DataSentProgress, k, delta, index, unique, c.getSentIndex)
-}
-
-func (c *Channels) DataQueued(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) (bool, error) {
-	return c.fireProgressEvent(chid, datatransfer.DataQueued, datatransfer.DataQueuedProgress, k, delta, index, unique, c.getQueuedIndex)
-}
-
-// Returns true if this is the first time the block has been received
-func (c *Channels) DataReceived(chid datatransfer.ChannelID, k cid.Cid, delta uint64, index int64, unique bool) (bool, error) {
-	new, err := c.fireProgressEvent(chid, datatransfer.DataReceived, datatransfer.DataReceivedProgress, k, delta, index, unique, c.getReceivedIndex)
-	return new, err
+// DataLimitExceeded records a data limit exceeded event
+func (c *Channels) DataLimitExceeded(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.DataLimitExceeded)
 }
 
 // PauseInitiator pauses the initator of this channel
@@ -270,21 +215,13 @@ func (c *Channels) ResumeResponder(chid datatransfer.ChannelID) error {
 }
 
 // NewVoucher records a new voucher for this channel
-func (c *Channels) NewVoucher(chid datatransfer.ChannelID, voucher datatransfer.Voucher) error {
-	voucherBytes, err := encoding.Encode(voucher)
-	if err != nil {
-		return err
-	}
-	return c.send(chid, datatransfer.NewVoucher, voucher.Type(), voucherBytes)
+func (c *Channels) NewVoucher(chid datatransfer.ChannelID, voucher datatransfer.TypedVoucher) error {
+	return c.send(chid, datatransfer.NewVoucher, voucher)
 }
 
 // NewVoucherResult records a new voucher result for this channel
-func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResult datatransfer.VoucherResult) error {
-	voucherResultBytes, err := encoding.Encode(voucherResult)
-	if err != nil {
-		return err
-	}
-	return c.send(chid, datatransfer.NewVoucherResult, voucherResult.Type(), voucherResultBytes)
+func (c *Channels) NewVoucherResult(chid datatransfer.ChannelID, voucherResult datatransfer.TypedVoucher) error {
+	return c.send(chid, datatransfer.NewVoucherResult, voucherResult)
 }
 
 // Complete indicates responder has completed sending/receiving data
@@ -354,6 +291,21 @@ func (c *Channels) ReceiveDataError(chid datatransfer.ChannelID, err error) erro
 	return c.send(chid, datatransfer.ReceiveDataError, err)
 }
 
+// SendMessageError indicates an error sending a message to the transport layer
+func (c *Channels) SendMessageError(chid datatransfer.ChannelID, err error) error {
+	return c.send(chid, datatransfer.SendMessageError, err)
+}
+
+// SetDataLimit means a data limit has been set on this channel
+func (c *Channels) SetDataLimit(chid datatransfer.ChannelID, dataLimit uint64) error {
+	return c.send(chid, datatransfer.SetDataLimit, dataLimit)
+}
+
+// SetRequiresFinalization sets the state of whether a data transfer can complete
+func (c *Channels) SetRequiresFinalization(chid datatransfer.ChannelID, RequiresFinalization bool) error {
+	return c.send(chid, datatransfer.SetRequiresFinalization, RequiresFinalization)
+}
+
 // HasChannel returns true if the given channel id is being tracked
 func (c *Channels) HasChannel(chid datatransfer.ChannelID) (bool, error) {
 	return c.stateMachines.Has(chid)
@@ -361,30 +313,19 @@ func (c *Channels) HasChannel(chid datatransfer.ChannelID) (bool, error) {
 
 // fireProgressEvent fires
 // - an event for queuing / sending / receiving blocks
-// - a corresponding "progress" event if the block has not been seen before
-// For example, if a block is being sent for the first time, the method will
-// fire both DataSent AND DataSentProgress.
-// If a block is resent, the method will fire DataSent but not DataSentProgress.
-// Returns true if the block is new (both the event and a progress event were fired).
-func (c *Channels) fireProgressEvent(chid datatransfer.ChannelID, evt datatransfer.EventCode, progressEvt datatransfer.EventCode, k cid.Cid, delta uint64, index int64, unique bool, readFromOriginal readOriginalFn) (bool, error) {
+// - a corresponding "progress" event
+func (c *Channels) fireProgressEvent(chid datatransfer.ChannelID, evt datatransfer.EventCode, progressEvt datatransfer.EventCode, delta uint64, index datamodel.Node) error {
 	if err := c.checkChannelExists(chid, evt); err != nil {
-		return false, err
+		return err
 	}
 
-	isNewIndex, err := c.blockIndexCache.updateIfGreater(evt, chid, index, readFromOriginal)
-	if err != nil {
-		return false, err
-	}
-
-	// If the block has not been seen before, fire the progress event
-	if unique && isNewIndex {
-		if err := c.stateMachines.Send(chid, progressEvt, delta); err != nil {
-			return false, err
-		}
+	// Fire the progress event
+	if err := c.stateMachines.Send(chid, progressEvt, delta); err != nil {
+		return err
 	}
 
 	// Fire the regular event
-	return unique && isNewIndex, c.stateMachines.Send(chid, evt, index)
+	return c.stateMachines.Send(chid, evt, index)
 }
 
 func (c *Channels) send(chid datatransfer.ChannelID, code datatransfer.EventCode, args ...interface{}) error {
@@ -403,12 +344,12 @@ func (c *Channels) checkChannelExists(chid datatransfer.ChannelID, code datatran
 	}
 	if !has {
 		return xerrors.Errorf("cannot send FSM event %s to data-transfer channel %s: %w",
-			datatransfer.Events[code], chid, NewErrNotFound(chid))
+			datatransfer.Events[code], chid, datatransfer.ErrChannelNotFound)
 	}
 	return nil
 }
 
 // Convert from the internally used channel state format to the externally exposed ChannelState
 func (c *Channels) fromInternalChannelState(ch internal.ChannelState) datatransfer.ChannelState {
-	return fromInternalChannelState(ch, c.voucherDecoder, c.voucherResultDecoder)
+	return fromInternalChannelState(ch)
 }

@@ -7,7 +7,7 @@ import (
 	"io"
 	"sort"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -23,7 +23,7 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{180}); err != nil {
+	if _, err := w.Write([]byte{184, 24}); err != nil {
 		return err
 	}
 
@@ -130,7 +130,7 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.BaseCid: %w", err)
 	}
 
-	// t.Selector (typegen.Deferred) (struct)
+	// t.Selector (internal.CborGenCompatibleNode) (struct)
 	if len("Selector") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Selector\" was too long")
 	}
@@ -345,70 +345,116 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.ReceivedBlocksTotal (int64) (int64)
-	if len("ReceivedBlocksTotal") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"ReceivedBlocksTotal\" was too long")
+	// t.ReceivedIndex (internal.CborGenCompatibleNode) (struct)
+	if len("ReceivedIndex") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"ReceivedIndex\" was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("ReceivedBlocksTotal"))); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("ReceivedIndex"))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string("ReceivedBlocksTotal")); err != nil {
-		return err
-	}
-
-	if t.ReceivedBlocksTotal >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ReceivedBlocksTotal)); err != nil {
-			return err
-		}
-	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.ReceivedBlocksTotal-1)); err != nil {
-			return err
-		}
-	}
-
-	// t.QueuedBlocksTotal (int64) (int64)
-	if len("QueuedBlocksTotal") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"QueuedBlocksTotal\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("QueuedBlocksTotal"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("QueuedBlocksTotal")); err != nil {
+	if _, err := io.WriteString(w, string("ReceivedIndex")); err != nil {
 		return err
 	}
 
-	if t.QueuedBlocksTotal >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.QueuedBlocksTotal)); err != nil {
-			return err
-		}
-	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.QueuedBlocksTotal-1)); err != nil {
-			return err
-		}
-	}
-
-	// t.SentBlocksTotal (int64) (int64)
-	if len("SentBlocksTotal") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"SentBlocksTotal\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("SentBlocksTotal"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("SentBlocksTotal")); err != nil {
+	if err := t.ReceivedIndex.MarshalCBOR(w); err != nil {
 		return err
 	}
 
-	if t.SentBlocksTotal >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.SentBlocksTotal)); err != nil {
-			return err
-		}
-	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.SentBlocksTotal-1)); err != nil {
-			return err
-		}
+	// t.QueuedIndex (internal.CborGenCompatibleNode) (struct)
+	if len("QueuedIndex") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"QueuedIndex\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("QueuedIndex"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("QueuedIndex")); err != nil {
+		return err
+	}
+
+	if err := t.QueuedIndex.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.SentIndex (internal.CborGenCompatibleNode) (struct)
+	if len("SentIndex") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"SentIndex\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("SentIndex"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("SentIndex")); err != nil {
+		return err
+	}
+
+	if err := t.SentIndex.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.DataLimit (uint64) (uint64)
+	if len("DataLimit") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"DataLimit\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("DataLimit"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("DataLimit")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.DataLimit)); err != nil {
+		return err
+	}
+
+	// t.RequiresFinalization (bool) (bool)
+	if len("RequiresFinalization") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"RequiresFinalization\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("RequiresFinalization"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("RequiresFinalization")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteBool(w, t.RequiresFinalization); err != nil {
+		return err
+	}
+
+	// t.ResponderPaused (bool) (bool)
+	if len("ResponderPaused") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"ResponderPaused\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("ResponderPaused"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("ResponderPaused")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteBool(w, t.ResponderPaused); err != nil {
+		return err
+	}
+
+	// t.InitiatorPaused (bool) (bool)
+	if len("InitiatorPaused") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"InitiatorPaused\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("InitiatorPaused"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("InitiatorPaused")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteBool(w, t.InitiatorPaused); err != nil {
+		return err
 	}
 
 	// t.Stages (datatransfer.ChannelStages) (struct)
@@ -523,16 +569,15 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 				t.BaseCid = c
 
 			}
-			// t.Selector (typegen.Deferred) (struct)
+			// t.Selector (internal.CborGenCompatibleNode) (struct)
 		case "Selector":
 
 			{
 
-				t.Selector = new(cbg.Deferred)
-
 				if err := t.Selector.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("failed to read deferred field: %w", err)
+					return xerrors.Errorf("unmarshaling t.Selector: %w", err)
 				}
+
 			}
 			// t.Sender (peer.ID) (string)
 		case "Sender":
@@ -702,83 +747,104 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 				t.VoucherResults[i] = v
 			}
 
-			// t.ReceivedBlocksTotal (int64) (int64)
-		case "ReceivedBlocksTotal":
+			// t.ReceivedIndex (internal.CborGenCompatibleNode) (struct)
+		case "ReceivedIndex":
+
 			{
-				maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-				var extraI int64
-				if err != nil {
-					return err
-				}
-				switch maj {
-				case cbg.MajUnsignedInt:
-					extraI = int64(extra)
-					if extraI < 0 {
-						return fmt.Errorf("int64 positive overflow")
-					}
-				case cbg.MajNegativeInt:
-					extraI = int64(extra)
-					if extraI < 0 {
-						return fmt.Errorf("int64 negative oveflow")
-					}
-					extraI = -1 - extraI
-				default:
-					return fmt.Errorf("wrong type for int64 field: %d", maj)
+
+				if err := t.ReceivedIndex.UnmarshalCBOR(br); err != nil {
+					return xerrors.Errorf("unmarshaling t.ReceivedIndex: %w", err)
 				}
 
-				t.ReceivedBlocksTotal = int64(extraI)
 			}
-			// t.QueuedBlocksTotal (int64) (int64)
-		case "QueuedBlocksTotal":
+			// t.QueuedIndex (internal.CborGenCompatibleNode) (struct)
+		case "QueuedIndex":
+
 			{
-				maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-				var extraI int64
-				if err != nil {
-					return err
-				}
-				switch maj {
-				case cbg.MajUnsignedInt:
-					extraI = int64(extra)
-					if extraI < 0 {
-						return fmt.Errorf("int64 positive overflow")
-					}
-				case cbg.MajNegativeInt:
-					extraI = int64(extra)
-					if extraI < 0 {
-						return fmt.Errorf("int64 negative oveflow")
-					}
-					extraI = -1 - extraI
-				default:
-					return fmt.Errorf("wrong type for int64 field: %d", maj)
+
+				if err := t.QueuedIndex.UnmarshalCBOR(br); err != nil {
+					return xerrors.Errorf("unmarshaling t.QueuedIndex: %w", err)
 				}
 
-				t.QueuedBlocksTotal = int64(extraI)
 			}
-			// t.SentBlocksTotal (int64) (int64)
-		case "SentBlocksTotal":
+			// t.SentIndex (internal.CborGenCompatibleNode) (struct)
+		case "SentIndex":
+
 			{
-				maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-				var extraI int64
+
+				if err := t.SentIndex.UnmarshalCBOR(br); err != nil {
+					return xerrors.Errorf("unmarshaling t.SentIndex: %w", err)
+				}
+
+			}
+			// t.DataLimit (uint64) (uint64)
+		case "DataLimit":
+
+			{
+
+				maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 				if err != nil {
 					return err
 				}
-				switch maj {
-				case cbg.MajUnsignedInt:
-					extraI = int64(extra)
-					if extraI < 0 {
-						return fmt.Errorf("int64 positive overflow")
-					}
-				case cbg.MajNegativeInt:
-					extraI = int64(extra)
-					if extraI < 0 {
-						return fmt.Errorf("int64 negative oveflow")
-					}
-					extraI = -1 - extraI
-				default:
-					return fmt.Errorf("wrong type for int64 field: %d", maj)
+				if maj != cbg.MajUnsignedInt {
+					return fmt.Errorf("wrong type for uint64 field")
 				}
+				t.DataLimit = uint64(extra)
 
-				t.SentBlocksTotal = int64(extraI)
+			}
+			// t.RequiresFinalization (bool) (bool)
+		case "RequiresFinalization":
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.RequiresFinalization = false
+			case 21:
+				t.RequiresFinalization = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+			}
+			// t.ResponderPaused (bool) (bool)
+		case "ResponderPaused":
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.ResponderPaused = false
+			case 21:
+				t.ResponderPaused = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+			}
+			// t.InitiatorPaused (bool) (bool)
+		case "InitiatorPaused":
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.InitiatorPaused = false
+			case 21:
+				t.InitiatorPaused = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 			}
 			// t.Stages (datatransfer.ChannelStages) (struct)
 		case "Stages":
@@ -843,7 +909,7 @@ func (t *EncodedVoucher) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Voucher (typegen.Deferred) (struct)
+	// t.Voucher (internal.CborGenCompatibleNode) (struct)
 	if len("Voucher") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Voucher\" was too long")
 	}
@@ -905,16 +971,15 @@ func (t *EncodedVoucher) UnmarshalCBOR(r io.Reader) error {
 
 				t.Type = datatransfer.TypeIdentifier(sval)
 			}
-			// t.Voucher (typegen.Deferred) (struct)
+			// t.Voucher (internal.CborGenCompatibleNode) (struct)
 		case "Voucher":
 
 			{
 
-				t.Voucher = new(cbg.Deferred)
-
 				if err := t.Voucher.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("failed to read deferred field: %w", err)
+					return xerrors.Errorf("unmarshaling t.Voucher: %w", err)
 				}
+
 			}
 
 		default:
@@ -959,7 +1024,7 @@ func (t *EncodedVoucherResult) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.VoucherResult (typegen.Deferred) (struct)
+	// t.VoucherResult (internal.CborGenCompatibleNode) (struct)
 	if len("VoucherResult") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"VoucherResult\" was too long")
 	}
@@ -1021,16 +1086,15 @@ func (t *EncodedVoucherResult) UnmarshalCBOR(r io.Reader) error {
 
 				t.Type = datatransfer.TypeIdentifier(sval)
 			}
-			// t.VoucherResult (typegen.Deferred) (struct)
+			// t.VoucherResult (internal.CborGenCompatibleNode) (struct)
 		case "VoucherResult":
 
 			{
 
-				t.VoucherResult = new(cbg.Deferred)
-
 				if err := t.VoucherResult.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("failed to read deferred field: %w", err)
+					return xerrors.Errorf("unmarshaling t.VoucherResult: %w", err)
 				}
+
 			}
 
 		default:

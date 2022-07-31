@@ -4,15 +4,14 @@ import (
 	"io"
 
 	"github.com/ipfs/go-cid"
+	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	xerrors "golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/message/types"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
 // TransferRequest1_1 is a struct for the 1.1 Data Transfer Protocol that fulfills the datatransfer.Request interface.
@@ -23,19 +22,31 @@ type TransferRequest1_1 struct {
 	Pause                 bool
 	Partial               bool
 	Pull                  bool
-	SelectorPtr           *datamodel.Node
-	VoucherPtr            *datamodel.Node
+	SelectorPtr           datamodel.Node
+	VoucherPtr            datamodel.Node
 	VoucherTypeIdentifier datatransfer.TypeIdentifier
 	TransferId            uint64
 	RestartChannel        datatransfer.ChannelID
 }
 
-func (trq *TransferRequest1_1) MessageForProtocol(targetProtocol protocol.ID) (datatransfer.Message, error) {
-	switch targetProtocol {
-	case datatransfer.ProtocolDataTransfer1_2:
+func (trq *TransferRequest1_1) MessageForVersion(version datatransfer.Version) (datatransfer.Message, error) {
+	switch version {
+	case datatransfer.DataTransfer1_2:
 		return trq, nil
 	default:
 		return nil, xerrors.Errorf("protocol not supported")
+	}
+}
+
+func (trq *TransferRequest1_1) Version() datatransfer.Version {
+	return datatransfer.DataTransfer1_2
+}
+
+func (trq *TransferRequest1_1) WrappedForTransport(transportID datatransfer.TransportID, transportVersion datatransfer.Version) datatransfer.TransportedMessage {
+	return &WrappedTransferRequest1_1{
+		TransferRequest1_1: trq,
+		transportID:        string(transportID),
+		transportVersion:   transportVersion,
 	}
 }
 
@@ -91,11 +102,22 @@ func (trq *TransferRequest1_1) VoucherType() datatransfer.TypeIdentifier {
 }
 
 // Voucher returns the Voucher bytes
-func (trq *TransferRequest1_1) Voucher(decoder encoding.Decoder) (encoding.Encodable, error) {
+func (trq *TransferRequest1_1) Voucher() (datamodel.Node, error) {
 	if trq.VoucherPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
-	return decoder.DecodeFromNode(*trq.VoucherPtr)
+	return trq.VoucherPtr, nil
+}
+
+// TypedVoucher is a convenience method that returns the voucher and its typed
+// as a TypedVoucher object
+// TODO(rvagg): tests for this
+func (trq *TransferRequest1_1) TypedVoucher() (datatransfer.TypedVoucher, error) {
+	voucher, err := trq.Voucher()
+	if err != nil {
+		return datatransfer.TypedVoucher{}, err
+	}
+	return datatransfer.TypedVoucher{Voucher: voucher, Type: trq.VoucherType()}, nil
 }
 
 func (trq *TransferRequest1_1) EmptyVoucher() bool {
@@ -115,7 +137,7 @@ func (trq *TransferRequest1_1) Selector() (datamodel.Node, error) {
 	if trq.SelectorPtr == nil {
 		return nil, xerrors.New("No selector present to read")
 	}
-	return *trq.SelectorPtr, nil
+	return trq.SelectorPtr, nil
 }
 
 // IsCancel returns true if this is a cancel request
@@ -128,20 +150,57 @@ func (trq *TransferRequest1_1) IsPartial() bool {
 	return trq.Partial
 }
 
-func (trsp *TransferRequest1_1) toIPLD() schema.TypedNode {
+func (trq *TransferRequest1_1) toIPLD() schema.TypedNode {
 	msg := TransferMessage1_1{
 		IsRequest: true,
-		Request:   trsp,
+		Request:   trq,
 		Response:  nil,
 	}
 	return msg.toIPLD()
 }
 
-func (trq *TransferRequest1_1) ToIPLD() (datamodel.Node, error) {
-	return trq.toIPLD().Representation(), nil
+func (trq *TransferRequest1_1) ToIPLD() datamodel.Node {
+	return trq.toIPLD().Representation()
 }
 
 // ToNet serializes a transfer request.
 func (trq *TransferRequest1_1) ToNet(w io.Writer) error {
-	return dagcbor.Encode(trq.toIPLD().Representation(), w)
+	return ipld.EncodeStreaming(w, trq.toIPLD(), dagcbor.Encode)
+}
+
+// WrappedTransferRequest1_1 is used to serialize a request along with a
+// transport id
+type WrappedTransferRequest1_1 struct {
+	*TransferRequest1_1
+	transportVersion datatransfer.Version
+	transportID      string
+}
+
+func (trq *WrappedTransferRequest1_1) TransportID() datatransfer.TransportID {
+	return datatransfer.TransportID(trq.transportID)
+}
+
+func (trq *WrappedTransferRequest1_1) TransportVersion() datatransfer.Version {
+	return trq.transportVersion
+}
+
+func (trq *WrappedTransferRequest1_1) toIPLD() schema.TypedNode {
+	msg := WrappedTransferMessage1_1{
+		TransportID:      trq.transportID,
+		TransportVersion: trq.transportVersion,
+		Message: TransferMessage1_1{
+			IsRequest: true,
+			Request:   trq.TransferRequest1_1,
+			Response:  nil,
+		},
+	}
+	return msg.toIPLD()
+}
+
+func (trq *WrappedTransferRequest1_1) ToIPLD() datamodel.Node {
+	return trq.toIPLD().Representation()
+}
+
+func (trq *WrappedTransferRequest1_1) ToNet(w io.Writer) error {
+	return ipld.EncodeStreaming(w, trq.toIPLD(), dagcbor.Encode)
 }

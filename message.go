@@ -1,20 +1,51 @@
 package datatransfer
 
 import (
+	"errors"
+	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/libp2p/go-libp2p-core/protocol"
-
-	"github.com/filecoin-project/go-data-transfer/encoding"
 )
 
+type Version struct {
+	Major uint64
+	Minor uint64
+	Patch uint64
+}
+
+func (mv Version) String() string {
+	return fmt.Sprintf("%d.%d.%d", mv.Major, mv.Minor, mv.Patch)
+}
+
+// MessageVersionFromString parses a string into a message version
+func MessageVersionFromString(versionString string) (Version, error) {
+	versions := strings.Split(versionString, ".")
+	if len(versions) != 3 {
+		return Version{}, errors.New("not a version string")
+	}
+	major, err := strconv.ParseUint(versions[0], 10, 0)
+	if err != nil {
+		return Version{}, errors.New("unable to parse major version")
+	}
+	minor, err := strconv.ParseUint(versions[1], 10, 0)
+	if err != nil {
+		return Version{}, errors.New("unable to parse major version")
+	}
+	patch, err := strconv.ParseUint(versions[2], 10, 0)
+	if err != nil {
+		return Version{}, errors.New("unable to parse major version")
+	}
+	return Version{Major: major, Minor: minor, Patch: patch}, nil
+}
+
 var (
-	// ProtocolDataTransfer1_2 is the protocol identifier for the latest
-	// version of data-transfer (supports do-not-send-first-blocks extension)
-	ProtocolDataTransfer1_2 protocol.ID = "/fil/datatransfer/1.2.0"
+	// DataTransfer1_2 is the identifier for the current
+	// supported version of data-transfer
+	DataTransfer1_2 Version = Version{1, 2, 0}
 )
 
 // Message is a message for the data transfer protocol
@@ -28,8 +59,17 @@ type Message interface {
 	IsCancel() bool
 	TransferID() TransferID
 	ToNet(w io.Writer) error
-	ToIPLD() (datamodel.Node, error)
-	MessageForProtocol(targetProtocol protocol.ID) (newMsg Message, err error)
+	ToIPLD() datamodel.Node
+	MessageForVersion(targetProtocol Version) (newMsg Message, err error)
+	Version() Version
+	WrappedForTransport(transportID TransportID, transportVersion Version) TransportedMessage
+}
+
+// TransportedMessage is a message that can also report how it was transported
+type TransportedMessage interface {
+	Message
+	TransportID() TransportID
+	TransportVersion() Version
 }
 
 // Request is a response message for the data transfer protocol
@@ -38,9 +78,10 @@ type Request interface {
 	IsPull() bool
 	IsVoucher() bool
 	VoucherType() TypeIdentifier
-	Voucher(decoder encoding.Decoder) (encoding.Encodable, error)
+	Voucher() (datamodel.Node, error)
+	TypedVoucher() (TypedVoucher, error)
 	BaseCid() cid.Cid
-	Selector() (ipld.Node, error)
+	Selector() (datamodel.Node, error)
 	IsRestartExistingChannelRequest() bool
 	RestartChannelId() (ChannelID, error)
 }
@@ -48,10 +89,10 @@ type Request interface {
 // Response is a response message for the data transfer protocol
 type Response interface {
 	Message
-	IsVoucherResult() bool
+	IsValidationResult() bool
 	IsComplete() bool
 	Accepted() bool
 	VoucherResultType() TypeIdentifier
-	VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error)
+	VoucherResult() (datamodel.Node, error)
 	EmptyVoucherResult() bool
 }

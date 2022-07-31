@@ -4,13 +4,11 @@ import (
 	"context"
 
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message"
-	"github.com/filecoin-project/go-data-transfer/registry"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
 )
 
 type statusList []datatransfer.Status
@@ -31,37 +29,17 @@ var resumeTransportStatesResponder = statusList{
 }
 
 // newRequest encapsulates message creation
-func (m *manager) newRequest(ctx context.Context, selector ipld.Node, isPull bool, voucher datatransfer.Voucher, baseCid cid.Cid, to peer.ID) (datatransfer.Request, error) {
+func (m *manager) newRequest(ctx context.Context, selector datamodel.Node, isPull bool, voucher datatransfer.TypedVoucher, baseCid cid.Cid, to peer.ID) (datatransfer.Request, error) {
 	// Generate a new transfer ID for the request
 	tid := datatransfer.TransferID(m.transferIDGen.next())
-	return message.NewRequest(tid, false, isPull, voucher.Type(), voucher, baseCid, selector)
+	return message.NewRequest(tid, false, isPull, &voucher, baseCid, selector)
 }
 
-func (m *manager) response(isRestart bool, isNew bool, err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {
-	isAccepted := err == nil || err == datatransfer.ErrPause || err == datatransfer.ErrResume
-	isPaused := err == datatransfer.ErrPause
-	resultType := datatransfer.EmptyTypeIdentifier
-	if voucherResult != nil {
-		resultType = voucherResult.Type()
+func (m *manager) otherPeer(chid datatransfer.ChannelID) peer.ID {
+	if chid.Initiator == m.peerID {
+		return chid.Responder
 	}
-	if isRestart {
-		return message.RestartResponse(tid, isAccepted, isPaused, resultType, voucherResult)
-	}
-
-	if isNew {
-		return message.NewResponse(tid, isAccepted, isPaused, resultType, voucherResult)
-	}
-	return message.VoucherResultResponse(tid, isAccepted, isPaused, resultType, voucherResult)
-}
-
-func (m *manager) completeResponse(err error, tid datatransfer.TransferID, voucherResult datatransfer.VoucherResult) (datatransfer.Response, error) {
-	isAccepted := err == nil || err == datatransfer.ErrPause || err == datatransfer.ErrResume
-	isPaused := err == datatransfer.ErrPause
-	resultType := datatransfer.EmptyTypeIdentifier
-	if voucherResult != nil {
-		resultType = voucherResult.Type()
-	}
-	return message.CompleteResponse(tid, isAccepted, isPaused, resultType, voucherResult)
+	return chid.Initiator
 }
 
 func (m *manager) resume(chid datatransfer.ChannelID) error {
@@ -111,30 +89,4 @@ func (m *manager) cancelMessage(chid datatransfer.ChannelID) datatransfer.Messag
 		return message.CancelRequest(chid.ID)
 	}
 	return message.CancelResponse(chid.ID)
-}
-
-func (m *manager) decodeVoucherResult(response datatransfer.Response) (datatransfer.VoucherResult, error) {
-	vtypStr := datatransfer.TypeIdentifier(response.VoucherResultType())
-	decoder, has := m.resultTypes.Decoder(vtypStr)
-	if !has {
-		return nil, xerrors.Errorf("unknown voucher result type: %s", vtypStr)
-	}
-	encodable, err := response.VoucherResult(decoder)
-	if err != nil {
-		return nil, err
-	}
-	return encodable.(datatransfer.Registerable), nil
-}
-
-func (m *manager) decodeVoucher(request datatransfer.Request, registry *registry.Registry) (datatransfer.Voucher, error) {
-	vtypStr := datatransfer.TypeIdentifier(request.VoucherType())
-	decoder, has := registry.Decoder(vtypStr)
-	if !has {
-		return nil, xerrors.Errorf("unknown voucher type: %s", vtypStr)
-	}
-	encodable, err := request.Voucher(decoder)
-	if err != nil {
-		return nil, err
-	}
-	return encodable.(datatransfer.Registerable), nil
 }
