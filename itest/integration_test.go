@@ -725,6 +725,11 @@ func TestAutoRestart(t *testing.T) {
 				// Watch for successful completion
 				finished := make(chan struct{}, 2)
 				var subscriber datatransfer.Subscriber = func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+					if channelState.ChannelID().Initiator == channelState.SelfPeer() {
+						t.Logf("Initiator Event: %s, Status: %s", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
+					} else {
+						t.Logf("Responder Event: %s, Status: %s", datatransfer.Events[event.Code], datatransfer.Statuses[channelState.Status()])
+					}
 					if channelState.Status() == datatransfer.Completed {
 						finished <- struct{}{}
 					}
@@ -1161,9 +1166,11 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 							case <-ctx.Done():
 							case <-timer.C:
 								if data.isPull {
-									_ = dt1.CloseDataTransferChannel(ctx, chid)
+									err = dt1.CloseDataTransferChannel(ctx, chid)
+									require.NoError(t, err)
 								} else {
-									_ = dt2.CloseDataTransferChannel(ctx, chid)
+									err = dt2.CloseDataTransferChannel(ctx, chid)
+									require.NoError(t, err)
 								}
 							}
 						}()

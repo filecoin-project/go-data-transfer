@@ -158,6 +158,9 @@ type ChannelState interface {
 	// SelfPaused indicates whether the local peer for this channel is in a paused state
 	SelfPaused() bool
 
+	// TransferClosed indicates whether the transfer has finished
+	TransferClosed() bool
+
 	// Stages returns the timeline of events this data transfer has gone through,
 	// for observability purposes.
 	//

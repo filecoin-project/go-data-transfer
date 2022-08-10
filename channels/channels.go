@@ -306,6 +306,11 @@ func (c *Channels) SetRequiresFinalization(chid datatransfer.ChannelID, Requires
 	return c.send(chid, datatransfer.SetRequiresFinalization, RequiresFinalization)
 }
 
+// CloseTransfer indicates the transfer is closed, even if the transfer was not finished
+func (c *Channels) CloseTransfer(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.CloseTransfer)
+}
+
 // HasChannel returns true if the given channel id is being tracked
 func (c *Channels) HasChannel(chid datatransfer.ChannelID) (bool, error) {
 	return c.stateMachines.Has(chid)

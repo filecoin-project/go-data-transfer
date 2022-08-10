@@ -168,7 +168,7 @@ func (m *manager) channelCompleted(chid datatransfer.ChannelID, success bool, er
 	// If the transferred errored on completion
 	if !success {
 		// send an error, but only if we haven't already errored/finished transfer already for some reason
-		if !chst.Status().TransferComplete() {
+		if !chst.TransferClosed() {
 			err := fmt.Errorf("data transfer channel %s failed to transfer data: %s", chid, errorMessage)
 			log.Warnf(err.Error())
 			return m.channels.Error(chid, err)

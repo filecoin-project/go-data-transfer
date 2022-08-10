@@ -362,7 +362,7 @@ func (c *Channel) ActionFromChannelState(chst datatransfer.ChannelState) Action 
 
 func (c *Channel) actionFromChannelState(chst datatransfer.ChannelState) Action {
 	// if the state is closed, and we haven't closed, we need to close
-	if !c.requesterCancelled && c.state != channelClosed && chst.Status().TransferComplete() {
+	if !c.requesterCancelled && c.state != channelClosed && chst.TransferClosed() {
 		return Close
 	}
 

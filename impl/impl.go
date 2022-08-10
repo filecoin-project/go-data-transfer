@@ -374,29 +374,36 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 }
 
 func (m *manager) closeChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-	// Fire a cancel event
-	err := m.channels.Cancel(chid)
-	if err != nil {
-		return xerrors.Errorf("unable to send cancel to channel FSM: %w", err)
-	}
 
 	// Close the channel on the local transport
-	err = m.transport.ChannelUpdated(ctx, chid, nil)
+	if err := m.channels.CloseTransfer(chid); err != nil {
+		return xerrors.Errorf("unable to send close transfer message to FSM: %w", err)
+	}
+
+	if err := m.transport.ChannelUpdated(ctx, chid, nil); err != nil {
+		log.Warnf("unable to close channel %s: %s", chid, err)
+	}
 
 	// Send a cancel message to the remote peer async
 	go func() {
 		sctx, cancel := context.WithTimeout(context.Background(), cancelSendTimeout)
 		defer cancel()
 		log.Infof("%s: sending cancel channel to %s for channel %s", m.peerID, m.otherPeer(chid), chid)
-		err = m.transport.SendMessage(sctx, chid, m.cancelMessage(chid))
-		if err != nil {
+
+		if err := m.transport.SendMessage(sctx, chid, m.cancelMessage(chid)); err != nil {
 			err = fmt.Errorf("unable to send cancel message for channel %s to peer %s: %w",
 				chid, m.peerID, err)
 			log.Warn(err)
 		}
 	}()
 
-	return err
+	// Fire a cancel event
+	err := m.channels.Cancel(chid)
+	if err != nil {
+		return xerrors.Errorf("unable to send cancel to channel FSM: %w", err)
+	}
+
+	return nil
 }
 
 // close an open channel and fire an error event
@@ -420,15 +427,14 @@ func (m *manager) CloseDataTransferChannelWithError(ctx context.Context, chid da
 
 func (m *manager) closeChannelWithError(ctx context.Context, chid datatransfer.ChannelID, cherr error) error {
 
-	// Fire an error event
-	if err := m.channels.Error(chid, cherr); err != nil {
-		return xerrors.Errorf("unable to send error %s to channel FSM: %w", cherr, err)
-	}
-
 	// Close transfport and try to send a cancel message to the remote peer.
 	// It's quite likely we aren't able to send the message to the peer because
 	// the channel is already in an error state, which is probably because of
 	// connection issues, so if we cant send the message just log a warning.
+	if err := m.channels.CloseTransfer(chid); err != nil {
+		return xerrors.Errorf("unable to send close transfer message to FSM: %w", err)
+	}
+
 	log.Infof("%s: sending cancel channel to %s for channel %s", m.peerID, m.otherPeer(chid), chid)
 
 	if err := m.transport.ChannelUpdated(ctx, chid, m.cancelMessage(chid)); err != nil {
@@ -437,6 +443,11 @@ func (m *manager) closeChannelWithError(ctx context.Context, chid datatransfer.C
 		// by subsequent errors.
 		log.Warnf("unable to close channel %s: %s", chid, err)
 	}
+	// Fire an error event
+	if err := m.channels.Error(chid, cherr); err != nil {
+		return xerrors.Errorf("unable to send error %s to channel FSM: %w", cherr, err)
+	}
+
 	return nil
 }
 

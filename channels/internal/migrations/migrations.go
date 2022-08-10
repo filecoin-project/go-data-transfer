@@ -71,6 +71,18 @@ func NoOpChannelState0To2(oldChannelState *ChannelStateV2) (*ChannelStateV2, err
 	return oldChannelState, nil
 }
 
+var transferClosedStatuses = []datatransfer.Status{
+	datatransfer.TransferFinished,
+	datatransfer.ResponderFinalizingTransferFinished,
+	datatransfer.Finalizing,
+	datatransfer.Completed,
+	datatransfer.Completing,
+	datatransfer.Failing,
+	datatransfer.Failed,
+	datatransfer.Cancelling,
+	datatransfer.Cancelled,
+}
+
 func MigrateChannelState2To3(oldChannelState *ChannelStateV2) (*internal.ChannelState, error) {
 	receivedIndex := basicnode.NewInt(oldChannelState.ReceivedBlocksTotal)
 	sentIndex := basicnode.NewInt(oldChannelState.SentBlocksTotal)
@@ -81,6 +93,12 @@ func MigrateChannelState2To3(oldChannelState *ChannelStateV2) (*internal.Channel
 	newStatus := oldChannelState.Status
 	if newStatus == datatransfer.ResponderPaused || newStatus == datatransfer.InitiatorPaused || newStatus == datatransfer.BothPaused {
 		newStatus = datatransfer.Ongoing
+	}
+	var transferClosed bool
+	for _, status := range transferClosedStatuses {
+		if oldChannelState.Status == status {
+			transferClosed = true
+		}
 	}
 	return &internal.ChannelState{
 		SelfPeer:             oldChannelState.SelfPeer,
@@ -106,6 +124,7 @@ func MigrateChannelState2To3(oldChannelState *ChannelStateV2) (*internal.Channel
 		RequiresFinalization: oldChannelState.RequiresFinalization,
 		InitiatorPaused:      initiatorPaused,
 		ResponderPaused:      responderPaused,
+		TransferClosed:       transferClosed,
 		Stages:               oldChannelState.Stages,
 	}, nil
 }

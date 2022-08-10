@@ -46,6 +46,7 @@ var ChannelEvents = fsm.Events{
 	}),
 
 	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelling).Action(func(chst *internal.ChannelState) error {
+		chst.TransferClosed = true
 		chst.AddLog("")
 		return nil
 	}),
@@ -145,6 +146,7 @@ var ChannelEvents = fsm.Events{
 
 	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failing).Action(func(chst *internal.ChannelState, err error) error {
 		chst.Message = err.Error()
+		chst.TransferClosed = true
 		chst.AddLog("data transfer erred: %s", chst.Message)
 		return nil
 	}),
@@ -224,6 +226,7 @@ var ChannelEvents = fsm.Events{
 		// the finalization process and complete the transfer
 		From(datatransfer.AwaitingAcceptance).To(datatransfer.Completing).
 		Action(func(chst *internal.ChannelState) error {
+			chst.TransferClosed = true
 			chst.AddLog("")
 			return nil
 		}),
@@ -248,12 +251,20 @@ var ChannelEvents = fsm.Events{
 	}),
 
 	fsm.Event(datatransfer.BeginFinalizing).FromAny().To(datatransfer.Finalizing).Action(func(chst *internal.ChannelState) error {
+		chst.TransferClosed = true
+		chst.AddLog("")
+		return nil
+	}),
+
+	fsm.Event(datatransfer.CloseTransfer).FromAny().ToJustRecord().Action(func(chst *internal.ChannelState) error {
+		chst.TransferClosed = true
 		chst.AddLog("")
 		return nil
 	}),
 
 	// Both the local node and the remote peer have completed the transfer
 	fsm.Event(datatransfer.Complete).FromAny().To(datatransfer.Completing).Action(func(chst *internal.ChannelState) error {
+		chst.TransferClosed = true
 		chst.AddLog("")
 		return nil
 	}),

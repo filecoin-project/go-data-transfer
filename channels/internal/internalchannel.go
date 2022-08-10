@@ -121,6 +121,8 @@ type ChannelState struct {
 	ResponderPaused bool
 	// InitiatorPaused indicates whether the initiator is in a paused state
 	InitiatorPaused bool
+	// TransferClosed indicates the transfer portion of the request is over
+	TransferClosed bool
 	// Stages traces the execution fo a data transfer.
 	//
 	// EXPERIMENTAL; subject to change.

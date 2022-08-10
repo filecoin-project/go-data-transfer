@@ -440,6 +440,15 @@ func TestMigrations(t *testing.T) {
 		datatransfer.ResponderPaused,
 		datatransfer.BothPaused,
 		datatransfer.Ongoing,
+		datatransfer.TransferFinished,
+		datatransfer.ResponderFinalizingTransferFinished,
+		datatransfer.Finalizing,
+		datatransfer.Completed,
+		datatransfer.Completing,
+		datatransfer.Failing,
+		datatransfer.Failed,
+		datatransfer.Cancelling,
+		datatransfer.Cancelled,
 	}
 	for i := 0; i < numChannels; i++ {
 		transferIDs[i] = datatransfer.TransferID(rand.Uint64())
@@ -515,8 +524,9 @@ func TestMigrations(t *testing.T) {
 		datatransfer.Ongoing,
 	}
 
-	expectedInitiatorPaused := []bool{false, true, false, true, false}
-	expectedResponderPaused := []bool{false, false, true, true, false}
+	expectedInitiatorPaused := []bool{false, true, false, true, false, false, false, false, false, false, false, false, false, false}
+	expectedResponderPaused := []bool{false, false, true, true, false, false, false, false, false, false, false, false, false, false}
+	expectedTransferClosed := []bool{false, false, false, false, false, true, true, true, true, true, true, true, true, true}
 	for i := 0; i < numChannels; i++ {
 
 		channel, err := channelList.GetByID(ctx, datatransfer.ChannelID{
@@ -540,10 +550,10 @@ func TestMigrations(t *testing.T) {
 		require.Equal(t, expectedStatuses[i], channel.Status())
 		require.Equal(t, expectedInitiatorPaused[i], channel.InitiatorPaused())
 		require.Equal(t, expectedResponderPaused[i], channel.ResponderPaused())
+		require.Equal(t, expectedTransferClosed[i], channel.TransferClosed())
 		require.Equal(t, basicnode.NewInt(sentIndex[i]), channel.SentIndex())
 		require.Equal(t, basicnode.NewInt(receivedIndex[i]), channel.ReceivedIndex())
 		require.Equal(t, basicnode.NewInt(queuedIndex[i]), channel.QueuedIndex())
-
 	}
 }
 

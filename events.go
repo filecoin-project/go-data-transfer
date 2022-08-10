@@ -129,6 +129,9 @@ const (
 
 	// SendMessageError indicates an error sending a data transfer message
 	SendMessageError
+
+	// CloseTransfer is called indicates the transfer is complete, but not because it was finished
+	CloseTransfer
 )
 
 // Events are human readable names for data transfer events
@@ -169,6 +172,7 @@ var Events = map[EventCode]string{
 	DataLimitExceeded:           "DataLimitExceeded",
 	TransferInitiated:           "TransferInitiated",
 	SendMessageError:            "SendMessageError",
+	CloseTransfer:               "CloseTransfer",
 }
 
 // Event is a struct containing information about a data transfer event

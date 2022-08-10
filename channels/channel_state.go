@@ -158,6 +158,10 @@ func (c channelState) SelfPaused() bool {
 	return c.ResponderPaused()
 }
 
+func (c channelState) TransferClosed() bool {
+	return c.ic.TransferClosed
+}
+
 // Stages returns the current ChannelStages object, or an empty object.
 // It is unsafe for the caller to modify the return value, and changes may not
 // be persisted. It should be treated as immutable.

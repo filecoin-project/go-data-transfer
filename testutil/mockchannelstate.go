@@ -250,3 +250,7 @@ func (m *MockChannelState) SelfPaused() bool {
 	}
 	return m.responderPaused
 }
+
+func (m *MockChannelState) TransferClosed() bool {
+	return false
+}
