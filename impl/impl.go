@@ -327,6 +327,7 @@ func (m *manager) updateValidationStatus(ctx context.Context, chid datatransfer.
 		return err
 	}
 
+	transferAlreadyClosed := chst.TransferClosed()
 	// dispatch channel events and generate a response message
 	err = m.processValidationUpdate(ctx, chst, result)
 	if err != nil {
@@ -341,6 +342,9 @@ func (m *manager) updateValidationStatus(ctx context.Context, chid datatransfer.
 	response := message.ValidationResultResponse(messageType, chid.ID, result, err,
 		result.LeaveRequestPaused(chst))
 
+	if transferAlreadyClosed {
+		return m.transport.SendMessage(ctx, chid, response)
+	}
 	// dispatch transport updates
 	return m.transport.ChannelUpdated(ctx, chid, response)
 }
