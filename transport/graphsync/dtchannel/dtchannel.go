@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -364,6 +365,11 @@ func (c *Channel) ActionFromChannelState(chst datatransfer.ChannelState) Action 
 func (c *Channel) actionFromChannelState(chst datatransfer.ChannelState) Action {
 	// if the state is closed, and we haven't closed, we need to close
 	if !c.requesterCancelled && c.state != channelClosed && chst.TransferClosed() {
+		if chst.ChannelID().Initiator == chst.SelfPeer() {
+			log.Infof("closing initiator")
+		} else {
+			log.Infof("closing responder")
+		}
 		return Close
 	}
 
@@ -487,6 +493,7 @@ func (c *Channel) Cleanup() {
 }
 
 func (c *Channel) Close(ctx context.Context) error {
+	debug.PrintStack()
 	// Cancel the graphsync request
 	c.lk.Lock()
 	errch := c.cancel(ctx)

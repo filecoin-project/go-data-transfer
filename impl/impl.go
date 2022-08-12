@@ -378,7 +378,7 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 }
 
 func (m *manager) closeChannel(ctx context.Context, chid datatransfer.ChannelID) error {
-
+	log.Infof("closing the channel imperatively")
 	// Close the channel on the local transport
 	if err := m.channels.CloseTransfer(chid); err != nil {
 		return xerrors.Errorf("unable to send close transfer message to FSM: %w", err)
