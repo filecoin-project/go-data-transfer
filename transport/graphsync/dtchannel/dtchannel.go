@@ -198,6 +198,7 @@ func (c *Channel) GsDataRequestRcvd(sender peer.ID, requestID graphsync.RequestI
 	}
 
 	action := c.actionFromChannelState(chst)
+	log.Infof(string(action))
 	switch action {
 	case Pause:
 		c.state = channelPaused

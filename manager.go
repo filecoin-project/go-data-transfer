@@ -4,9 +4,12 @@ import (
 	"context"
 
 	"github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
+
+var log = logging.Logger("dt_graphsync")
 
 // ValidationResult describes the result of validating a voucher
 type ValidationResult struct {
@@ -55,6 +58,7 @@ func (vr ValidationResult) LeaveRequestPaused(chst ChannelState) bool {
 	} else {
 		limitFactor = chst.Received()
 	}
+	log.Infof("datalimit %d, dataprocesed %d", vr.DataLimit, limitFactor)
 	return vr.DataLimit != 0 && limitFactor >= vr.DataLimit
 }
 

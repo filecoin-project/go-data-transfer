@@ -175,7 +175,7 @@ var ChannelEvents = fsm.Events{
 	// seems less than ideal. We need some kind of support for pausing being an independent aspect of state
 	// Possibly we should just remove whether a state is paused from the state entirely.
 	fsm.Event(datatransfer.PauseInitiator).
-		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance).ToJustRecord().
+		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance, datatransfer.ResponderFinalizing, datatransfer.ResponderFinalizingTransferFinished).ToJustRecord().
 		Action(func(chst *internal.ChannelState) error {
 			chst.InitiatorPaused = true
 			chst.AddLog("")

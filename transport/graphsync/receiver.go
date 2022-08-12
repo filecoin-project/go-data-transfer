@@ -49,6 +49,7 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 	if isNewOrRestart && incoming.IsPull() {
 		return datatransfer.ErrUnsupported
 	}
+	log.Debugf("received request for channel: %s", chid)
 	response, receiveErr := r.transport.events.OnRequestReceived(chid, incoming)
 	initiateGraphsyncRequest := isNewOrRestart && response != nil && receiveErr == nil
 	ch, err := r.transport.getDTChannel(chid)
