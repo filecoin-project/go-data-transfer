@@ -193,7 +193,6 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.DataLimitExceeded).
 		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance, datatransfer.ResponderCompleted, datatransfer.ResponderFinalizing).ToJustRecord().
 		Action(func(chst *internal.ChannelState) error {
-			chst.ResponderPaused = true
 			chst.AddLog("")
 			return nil
 		}),

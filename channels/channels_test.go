@@ -196,7 +196,6 @@ func TestChannels(t *testing.T) {
 		err = channelList.DataLimitExceeded(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.DataLimitExceeded)
-		require.True(t, state.ResponderPaused())
 
 		err = channelList.SetDataLimit(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, 700)
 		require.NoError(t, err)
@@ -205,7 +204,6 @@ func TestChannels(t *testing.T) {
 
 		err = channelList.ResumeResponder(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		state = checkEvent(ctx, t, received, datatransfer.ResumeResponder)
-		require.False(t, state.ResponderPaused())
 
 		err = channelList.PauseInitiator(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		state = checkEvent(ctx, t, received, datatransfer.PauseInitiator)
@@ -214,7 +212,7 @@ func TestChannels(t *testing.T) {
 		err = channelList.DataLimitExceeded(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.DataLimitExceeded)
-		require.True(t, state.BothPaused())
+		require.True(t, state.InitiatorPaused())
 
 	})
 

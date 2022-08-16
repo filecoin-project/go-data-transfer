@@ -144,7 +144,7 @@ func (c channelState) InitiatorPaused() bool {
 }
 
 func (c channelState) ResponderPaused() bool {
-	return c.ic.ResponderPaused || c.ic.Status == datatransfer.Finalizing
+	return c.ic.ResponderPaused
 }
 
 func (c channelState) BothPaused() bool {
@@ -160,6 +160,24 @@ func (c channelState) SelfPaused() bool {
 
 func (c channelState) TransferClosed() bool {
 	return c.ic.TransferClosed
+}
+
+func (c channelState) ExceededDataLimit() bool {
+	var limitFactor uint64
+	if c.ic.SelfPeer == c.ic.Sender {
+		limitFactor = c.ic.Queued
+	} else {
+		limitFactor = c.ic.Received
+	}
+	return c.ic.DataLimit != 0 && limitFactor >= c.ic.DataLimit
+}
+
+func (c channelState) AwaitingFinalization() bool {
+	return c.Status().InFinalization() && c.ic.RequiresFinalization
+}
+
+func (c channelState) TransferOnHold() bool {
+	return c.SelfPaused() || c.AwaitingFinalization() || c.ExceededDataLimit()
 }
 
 // Stages returns the current ChannelStages object, or an empty object.
