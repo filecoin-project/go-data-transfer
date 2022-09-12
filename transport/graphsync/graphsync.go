@@ -640,6 +640,7 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 	}
 
 	if err != nil && err != datatransfer.ErrPause {
+		log.Infof("%s: terminating req_id=%d with error: %s", chid, request.ID(), err.Error())
 		hookActions.TerminateWithError(err)
 		return
 	}
