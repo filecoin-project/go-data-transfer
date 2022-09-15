@@ -33,7 +33,7 @@ type TransferRequest1_1 struct {
 	VTyp   datatransfer.TypeIdentifier
 	XferID uint64
 
-	RestartChannel datatransfer.ChannelID
+	RestartChannel *datatransfer.ChannelID
 }
 
 func (trq *TransferRequest1_1) MessageForProtocol(targetProtocol protocol.ID) (datatransfer.Message, error) {
@@ -62,7 +62,10 @@ func (trq *TransferRequest1_1) RestartChannelId() (datatransfer.ChannelID, error
 	if !trq.IsRestartExistingChannelRequest() {
 		return datatransfer.ChannelID{}, xerrors.New("not a restart request")
 	}
-	return trq.RestartChannel, nil
+	if trq.RestartChannel == nil {
+		return datatransfer.ChannelID{}, xerrors.New("TransferRequest1_1.RestartChannel = nil")
+	}
+	return *trq.RestartChannel, nil
 }
 
 func (trq *TransferRequest1_1) IsNew() bool {

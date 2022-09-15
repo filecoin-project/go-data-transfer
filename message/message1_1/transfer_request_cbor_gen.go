@@ -381,8 +381,18 @@ func (t *TransferRequest1_1) UnmarshalCBOR(r io.Reader) error {
 
 			{
 
-				if err := t.RestartChannel.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("unmarshaling t.RestartChannel: %w", err)
+				b, err := br.ReadByte()
+				if err != nil {
+					return err
+				}
+				if b != cbg.CborNull[0] {
+					if err := br.UnreadByte(); err != nil {
+						return err
+					}
+					t.RestartChannel = new(datatransfer.ChannelID)
+					if err := t.RestartChannel.UnmarshalCBOR(br); err != nil {
+						return xerrors.Errorf("unmarshaling t.RestartChannel pointer: %w", err)
+					}
 				}
 
 			}

@@ -49,7 +49,7 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, vtype d
 func RestartExistingChannelRequest(channelId datatransfer.ChannelID) datatransfer.Request {
 	return &TransferRequest1_1{
 		MessageType:    uint64(types.RestartExistingChannelRequestMessage),
-		RestartChannel: channelId,
+		RestartChannel: &channelId,
 	}
 }
 
