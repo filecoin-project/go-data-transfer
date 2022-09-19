@@ -16,7 +16,7 @@ import (
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	delay "github.com/ipfs/go-ipfs-delay"
 	"github.com/ipld/go-ipld-prime"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	tn "github.com/filecoin-project/go-data-transfer/benchmarks/testnet"
