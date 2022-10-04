@@ -212,7 +212,6 @@ func (m *manager) processUpdateVoucher(chid datatransfer.ChannelID, request data
 
 // receiveUpdateRequest handles an incoming request message change in pause status
 func (m *manager) receiveUpdateRequest(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
-
 	if request.IsPaused() {
 		return nil, m.pauseOther(chid)
 	}
@@ -225,8 +224,7 @@ func (m *manager) receiveUpdateRequest(chid datatransfer.ChannelID, request data
 	if err != nil {
 		return nil, err
 	}
-	if chst.Status() == datatransfer.ResponderPaused ||
-		chst.Status() == datatransfer.ResponderFinalizing {
+	if chst.SelfPaused() {
 		return nil, datatransfer.ErrPause
 	}
 	return nil, nil
@@ -290,14 +288,14 @@ func (m *manager) recordAcceptedValidationEvents(chst datatransfer.ChannelState,
 
 	// pause or resume the request as neccesary
 	if result.LeaveRequestPaused(chst) {
-		if !chst.Status().IsResponderPaused() {
+		if !chst.ResponderPaused() {
 			err := m.channels.PauseResponder(chid)
 			if err != nil {
 				return err
 			}
 		}
 	} else {
-		if chst.Status().IsResponderPaused() {
+		if chst.ResponderPaused() {
 			err := m.channels.ResumeResponder(chid)
 			if err != nil {
 				return err

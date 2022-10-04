@@ -36,8 +36,8 @@ type EventsHandler interface {
 	// OnDataSent is called when we send data for the given channel ID
 	OnDataSent(chid ChannelID, link ipld.Link, size uint64, index int64, unique bool) error
 
-	// OnTransferQueued is called when a new data transfer request is queued in the transport layer.
-	OnTransferQueued(chid ChannelID)
+	// OnTransferInitiated is called when the transport layer initiates transfer
+	OnTransferInitiated(chid ChannelID)
 
 	// OnRequestReceived is called when we receive a new request to send data
 	// for the given channel ID
@@ -87,7 +87,8 @@ data protocol.
 
 Transport is the minimum interface that must be satisfied to serve as a datatransfer
 transport layer. Transports must be able to open (open is always called by the receiving peer)
-and close channels, and set at an event handler */
+and close channels, and set at an event handler
+*/
 type Transport interface {
 	// OpenChannel initiates an outgoing request for the other peer to send data
 	// to us on this channel

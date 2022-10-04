@@ -117,6 +117,10 @@ type ChannelState struct {
 	// RequiresFinalization indicates at the end of the transfer, the channel should
 	// be left open for a final settlement
 	RequiresFinalization bool
+	// ResponderPaused indicates whether the responder is in a paused state
+	ResponderPaused bool
+	// InitiatorPaused indicates whether the initiator is in a paused state
+	InitiatorPaused bool
 	// Stages traces the execution fo a data transfer.
 	//
 	// EXPERIMENTAL; subject to change.

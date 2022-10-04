@@ -23,6 +23,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 	. "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
 	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/testharness"
 )
 
 func TestManager(t *testing.T) {
@@ -100,6 +101,18 @@ func TestManager(t *testing.T) {
 				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				require.True(t, events.OnDataReceivedCalled)
 				require.Error(t, gsData.incomingBlockHookActions.TerminationError)
+			},
+		},
+		"gs outgoing request with recognized dt request can receive request processing listener": {
+			action: func(gsData *harness) {
+				gsData.outgoingRequestHook()
+				gsData.outgoingRequestProcessingListener()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				require.Equal(t, events.ChannelOpenedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
+				require.Equal(t, 0, events.OnRequestReceivedCallCount)
+				require.True(t, events.TransferInitiatedCalled)
+				require.Equal(t, events.TransferInitiatedChannelID, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 			},
 		},
 		"outgoing gs request with recognized dt request can receive gs response": {
@@ -602,31 +615,15 @@ func TestManager(t *testing.T) {
 			},
 		},
 
-		"incoming request can be queued": {
+		"recognized incoming request can begin processing": {
 			action: func(gsData *harness) {
-				gsData.incomingRequestQueuedHook()
+				gsData.incomingRequestHook()
+				gsData.incomingRequestProcessingListener()
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.True(t, events.TransferQueuedCalled)
+				require.True(t, events.TransferInitiatedCalled)
 				require.Equal(t, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other},
-					events.TransferQueuedChannelID)
-			},
-		},
-
-		"incoming request with dtResponse can be queued": {
-			requestConfig: gsRequestConfig{
-				dtIsResponse: true,
-			},
-			responseConfig: gsResponseConfig{
-				dtIsResponse: true,
-			},
-			action: func(gsData *harness) {
-				gsData.incomingRequestQueuedHook()
-			},
-			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
-				require.True(t, events.TransferQueuedCalled)
-				require.Equal(t, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self},
-					events.TransferQueuedChannelID)
+					events.TransferInitiatedChannelID)
 			},
 		},
 
@@ -711,8 +708,7 @@ func TestManager(t *testing.T) {
 		},
 		"open channel adds block count to the DoNotSendFirstBlocks extension for v1.2 protocol": {
 			action: func(gsData *harness) {
-				cids := testutil.GenerateCids(2)
-				channel := testutil.NewMockChannelState(testutil.MockChannelStateParams{ReceivedCids: cids})
+				channel := testutil.NewMockChannelState(testutil.MockChannelStateParams{ReceivedCidsTotal: 2})
 				stor, _ := gsData.outgoing.Selector()
 
 				go gsData.outgoingRequestHook()
@@ -742,8 +738,7 @@ func TestManager(t *testing.T) {
 		},
 		"ChannelsForPeer when request is open": {
 			action: func(gsData *harness) {
-				cids := testutil.GenerateCids(2)
-				channel := testutil.NewMockChannelState(testutil.MockChannelStateParams{ReceivedCids: cids})
+				channel := testutil.NewMockChannelState(testutil.MockChannelStateParams{ReceivedCidsTotal: 2})
 				stor, _ := gsData.outgoing.Selector()
 
 				go gsData.outgoingRequestHook()
@@ -772,8 +767,7 @@ func TestManager(t *testing.T) {
 		},
 		"open channel cancels an existing request with the same channel ID": {
 			action: func(gsData *harness) {
-				cids := testutil.GenerateCids(2)
-				channel := testutil.NewMockChannelState(testutil.MockChannelStateParams{ReceivedCids: cids})
+				channel := testutil.NewMockChannelState(testutil.MockChannelStateParams{ReceivedCidsTotal: 2})
 				stor, _ := gsData.outgoing.Selector()
 				go gsData.outgoingRequestHook()
 				_ = gsData.transport.OpenChannel(
@@ -889,7 +883,7 @@ func TestManager(t *testing.T) {
 				for _, ext := range requestReceived.Extensions {
 					extensions[ext.Name] = ext.Data
 				}
-				request := testutil.NewFakeRequest(graphsync.NewRequestID(), extensions)
+				request := testharness.NewFakeRequest(graphsync.NewRequestID(), extensions, graphsync.RequestTypeNew)
 				gsData.fgs.OutgoingRequestHook(gsData.other, request, gsData.outgoingRequestHookActions)
 				_ = gsData.transport.CloseChannel(gsData.ctx, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self})
 				ctxt, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -990,7 +984,7 @@ func TestManager(t *testing.T) {
 				for _, ext := range requestReceived.Extensions {
 					extensions[ext.Name] = ext.Data
 				}
-				request := testutil.NewFakeRequest(graphsync.NewRequestID(), extensions)
+				request := testharness.NewFakeRequest(graphsync.NewRequestID(), extensions, graphsync.RequestTypeNew)
 				gsData.fgs.OutgoingRequestHook(gsData.other, request, gsData.outgoingRequestHookActions)
 				select {
 				case <-gsData.ctx.Done():
@@ -1053,8 +1047,8 @@ func TestManager(t *testing.T) {
 			altRequest := data.requestConfig.makeRequest(t, transferID, graphsync.NewRequestID())
 			response := data.responseConfig.makeResponse(t, transferID, requestID)
 			updatedRequest := data.updatedConfig.makeRequest(t, transferID, requestID)
-			block := testutil.NewFakeBlockData()
-			fgs := testutil.NewFakeGraphSync()
+			block := testharness.NewFakeBlockData(rand.Uint64(), int64(rand.Uint32()), true)
+			fgs := testharness.NewFakeGraphSync()
 			outgoing := testutil.NewDTRequest(t, transferID)
 			incoming := testutil.NewDTResponse(t, transferID)
 			transport := NewTransport(peers[0], fgs)
@@ -1072,13 +1066,12 @@ func TestManager(t *testing.T) {
 				response:                    response,
 				updatedRequest:              updatedRequest,
 				block:                       block,
-				outgoingRequestHookActions:  &testutil.FakeOutgoingRequestHookActions{},
-				outgoingBlockHookActions:    &testutil.FakeOutgoingBlockHookActions{},
-				incomingBlockHookActions:    &testutil.FakeIncomingBlockHookActions{},
-				incomingRequestHookActions:  &testutil.FakeIncomingRequestHookActions{},
-				requestUpdatedHookActions:   &testutil.FakeRequestUpdatedActions{},
-				incomingResponseHookActions: &testutil.FakeIncomingResponseHookActions{},
-				requestQueuedHookActions:    &testutil.FakeRequestQueuedHookActions{},
+				outgoingRequestHookActions:  &testharness.FakeOutgoingRequestHookActions{},
+				outgoingBlockHookActions:    &testharness.FakeOutgoingBlockHookActions{},
+				incomingBlockHookActions:    &testharness.FakeIncomingBlockHookActions{},
+				incomingRequestHookActions:  &testharness.FakeIncomingRequestHookActions{},
+				requestUpdatedHookActions:   &testharness.FakeRequestUpdatedActions{},
+				incomingResponseHookActions: &testharness.FakeIncomingResponseHookActions{},
 			}
 			require.NoError(t, transport.SetEventHandler(&data.events))
 			if data.action != nil {
@@ -1114,8 +1107,8 @@ type fakeEvents struct {
 	OnReceiveDataErrorCalled    bool
 	OnReceiveDataErrorChannelID datatransfer.ChannelID
 	OnContextAugmentFunc        func(context.Context) context.Context
-	TransferQueuedCalled        bool
-	TransferQueuedChannelID     datatransfer.ChannelID
+	TransferInitiatedCalled     bool
+	TransferInitiatedChannelID  datatransfer.ChannelID
 
 	ChannelCompletedSuccess  bool
 	RequestReceivedRequest   datatransfer.Request
@@ -1136,9 +1129,9 @@ func (fe *fakeEvents) OnRequestCancelled(chid datatransfer.ChannelID, err error)
 	return nil
 }
 
-func (fe *fakeEvents) OnTransferQueued(chid datatransfer.ChannelID) {
-	fe.TransferQueuedCalled = true
-	fe.TransferQueuedChannelID = chid
+func (fe *fakeEvents) OnTransferInitiated(chid datatransfer.ChannelID) {
+	fe.TransferInitiatedCalled = true
+	fe.TransferInitiatedChannelID = chid
 }
 
 func (fe *fakeEvents) OnRequestDisconnected(chid datatransfer.ChannelID, err error) error {
@@ -1209,7 +1202,7 @@ type harness struct {
 	incoming                    datatransfer.Response
 	ctx                         context.Context
 	transport                   *Transport
-	fgs                         *testutil.FakeGraphSync
+	fgs                         *testharness.FakeGraphSync
 	transferID                  datatransfer.TransferID
 	self                        peer.ID
 	other                       peer.ID
@@ -1218,13 +1211,12 @@ type harness struct {
 	altRequest                  graphsync.RequestData
 	response                    graphsync.ResponseData
 	updatedRequest              graphsync.RequestData
-	outgoingRequestHookActions  *testutil.FakeOutgoingRequestHookActions
-	incomingBlockHookActions    *testutil.FakeIncomingBlockHookActions
-	outgoingBlockHookActions    *testutil.FakeOutgoingBlockHookActions
-	incomingRequestHookActions  *testutil.FakeIncomingRequestHookActions
-	requestUpdatedHookActions   *testutil.FakeRequestUpdatedActions
-	incomingResponseHookActions *testutil.FakeIncomingResponseHookActions
-	requestQueuedHookActions    *testutil.FakeRequestQueuedHookActions
+	outgoingRequestHookActions  *testharness.FakeOutgoingRequestHookActions
+	incomingBlockHookActions    *testharness.FakeIncomingBlockHookActions
+	outgoingBlockHookActions    *testharness.FakeOutgoingBlockHookActions
+	incomingRequestHookActions  *testharness.FakeIncomingRequestHookActions
+	requestUpdatedHookActions   *testharness.FakeRequestUpdatedActions
+	incomingResponseHookActions *testharness.FakeIncomingResponseHookActions
 }
 
 func (ha *harness) outgoingRequestHook() {
@@ -1246,10 +1238,6 @@ func (ha *harness) incomingRequestHook() {
 	ha.fgs.IncomingRequestHook(ha.other, ha.request, ha.incomingRequestHookActions)
 }
 
-func (ha *harness) incomingRequestQueuedHook() {
-	ha.fgs.IncomingRequestQueuedHook(ha.other, ha.request, ha.requestQueuedHookActions)
-}
-
 func (ha *harness) requestUpdatedHook() {
 	ha.fgs.RequestUpdatedHook(ha.other, ha.request, ha.updatedRequest, ha.requestUpdatedHookActions)
 }
@@ -1267,6 +1255,13 @@ func (ha *harness) networkErrorListener(err error) {
 }
 func (ha *harness) receiverNetworkErrorListener(err error) {
 	ha.fgs.ReceiverNetworkErrorListener(ha.other, err)
+}
+func (ha *harness) outgoingRequestProcessingListener() {
+	ha.fgs.OutgoingRequestProcessingListener(ha.other, ha.request, 0)
+}
+
+func (ha *harness) incomingRequestProcessingListener() {
+	ha.fgs.IncomingRequestProcessingListener(ha.other, ha.request, 0)
 }
 
 type dtConfig struct {
@@ -1307,7 +1302,7 @@ func (grc *gsRequestConfig) makeRequest(t *testing.T, transferID datatransfer.Tr
 		dtExtensionMalformed: grc.dtExtensionMalformed,
 	}
 	extensions := dtConfig.extensions(t, transferID, extension.ExtensionDataTransfer1_1)
-	return testutil.NewFakeRequest(requestID, extensions)
+	return testharness.NewFakeRequest(requestID, extensions, graphsync.RequestTypeNew)
 }
 
 type gsResponseConfig struct {
@@ -1324,7 +1319,7 @@ func (grc *gsResponseConfig) makeResponse(t *testing.T, transferID datatransfer.
 		dtExtensionMalformed: grc.dtExtensionMalformed,
 	}
 	extensions := dtConfig.extensions(t, transferID, extension.ExtensionDataTransfer1_1)
-	return testutil.NewFakeResponse(requestID, extensions, grc.status)
+	return testharness.NewFakeResponse(requestID, extensions, grc.status)
 }
 
 func assertDecodesToMessage(t *testing.T, data datamodel.Node, expected datatransfer.Message) {

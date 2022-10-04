@@ -2,6 +2,7 @@ package impl_test
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"testing"
 	"time"
@@ -11,9 +12,9 @@ import (
 	dss "github.com/ipfs/go-datastore/sync"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
@@ -85,7 +86,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"SendVoucher with no channel open": {
 			verify: func(t *testing.T, h *harness) {
 				err := h.dt.SendVoucher(h.ctx, datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: 999999}, h.voucher)
-				require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
+				require.True(t, errors.As(err, new(*channels.ErrNotFound)))
 			},
 		},
 		"SendVoucher with channel open, push succeeds": {
@@ -333,7 +334,7 @@ func TestDataTransferInitiating(t *testing.T) {
 				events:         make(chan datatransfer.EventCode, len(verify.expectedEvents)),
 			}
 			ev.setup(t, dt)
-			h.stor = testutil.AllSelector()
+			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
 			h.voucher = testutil.NewTestTypedVoucher()
 			h.voucherResult = testutil.NewTestTypedVoucher()
 			require.NoError(t, err)
@@ -352,7 +353,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 		verify         func(t *testing.T, h *harness)
 	}{
 		"RestartDataTransferChannel: Manager Peer Create Pull Restart works": {
-			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.DataReceivedProgress, datatransfer.DataReceived, datatransfer.DataReceivedProgress, datatransfer.DataReceived},
+			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.TransferInitiated, datatransfer.DataReceivedProgress, datatransfer.DataReceived, datatransfer.DataReceivedProgress, datatransfer.DataReceived},
 			verify: func(t *testing.T, h *harness) {
 				// open a pull channel
 				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
@@ -365,6 +366,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				testCids := testutil.GenerateCids(2)
 				ev, ok := h.dt.(datatransfer.EventsHandler)
 				require.True(t, ok)
+				ev.OnTransferInitiated(channelID)
 				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[0]}, 12345, 1, true))
 				require.NoError(t, ev.OnDataReceived(channelID, cidlink.Link{Cid: testCids[1]}, 12345, 2, true))
 
@@ -598,7 +600,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			ev.setup(t, dt)
 
 			// setup voucher processing
-			h.stor = testutil.AllSelector()
+			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
 			h.voucher = testutil.NewTestTypedVoucher()
 			require.NoError(t, h.dt.RegisterVoucherType(h.voucher.Type, h.voucherValidator))
 			h.voucherResult = testutil.NewTestTypedVoucher()

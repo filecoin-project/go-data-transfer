@@ -2,6 +2,7 @@ package testutil
 
 import (
 	cid "github.com/ipfs/go-cid"
+	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p-core/peer"
 
@@ -9,32 +10,60 @@ import (
 )
 
 type MockChannelStateParams struct {
-	ReceivedCids []cid.Cid
-	ChannelID    datatransfer.ChannelID
-	Queued       uint64
-	Sent         uint64
-	Received     uint64
-	Complete     bool
+	ReceivedCidsTotal int64
+	SentCidsTotal     int64
+	QueuedCidsTotal   int64
+	ChannelID         datatransfer.ChannelID
+	Queued            uint64
+	Sent              uint64
+	Received          uint64
+	Complete          bool
+	BaseCID           cid.Cid
+	Selector          ipld.Node
+	Voucher           datatransfer.TypedVoucher
+	IsPull            bool
+	Self              peer.ID
+	DataLimit         uint64
+	InitiatorPaused   bool
+	ResponderPaused   bool
 }
 
 func NewMockChannelState(params MockChannelStateParams) *MockChannelState {
 	return &MockChannelState{
-		receivedCids: params.ReceivedCids,
-		chid:         params.ChannelID,
-		queued:       params.Queued,
-		sent:         params.Sent,
-		received:     params.Received,
-		complete:     params.Complete,
+		receivedIndex:   params.ReceivedCidsTotal,
+		sentIndex:       params.SentCidsTotal,
+		queuedIndex:     params.QueuedCidsTotal,
+		dataLimit:       params.DataLimit,
+		chid:            params.ChannelID,
+		queued:          params.Queued,
+		sent:            params.Sent,
+		received:        params.Received,
+		complete:        params.Complete,
+		isPull:          params.IsPull,
+		self:            params.Self,
+		baseCID:         params.BaseCID,
+		initiatorPaused: params.InitiatorPaused,
+		responderPaused: params.ResponderPaused,
 	}
 }
 
 type MockChannelState struct {
-	receivedCids []cid.Cid
-	chid         datatransfer.ChannelID
-	queued       uint64
-	sent         uint64
-	received     uint64
-	complete     bool
+	receivedIndex   int64
+	sentIndex       int64
+	queuedIndex     int64
+	dataLimit       uint64
+	chid            datatransfer.ChannelID
+	queued          uint64
+	sent            uint64
+	received        uint64
+	complete        bool
+	isPull          bool
+	baseCID         cid.Cid
+	selector        ipld.Node
+	voucher         datatransfer.TypedVoucher
+	self            peer.ID
+	initiatorPaused bool
+	responderPaused bool
 }
 
 var _ datatransfer.ChannelState = (*MockChannelState)(nil)
@@ -77,48 +106,58 @@ func (m *MockChannelState) Status() datatransfer.Status {
 	return datatransfer.Ongoing
 }
 
-func (m *MockChannelState) ReceivedCids() []cid.Cid {
-	return m.receivedCids
-}
-
-func (m *MockChannelState) ReceivedCidsLen() int {
-	return len(m.receivedCids)
+func (m *MockChannelState) SetReceivedCidsTotal(receivedIndex int64) {
+	m.receivedIndex = receivedIndex
 }
 
 func (m *MockChannelState) ReceivedCidsTotal() int64 {
-	return (int64)(len(m.receivedCids))
+	return m.receivedIndex
 }
 
 func (m *MockChannelState) QueuedCidsTotal() int64 {
-	panic("implement me")
+	return m.queuedIndex
+}
+
+func (m *MockChannelState) SetQueuedCidsTotal(queuedIndex int64) {
+	m.queuedIndex = queuedIndex
 }
 
 func (m *MockChannelState) SentCidsTotal() int64 {
-	panic("implement me")
+	return m.sentIndex
+}
+
+func (m *MockChannelState) SetSentCidsTotal(sentIndex int64) {
+	m.sentIndex = sentIndex
 }
 
 func (m *MockChannelState) TransferID() datatransfer.TransferID {
-	panic("implement me")
+	return m.chid.ID
 }
 
 func (m *MockChannelState) BaseCID() cid.Cid {
-	panic("implement me")
+	return m.baseCID
 }
 
 func (m *MockChannelState) Selector() datamodel.Node {
-	panic("implement me")
+	return m.selector
 }
 
 func (m *MockChannelState) Voucher() datatransfer.TypedVoucher {
-	panic("implement me")
+	return m.voucher
 }
 
 func (m *MockChannelState) Sender() peer.ID {
-	panic("implement me")
+	if m.isPull {
+		return m.chid.Responder
+	}
+	return m.chid.Initiator
 }
 
 func (m *MockChannelState) Recipient() peer.ID {
-	panic("implement me")
+	if m.isPull {
+		return m.chid.Initiator
+	}
+	return m.chid.Responder
 }
 
 func (m *MockChannelState) TotalSize() uint64 {
@@ -126,15 +165,18 @@ func (m *MockChannelState) TotalSize() uint64 {
 }
 
 func (m *MockChannelState) IsPull() bool {
-	panic("implement me")
+	return m.isPull
 }
 
 func (m *MockChannelState) OtherPeer() peer.ID {
-	panic("implement me")
+	if m.self == m.chid.Initiator {
+		return m.chid.Responder
+	}
+	return m.chid.Initiator
 }
 
 func (m *MockChannelState) SelfPeer() peer.ID {
-	panic("implement me")
+	return m.self
 }
 
 func (m *MockChannelState) Message() string {
@@ -161,10 +203,41 @@ func (m *MockChannelState) Stages() *datatransfer.ChannelStages {
 	panic("implement me")
 }
 
+func (m *MockChannelState) SetDataLimit(dataLimit uint64) {
+	m.dataLimit = dataLimit
+}
+
 func (m *MockChannelState) DataLimit() uint64 {
-	panic("implement me")
+	return m.dataLimit
 }
 
 func (m *MockChannelState) RequiresFinalization() bool {
 	panic("implement me")
+}
+
+func (m *MockChannelState) SetResponderPaused(responderPaused bool) {
+	m.responderPaused = responderPaused
+}
+
+func (m *MockChannelState) ResponderPaused() bool {
+	return m.responderPaused
+}
+
+func (m *MockChannelState) SetInitiatorPaused(initiatorPaused bool) {
+	m.initiatorPaused = initiatorPaused
+}
+
+func (m *MockChannelState) InitiatorPaused() bool {
+	return m.initiatorPaused
+}
+
+func (m *MockChannelState) BothPaused() bool {
+	return m.initiatorPaused && m.responderPaused
+}
+
+func (m *MockChannelState) SelfPaused() bool {
+	if m.self == m.chid.Initiator {
+		return m.initiatorPaused
+	}
+	return m.responderPaused
 }

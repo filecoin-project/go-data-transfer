@@ -77,7 +77,7 @@ func New(ds datastore.Batching,
 		StateEntryFuncs: ChannelStateEntryFuncs,
 		Notifier:        c.dispatch,
 		FinalityStates:  ChannelFinalityStates,
-	}, channelMigrations, versioning.VersionKey("2"))
+	}, channelMigrations, versioning.VersionKey("3"))
 	if err != nil {
 		return nil, err
 	}
@@ -178,8 +178,8 @@ func (c *Channels) ChannelOpened(chid datatransfer.ChannelID) error {
 	return c.send(chid, datatransfer.Opened)
 }
 
-func (c *Channels) TransferRequestQueued(chid datatransfer.ChannelID) error {
-	return c.send(chid, datatransfer.TransferRequestQueued)
+func (c *Channels) TransferInitiated(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.TransferInitiated)
 }
 
 // Restart marks a data transfer as restarted
