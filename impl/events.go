@@ -104,7 +104,6 @@ func (m *manager) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size u
 // OnRequestReceived is called when a Request message is received from the initiator
 // on the responder
 func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
-
 	// if request is restart request, process as restart
 	if request.IsRestart() {
 		return m.receiveRestartRequest(chid, request)
@@ -132,9 +131,9 @@ func (m *manager) OnRequestReceived(chid datatransfer.ChannelID, request datatra
 	return m.receiveUpdateRequest(chid, request)
 }
 
-// OnTransferQueued is called when the transport layer receives a request but has not yet processed it
-func (m *manager) OnTransferQueued(chid datatransfer.ChannelID) {
-	m.channels.TransferRequestQueued(chid)
+// OnTransferInitiated is called when the transport layer initiates transfer
+func (m *manager) OnTransferInitiated(chid datatransfer.ChannelID) {
+	m.channels.TransferInitiated(chid)
 }
 
 // OnRequestReceived is called when a Response message is received from the responder
@@ -212,7 +211,18 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 	if response.IsPaused() {
 		return m.pauseOther(chid)
 	}
-	return m.resumeOther(chid)
+	err := m.resumeOther(chid)
+	if err != nil {
+		return err
+	}
+	chst, err := m.channels.GetByID(context.TODO(), chid)
+	if err != nil {
+		return err
+	}
+	if chst.SelfPaused() {
+		return datatransfer.ErrPause
+	}
+	return nil
 }
 
 // OnRequestCancelled is called when a transport reports a channel is cancelled

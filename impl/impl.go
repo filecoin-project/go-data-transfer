@@ -306,9 +306,9 @@ func (m *manager) SendVoucherResult(ctx context.Context, channelID datatransfer.
 
 	var updateResponse datatransfer.Response
 	if chst.Status().InFinalization() {
-		updateResponse, err = message.CompleteResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), &voucherResult)
+		updateResponse, err = message.CompleteResponse(channelID.ID, chst.Status().IsAccepted(), chst.ResponderPaused(), &voucherResult)
 	} else {
-		updateResponse, err = message.VoucherResultResponse(channelID.ID, chst.Status().IsAccepted(), chst.Status().IsResponderPaused(), &voucherResult)
+		updateResponse, err = message.VoucherResultResponse(channelID.ID, chst.Status().IsAccepted(), chst.ResponderPaused(), &voucherResult)
 	}
 
 	if err != nil {
@@ -404,7 +404,7 @@ func (m *manager) handleTransportUpdate(
 	pauseRequest := result.LeaveRequestPaused(chst)
 	// resume channel as needed, sending the response message immediately and returning
 	if resultErr == nil && result.Accepted && !pauseRequest {
-		if chst.Status().IsResponderPaused() && !chst.Status().InFinalization() {
+		if chst.ResponderPaused() && !chst.Status().InFinalization() {
 			return m.transport.(datatransfer.PauseableTransport).ResumeChannel(ctx, response, chst.ChannelID())
 		}
 	}
@@ -423,7 +423,7 @@ func (m *manager) handleTransportUpdate(
 	}
 
 	// pause the channel as needed
-	if pauseRequest && !chst.Status().IsResponderPaused() && !chst.Status().InFinalization() {
+	if pauseRequest && !chst.ResponderPaused() && !chst.Status().InFinalization() {
 		return m.transport.(datatransfer.PauseableTransport).PauseChannel(ctx, chst.ChannelID())
 	}
 

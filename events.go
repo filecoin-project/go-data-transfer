@@ -91,7 +91,7 @@ const (
 	// data has been received.
 	DataReceivedProgress
 
-	// Deprecated in favour of RequestCancelled
+	// DEPRECATED in favour of RequestCancelled
 	RequestTimedOut
 
 	// SendDataError indicates that the transport layer had an error trying
@@ -102,7 +102,7 @@ const (
 	// receiving data from the remote peer
 	ReceiveDataError
 
-	// TransferRequestQueued indicates that a new data transfer request has been queued in the transport layer
+	// DEPRECATED in favor of TransferInitiated
 	TransferRequestQueued
 
 	// RequestCancelled indicates that a transport layer request was cancelled by the request opener
@@ -123,6 +123,12 @@ const (
 	// pausing the responder, but is distinct from PauseResponder to indicate why the pause
 	// happened
 	DataLimitExceeded
+
+	// TransferInitiated indicates the transport has begun transferring data
+	TransferInitiated
+
+	// SendMessageError indicates an error sending a data transfer message
+	SendMessageError
 )
 
 // Events are human readable names for data transfer events
@@ -161,6 +167,8 @@ var Events = map[EventCode]string{
 	SetDataLimit:                "SetDataLimit",
 	SetRequiresFinalization:     "SetRequiresFinalization",
 	DataLimitExceeded:           "DataLimitExceeded",
+	TransferInitiated:           "TransferInitiated",
+	SendMessageError:            "SendMessageError",
 }
 
 // Event is a struct containing information about a data transfer event

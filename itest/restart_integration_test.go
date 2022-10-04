@@ -1,4 +1,4 @@
-package impl_test
+package itest
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	ipldformat "github.com/ipfs/go-ipld-format"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -42,7 +43,7 @@ func TestRestartPush(t *testing.T) {
 			stopAt: 20,
 			openPushF: func(rh *restartHarness) datatransfer.ChannelID {
 				voucher := testutil.NewTestTypedVoucherWith("applesauce")
-				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, rh.gsData.AllSelector)
+				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -84,7 +85,7 @@ func TestRestartPush(t *testing.T) {
 			stopAt: 20,
 			openPushF: func(rh *restartHarness) datatransfer.ChannelID {
 				voucher := testutil.NewTestTypedVoucherWith("applesauce")
-				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, rh.gsData.AllSelector)
+				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -258,7 +259,7 @@ func TestRestartPush(t *testing.T) {
 
 			// verify all cids are present on the receiver
 
-			testutil.VerifyHasFile(rh.testCtx, t, rh.destDagService, rh.root, rh.origBytes)
+			VerifyHasFile(rh.testCtx, t, rh.destDagService, rh.root, rh.origBytes)
 			rh.sv.VerifyExpectations(t)
 
 			// we should ONLY see two opens and two completes
@@ -295,7 +296,7 @@ func TestRestartPull(t *testing.T) {
 			stopAt: 40,
 			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
 				voucher := testutil.NewTestTypedVoucherWith("applesauce")
-				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, rh.gsData.AllSelector)
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -334,7 +335,7 @@ func TestRestartPull(t *testing.T) {
 			stopAt: 40,
 			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
 				voucher := testutil.NewTestTypedVoucherWith("applesauce")
-				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, rh.gsData.AllSelector)
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -500,7 +501,7 @@ func TestRestartPull(t *testing.T) {
 			_, _, err = waitF(10*time.Second, 2)
 			require.NoError(t, err)
 
-			testutil.VerifyHasFile(rh.testCtx, t, rh.destDagService, rh.root, rh.origBytes)
+			VerifyHasFile(rh.testCtx, t, rh.destDagService, rh.root, rh.origBytes)
 			rh.sv.VerifyExpectations(t)
 
 			// we should ONLY see two opens and two completes
@@ -534,7 +535,7 @@ type restartHarness struct {
 	peer1          peer.ID
 	peer2          peer.ID
 
-	gsData *testutil.GraphsyncTestingData
+	gsData *GraphsyncTestingData
 	dt1    datatransfer.Manager
 	dt2    datatransfer.Manager
 	sv     *testutil.StubbedValidator
@@ -551,7 +552,7 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 
 	// Setup host
-	gsData := testutil.NewGraphsyncTestingData(ctx, t, nil, nil)
+	gsData := NewGraphsyncTestingData(ctx, t, nil, nil)
 	host1 := gsData.Host1 // initiator, data sender
 	host2 := gsData.Host2 // data recipient
 	peer1 := host1.ID()
@@ -574,7 +575,7 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
 
 	sourceDagService := gsData.DagService1
-	root, origBytes := testutil.LoadUnixFSFile(ctx, t, sourceDagService, largeFile)
+	root, origBytes := LoadUnixFSFile(ctx, t, sourceDagService, largeFile)
 	rootCid := root.(cidlink.Link).Cid
 	destDagService := gsData.DagService2
 
