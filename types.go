@@ -146,10 +146,10 @@ type ChannelState interface {
 	// be left open for a final settlement
 	RequiresFinalization() bool
 
-	// InitiatorPaused indicates whether the initiator of this channel is in a paused state
+	// InitiatorPaused indicates whether the initiator of this channel is in manually paused state
 	InitiatorPaused() bool
 
-	// ResponderPaused indicates whether the responder of this channel is in a paused state
+	// ResponderPaused indicates whether the responder of this channel is in manually paused state
 	ResponderPaused() bool
 
 	// BothPaused indicates both sides of the transfer have paused the transfer
@@ -157,6 +157,19 @@ type ChannelState interface {
 
 	// SelfPaused indicates whether the local peer for this channel is in a paused state
 	SelfPaused() bool
+
+	// ExceededDataLimit indicates whether the responder in the transfer is over its data limit
+	ExceededDataLimit() bool
+
+	// AwaitingFinalization indicates whether a transfer is waiting to be finalized
+	AwaitingFinalization() bool
+
+	// OnHold indicates whether the local peer is on hold from proceeding with the transfer,
+	// either cause they are manually paused, exceeded data limit or are awaiting finalization
+	TransferOnHold() bool
+
+	// TransferClosed indicates whether the transfer has finished
+	TransferClosed() bool
 
 	// Stages returns the timeline of events this data transfer has gone through,
 	// for observability purposes.

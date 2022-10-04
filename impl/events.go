@@ -42,7 +42,11 @@ func (m *manager) processTransferEvent(ctx context.Context, chid datatransfer.Ch
 			return err
 		}
 		msg := message.UpdateResponse(chid.ID, true)
-		return m.transport.SendMessage(ctx, chid, msg)
+		err := m.transport.SendMessage(ctx, chid, msg)
+		if err != nil {
+			return m.channels.SendMessageError(chid, err)
+		}
+		return nil
 	case datatransfer.TransportTransferCancelled:
 		log.Warnf("channel %+v was cancelled: %s", chid, evt.ErrorMessage)
 		return m.channels.RequestCancelled(chid, errors.New(evt.ErrorMessage))
@@ -168,7 +172,7 @@ func (m *manager) channelCompleted(chid datatransfer.ChannelID, success bool, er
 	// If the transferred errored on completion
 	if !success {
 		// send an error, but only if we haven't already errored/finished transfer already for some reason
-		if !chst.Status().TransferComplete() {
+		if !chst.TransferClosed() {
 			err := fmt.Errorf("data transfer channel %s failed to transfer data: %s", chid, errorMessage)
 			log.Warnf(err.Error())
 			return m.channels.Error(chid, err)

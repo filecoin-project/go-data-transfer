@@ -109,23 +109,6 @@ func (s Status) InFinalization() bool {
 	return FinalizationStatuses.Contains(s)
 }
 
-var TransferCompleteStates = statusList{
-	TransferFinished,
-	ResponderFinalizingTransferFinished,
-	Finalizing,
-	Completed,
-	Completing,
-	Failing,
-	Failed,
-	Cancelling,
-	Cancelled,
-	ChannelNotFoundError,
-}
-
-func (s Status) TransferComplete() bool {
-	return TransferCompleteStates.Contains(s)
-}
-
 var TransferringStates = statusList{
 	Ongoing,
 	ResponderCompleted,

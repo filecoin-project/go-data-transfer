@@ -282,13 +282,13 @@ func (t *Transport) CleanupChannel(chid datatransfer.ChannelID) {
 
 	t.dtChannelsLk.Unlock()
 
-	// Clean up mapping from gs key to channel ID
-	t.requestIDToChannelID.deleteRefs(chid)
-
 	// Clean up the channel
 	if ok {
 		ch.Cleanup()
 	}
+
+	// Clean up mapping from gs key to channel ID
+	t.requestIDToChannelID.deleteRefs(chid)
 
 	t.dtNet.Unprotect(t.otherPeer(chid), chid.String())
 }

@@ -23,7 +23,7 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{184, 24}); err != nil {
+	if _, err := w.Write([]byte{184, 25}); err != nil {
 		return err
 	}
 
@@ -457,6 +457,22 @@ func (t *ChannelState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.TransferClosed (bool) (bool)
+	if len("TransferClosed") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"TransferClosed\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("TransferClosed"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("TransferClosed")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteBool(w, t.TransferClosed); err != nil {
+		return err
+	}
+
 	// t.Stages (datatransfer.ChannelStages) (struct)
 	if len("Stages") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Stages\" was too long")
@@ -843,6 +859,24 @@ func (t *ChannelState) UnmarshalCBOR(r io.Reader) error {
 				t.InitiatorPaused = false
 			case 21:
 				t.InitiatorPaused = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+			}
+			// t.TransferClosed (bool) (bool)
+		case "TransferClosed":
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.TransferClosed = false
+			case 21:
+				t.TransferClosed = true
 			default:
 				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 			}

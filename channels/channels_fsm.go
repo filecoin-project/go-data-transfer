@@ -46,6 +46,7 @@ var ChannelEvents = fsm.Events{
 	}),
 
 	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelling).Action(func(chst *internal.ChannelState) error {
+		chst.TransferClosed = true
 		chst.AddLog("")
 		return nil
 	}),
@@ -145,6 +146,7 @@ var ChannelEvents = fsm.Events{
 
 	fsm.Event(datatransfer.Error).FromAny().To(datatransfer.Failing).Action(func(chst *internal.ChannelState, err error) error {
 		chst.Message = err.Error()
+		chst.TransferClosed = true
 		chst.AddLog("data transfer erred: %s", chst.Message)
 		return nil
 	}),
@@ -173,7 +175,7 @@ var ChannelEvents = fsm.Events{
 	// seems less than ideal. We need some kind of support for pausing being an independent aspect of state
 	// Possibly we should just remove whether a state is paused from the state entirely.
 	fsm.Event(datatransfer.PauseInitiator).
-		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance).ToJustRecord().
+		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance, datatransfer.ResponderFinalizing, datatransfer.ResponderFinalizingTransferFinished).ToJustRecord().
 		Action(func(chst *internal.ChannelState) error {
 			chst.InitiatorPaused = true
 			chst.AddLog("")
@@ -191,7 +193,6 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.DataLimitExceeded).
 		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance, datatransfer.ResponderCompleted, datatransfer.ResponderFinalizing).ToJustRecord().
 		Action(func(chst *internal.ChannelState) error {
-			chst.ResponderPaused = true
 			chst.AddLog("")
 			return nil
 		}),
@@ -224,6 +225,7 @@ var ChannelEvents = fsm.Events{
 		// the finalization process and complete the transfer
 		From(datatransfer.AwaitingAcceptance).To(datatransfer.Completing).
 		Action(func(chst *internal.ChannelState) error {
+			chst.TransferClosed = true
 			chst.AddLog("")
 			return nil
 		}),
@@ -248,12 +250,20 @@ var ChannelEvents = fsm.Events{
 	}),
 
 	fsm.Event(datatransfer.BeginFinalizing).FromAny().To(datatransfer.Finalizing).Action(func(chst *internal.ChannelState) error {
+		chst.TransferClosed = true
+		chst.AddLog("")
+		return nil
+	}),
+
+	fsm.Event(datatransfer.CloseTransfer).FromAny().ToJustRecord().Action(func(chst *internal.ChannelState) error {
+		chst.TransferClosed = true
 		chst.AddLog("")
 		return nil
 	}),
 
 	// Both the local node and the remote peer have completed the transfer
 	fsm.Event(datatransfer.Complete).FromAny().To(datatransfer.Completing).Action(func(chst *internal.ChannelState) error {
+		chst.TransferClosed = true
 		chst.AddLog("")
 		return nil
 	}),

@@ -196,7 +196,6 @@ func TestChannels(t *testing.T) {
 		err = channelList.DataLimitExceeded(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.DataLimitExceeded)
-		require.True(t, state.ResponderPaused())
 
 		err = channelList.SetDataLimit(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, 700)
 		require.NoError(t, err)
@@ -205,7 +204,6 @@ func TestChannels(t *testing.T) {
 
 		err = channelList.ResumeResponder(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		state = checkEvent(ctx, t, received, datatransfer.ResumeResponder)
-		require.False(t, state.ResponderPaused())
 
 		err = channelList.PauseInitiator(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		state = checkEvent(ctx, t, received, datatransfer.PauseInitiator)
@@ -214,7 +212,7 @@ func TestChannels(t *testing.T) {
 		err = channelList.DataLimitExceeded(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.DataLimitExceeded)
-		require.True(t, state.BothPaused())
+		require.True(t, state.InitiatorPaused())
 
 	})
 
@@ -440,6 +438,15 @@ func TestMigrations(t *testing.T) {
 		datatransfer.ResponderPaused,
 		datatransfer.BothPaused,
 		datatransfer.Ongoing,
+		datatransfer.TransferFinished,
+		datatransfer.ResponderFinalizingTransferFinished,
+		datatransfer.Finalizing,
+		datatransfer.Completed,
+		datatransfer.Completing,
+		datatransfer.Failing,
+		datatransfer.Failed,
+		datatransfer.Cancelling,
+		datatransfer.Cancelled,
 	}
 	for i := 0; i < numChannels; i++ {
 		transferIDs[i] = datatransfer.TransferID(rand.Uint64())
@@ -515,8 +522,9 @@ func TestMigrations(t *testing.T) {
 		datatransfer.Ongoing,
 	}
 
-	expectedInitiatorPaused := []bool{false, true, false, true, false}
-	expectedResponderPaused := []bool{false, false, true, true, false}
+	expectedInitiatorPaused := []bool{false, true, false, true, false, false, false, false, false, false, false, false, false, false}
+	expectedResponderPaused := []bool{false, false, true, true, false, false, false, false, false, false, false, false, false, false}
+	expectedTransferClosed := []bool{false, false, false, false, false, true, true, true, true, true, true, true, true, true}
 	for i := 0; i < numChannels; i++ {
 
 		channel, err := channelList.GetByID(ctx, datatransfer.ChannelID{
@@ -540,10 +548,10 @@ func TestMigrations(t *testing.T) {
 		require.Equal(t, expectedStatuses[i], channel.Status())
 		require.Equal(t, expectedInitiatorPaused[i], channel.InitiatorPaused())
 		require.Equal(t, expectedResponderPaused[i], channel.ResponderPaused())
+		require.Equal(t, expectedTransferClosed[i], channel.TransferClosed())
 		require.Equal(t, basicnode.NewInt(sentIndex[i]), channel.SentIndex())
 		require.Equal(t, basicnode.NewInt(receivedIndex[i]), channel.ReceivedIndex())
 		require.Equal(t, basicnode.NewInt(queuedIndex[i]), channel.QueuedIndex())
-
 	}
 }
 

@@ -10,60 +10,66 @@ import (
 )
 
 type MockChannelStateParams struct {
-	ReceivedIndex   datamodel.Node
-	SentIndex       datamodel.Node
-	QueuedIndex     datamodel.Node
-	ChannelID       datatransfer.ChannelID
-	Queued          uint64
-	Sent            uint64
-	Received        uint64
-	Complete        bool
-	BaseCID         cid.Cid
-	Selector        ipld.Node
-	Voucher         datatransfer.TypedVoucher
-	IsPull          bool
-	Self            peer.ID
-	DataLimit       uint64
-	InitiatorPaused bool
-	ResponderPaused bool
+	ReceivedIndex        datamodel.Node
+	SentIndex            datamodel.Node
+	QueuedIndex          datamodel.Node
+	ChannelID            datatransfer.ChannelID
+	Queued               uint64
+	Sent                 uint64
+	Received             uint64
+	Complete             bool
+	BaseCID              cid.Cid
+	Selector             ipld.Node
+	Voucher              datatransfer.TypedVoucher
+	IsPull               bool
+	Self                 peer.ID
+	DataLimit            uint64
+	InitiatorPaused      bool
+	ResponderPaused      bool
+	ExceededDataLimit    bool
+	AwaitingFinalization bool
 }
 
 func NewMockChannelState(params MockChannelStateParams) *MockChannelState {
 	return &MockChannelState{
-		receivedIndex:   params.ReceivedIndex,
-		sentIndex:       params.SentIndex,
-		queuedIndex:     params.QueuedIndex,
-		dataLimit:       params.DataLimit,
-		chid:            params.ChannelID,
-		queued:          params.Queued,
-		sent:            params.Sent,
-		received:        params.Received,
-		complete:        params.Complete,
-		isPull:          params.IsPull,
-		self:            params.Self,
-		baseCID:         params.BaseCID,
-		initiatorPaused: params.InitiatorPaused,
-		responderPaused: params.ResponderPaused,
+		receivedIndex:        params.ReceivedIndex,
+		sentIndex:            params.SentIndex,
+		queuedIndex:          params.QueuedIndex,
+		dataLimit:            params.DataLimit,
+		chid:                 params.ChannelID,
+		queued:               params.Queued,
+		sent:                 params.Sent,
+		received:             params.Received,
+		complete:             params.Complete,
+		isPull:               params.IsPull,
+		self:                 params.Self,
+		baseCID:              params.BaseCID,
+		initiatorPaused:      params.InitiatorPaused,
+		responderPaused:      params.ResponderPaused,
+		exceededDataLimit:    params.ExceededDataLimit,
+		awaitingFinalization: params.AwaitingFinalization,
 	}
 }
 
 type MockChannelState struct {
-	receivedIndex   datamodel.Node
-	sentIndex       datamodel.Node
-	queuedIndex     datamodel.Node
-	dataLimit       uint64
-	chid            datatransfer.ChannelID
-	queued          uint64
-	sent            uint64
-	received        uint64
-	complete        bool
-	isPull          bool
-	baseCID         cid.Cid
-	selector        ipld.Node
-	voucher         datatransfer.TypedVoucher
-	self            peer.ID
-	initiatorPaused bool
-	responderPaused bool
+	receivedIndex        datamodel.Node
+	sentIndex            datamodel.Node
+	queuedIndex          datamodel.Node
+	dataLimit            uint64
+	chid                 datatransfer.ChannelID
+	queued               uint64
+	sent                 uint64
+	received             uint64
+	complete             bool
+	isPull               bool
+	baseCID              cid.Cid
+	selector             ipld.Node
+	voucher              datatransfer.TypedVoucher
+	self                 peer.ID
+	initiatorPaused      bool
+	responderPaused      bool
+	exceededDataLimit    bool
+	awaitingFinalization bool
 }
 
 var _ datatransfer.ChannelState = (*MockChannelState)(nil)
@@ -249,4 +255,28 @@ func (m *MockChannelState) SelfPaused() bool {
 		return m.initiatorPaused
 	}
 	return m.responderPaused
+}
+
+func (m *MockChannelState) TransferClosed() bool {
+	return false
+}
+
+func (m *MockChannelState) SetExceededDataLimit(exceededDataLimit bool) {
+	m.exceededDataLimit = exceededDataLimit
+}
+
+func (m *MockChannelState) ExceededDataLimit() bool {
+	return m.exceededDataLimit
+}
+
+func (m *MockChannelState) SetAwaitingFinalization(awaitingFinalization bool) {
+	m.awaitingFinalization = awaitingFinalization
+}
+
+func (m *MockChannelState) AwaitingFinalization() bool {
+	return m.awaitingFinalization
+}
+
+func (m *MockChannelState) TransferOnHold() bool {
+	return m.SelfPaused() || m.AwaitingFinalization() || m.ExceededDataLimit()
 }
