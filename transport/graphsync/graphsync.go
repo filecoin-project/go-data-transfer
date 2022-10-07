@@ -12,7 +12,7 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 

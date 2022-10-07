@@ -13,7 +13,7 @@ import (
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"

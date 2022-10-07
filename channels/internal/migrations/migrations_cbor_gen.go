@@ -10,7 +10,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	internal "github.com/filecoin-project/go-data-transfer/v2/channels/internal"
 	cid "github.com/ipfs/go-cid"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 )
