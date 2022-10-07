@@ -33,7 +33,7 @@ Install the module in your package or app with `go get "github.com/filecoin-proj
         gsimpl "github.com/ipfs/go-graphsync/impl"
         datatransfer "github.com/filecoin-project/go-data-transfer/v2/impl"
         gstransport "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
-        "github.com/libp2p/go-libp2p-core/host"
+        "github.com/libp2p/go-libp2p/core/host"
     )
             
     ```

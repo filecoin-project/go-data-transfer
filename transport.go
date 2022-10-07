@@ -5,7 +5,7 @@ import (
 
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 )
 
 // EventsHandler are semantic data transfer events that happen as a result of graphsync hooks
