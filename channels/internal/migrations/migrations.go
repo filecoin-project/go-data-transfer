@@ -60,7 +60,7 @@ type ChannelStateV2 struct {
 	// RequiresFinalization indicates at the end of the transfer, the channel should
 	// be left open for a final settlement
 	RequiresFinalization bool
-	// Stages traces the execution fo a data transfer.
+	// Stages traces the execution of a data transfer.
 	//
 	// EXPERIMENTAL; subject to change.
 	Stages *datatransfer.ChannelStages
