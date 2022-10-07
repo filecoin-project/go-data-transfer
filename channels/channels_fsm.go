@@ -161,9 +161,9 @@ var ChannelEvents = fsm.Events{
 		}),
 
 	// TODO: There are four states from which the request can be "paused": request, queued, awaiting acceptance
-	// and ongoing. There four states of being
-	// paused (no pause, initiator pause, responder pause, both paused). Until the state machine software
-	// supports orthogonal regions (https://en.wikipedia.org/wiki/UML_state_machine#Orthogonal_regions)
+	// and ongoing. There four states of being paused (no pause, initiator pause, responder pause, both paused).
+	// Until the state machine software supports orthogonal regions
+	// (https://en.wikipedia.org/wiki/UML_state_machine#Orthogonal_regions)
 	// we end up with a cartesian product of states and as you can see, fairly complicated state transfers.
 	// Previously, we had dealt with this by moving directly to the Ongoing state upon return from pause but this
 	// seems less than ideal. We need some kind of support for pausing being an independent aspect of state
