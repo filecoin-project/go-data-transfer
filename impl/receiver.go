@@ -4,13 +4,13 @@ import (
 	"context"
 
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/channels"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/channels"
 )
 
 type receiver struct {
@@ -43,7 +43,6 @@ func (r *receiver) receiveRequest(ctx context.Context, initiator peer.ID, incomi
 	))
 	defer span.End()
 	response, receiveErr := r.manager.OnRequestReceived(chid, incoming)
-
 	if receiveErr == datatransfer.ErrResume {
 		chst, err := r.manager.channels.GetByID(ctx, chid)
 		if err != nil {

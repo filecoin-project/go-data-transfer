@@ -11,12 +11,13 @@ import (
 	"github.com/ipfs/go-graphsync/donotsendfirstblocks"
 	logging "github.com/ipfs/go-log/v2"
 	ipld "github.com/ipld/go-ipld-prime"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/ipld/go-ipld-prime/datamodel"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/transport/graphsync/extension"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
 var log = logging.Logger("dt_graphsync")
@@ -111,7 +112,7 @@ func (t *Transport) OpenChannel(
 	dataSender peer.ID,
 	channelID datatransfer.ChannelID,
 	root ipld.Link,
-	stor ipld.Node,
+	stor datamodel.Node,
 	channel datatransfer.ChannelState,
 	msg datatransfer.Message,
 ) error {
@@ -296,7 +297,8 @@ func (t *Transport) SetEventHandler(events datatransfer.EventsHandler) error {
 	}
 	t.events = events
 
-	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterIncomingRequestQueuedHook(t.gsReqQueuedHook))
+	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterIncomingRequestProcessingListener(t.gsRequestProcessingListener))
+	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterOutgoingRequestProcessingListener(t.gsRequestProcessingListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterIncomingRequestHook(t.gsReqRecdHook))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterCompletedResponseListener(t.gsCompletedResponseListener))
 	t.unregisterFuncs = append(t.unregisterFuncs, t.gs.RegisterIncomingBlockHook(t.gsIncomingBlockHook))
@@ -529,45 +531,13 @@ func (t *Transport) gsOutgoingBlockHook(p peer.ID, request graphsync.RequestData
 }
 
 // gsReqQueuedHook is called when graphsync enqueues an incoming request for data
-func (t *Transport) gsReqQueuedHook(p peer.ID, request graphsync.RequestData, hookActions graphsync.RequestQueuedHookActions) {
-	msg, err := extension.GetTransferData(request, t.supportedExtensions)
-	if err != nil {
-		log.Errorf("failed GetTransferData, req=%+v, err=%s", request, err)
-	}
-	// extension not found; probably not our request.
-	if msg == nil {
+func (t *Transport) gsRequestProcessingListener(p peer.ID, request graphsync.RequestData, requestCount int) {
+
+	chid, ok := t.requestIDToChannelID.load(request.ID())
+	if !ok {
 		return
 	}
-
-	var chid datatransfer.ChannelID
-	if msg.IsRequest() {
-		// when a data transfer request comes in on graphsync, the remote peer
-		// initiated a pull
-		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: p, Responder: t.peerID}
-		dtRequest := msg.(datatransfer.Request)
-		if dtRequest.IsNew() {
-			log.Infof("%s, pull request queued, req_id=%d", chid, request.ID())
-			t.events.OnTransferQueued(chid)
-		} else {
-			log.Infof("%s, pull restart request queued, req_id=%d", chid, request.ID())
-		}
-	} else {
-		// when a data transfer response comes in on graphsync, this node
-		// initiated a push, and the remote peer responded with a request
-		// for data
-		chid = datatransfer.ChannelID{ID: msg.TransferID(), Initiator: t.peerID, Responder: p}
-		response := msg.(datatransfer.Response)
-		if response.IsNew() {
-			log.Infof("%s, GS pull request queued in response to our push, req_id=%d", chid, request.ID())
-			t.events.OnTransferQueued(chid)
-		} else {
-			log.Infof("%s, GS pull request queued in response to our restart push, req_id=%d", chid, request.ID())
-		}
-	}
-	augmentContext := t.events.OnContextAugment(chid)
-	if augmentContext != nil {
-		hookActions.AugmentContext(augmentContext)
-	}
+	t.events.OnTransferInitiated(chid)
 }
 
 // gsReqRecdHook is called when graphsync receives an incoming request for data
@@ -669,6 +639,8 @@ func (t *Transport) gsReqRecdHook(p peer.ID, request graphsync.RequestData, hook
 	if !paused {
 		ch.xferStarted = true
 	}
+
+	hookActions.AugmentContext(t.events.OnContextAugment(chid))
 
 	ch.gsDataRequestRcvd(request.ID(), hookActions)
 
@@ -938,7 +910,7 @@ func (c *dtChannel) open(
 	chid datatransfer.ChannelID,
 	dataSender peer.ID,
 	root ipld.Link,
-	stor ipld.Node,
+	stor datamodel.Node,
 	channel datatransfer.ChannelState,
 	exts []graphsync.ExtensionData,
 ) (*gsReq, error) {

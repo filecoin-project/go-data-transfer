@@ -30,10 +30,10 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/benchmarks/testinstance"
-	tn "github.com/filecoin-project/go-data-transfer/benchmarks/testnet"
-	"github.com/filecoin-project/go-data-transfer/testutil"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/benchmarks/testinstance"
+	tn "github.com/filecoin-project/go-data-transfer/v2/benchmarks/testnet"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 const stdBlockSize = 8000
@@ -105,7 +105,7 @@ func p2pStrestTest(ctx context.Context, b *testing.B, numfiles int, df distFunc,
 		timer := time.NewTimer(30 * time.Second)
 		start := time.Now()
 		for j := 0; j < numfiles; j++ {
-			_, err := pusher.Manager.OpenPushDataChannel(ctx, receiver.Peer, testutil.NewFakeDTType(), allCids[j], allSelector)
+			_, err := pusher.Manager.OpenPushDataChannel(ctx, receiver.Peer, testutil.NewTestTypedVoucher(), allCids[j], allSelector)
 			if err != nil {
 				b.Fatalf("received error on request: %s", err.Error())
 			}

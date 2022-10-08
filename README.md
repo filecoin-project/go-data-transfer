@@ -21,7 +21,7 @@ This module encapsulates protocols for exchanging piece data between storage cli
 
 **Requires go 1.13**
 
-Install the module in your package or app with `go get "github.com/filecoin-project/go-data-transfer/datatransfer"`
+Install the module in your package or app with `go get "github.com/filecoin-project/go-data-transfer/v2/datatransfer"`
 
 
 ### Initialize a data transfer module
@@ -31,9 +31,9 @@ Install the module in your package or app with `go get "github.com/filecoin-proj
 
     import (
         gsimpl "github.com/ipfs/go-graphsync/impl"
-        datatransfer "github.com/filecoin-project/go-data-transfer/impl"
-        gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
-        "github.com/libp2p/go-libp2p-core/host"
+        datatransfer "github.com/filecoin-project/go-data-transfer/v2/impl"
+        gstransport "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
+        "github.com/libp2p/go-libp2p/core/host"
     )
             
     ```
@@ -85,7 +85,7 @@ func (vl *myValidator) ValidatePush(
 	sender peer.ID,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
-	selector ipld.Node) error {
+	selector datamodel.Node) error {
     
     v := voucher.(*myVoucher)
     if v.data == "" || v.data != "validpush" {
@@ -99,7 +99,7 @@ func (vl *myValidator) ValidatePull(
 	receiver peer.ID,
 	voucher datatransfer.Voucher,
 	baseCid cid.Cid,
-	selector ipld.Node) error {
+	selector datamodel.Node) error {
 
     v := voucher.(*myVoucher)
     if v.data == "" || v.data != "validpull" {
@@ -135,7 +135,7 @@ must be sent with the request.  Using the trivial examples above:
 For more detail, please see the [unit tests](https://github.com/filecoin-project/go-data-transfer/blob/master/impl/impl_test.go).
 
 ### Open a Push or Pull Request
-For a push or pull request, provide a context, a `datatransfer.Voucher`, a host recipient `peer.ID`, a baseCID `cid.CID` and a selector `ipld.Node`.  These
+For a push or pull request, provide a context, a `datatransfer.Voucher`, a host recipient `peer.ID`, a baseCID `cid.CID` and a selector `datamodel.Node`.  These
 calls return a `datatransfer.ChannelID` and any error:
 ```go
     channelID, err := dtm.OpenPullDataChannel(ctx, recipient, voucher, baseCid, selector)

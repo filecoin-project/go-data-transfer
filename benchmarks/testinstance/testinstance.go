@@ -16,14 +16,14 @@ import (
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	delay "github.com/ipfs/go-ipfs-delay"
 	"github.com/ipld/go-ipld-prime"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	tn "github.com/filecoin-project/go-data-transfer/benchmarks/testnet"
-	dtimpl "github.com/filecoin-project/go-data-transfer/impl"
-	dtnet "github.com/filecoin-project/go-data-transfer/network"
-	"github.com/filecoin-project/go-data-transfer/testutil"
-	gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	tn "github.com/filecoin-project/go-data-transfer/v2/benchmarks/testnet"
+	dtimpl "github.com/filecoin-project/go-data-transfer/v2/impl"
+	dtnet "github.com/filecoin-project/go-data-transfer/v2/network"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
+	gstransport "github.com/filecoin-project/go-data-transfer/v2/transport/graphsync"
 )
 
 // TempDirGenerator is any interface that can generate temporary directories
@@ -188,8 +188,7 @@ func NewInstance(ctx context.Context, net tn.Network, tempDir string, diskBasedD
 	sv := testutil.NewStubbedValidator()
 	sv.StubSuccessPull()
 	sv.StubSuccessPush()
-	dt.RegisterVoucherType(testutil.NewFakeDTType(), sv)
-	dt.RegisterVoucherResultType(testutil.NewFakeDTType())
+	dt.RegisterVoucherType(testutil.TestVoucherType, sv)
 	return Instance{
 		Adapter:         dtNet,
 		Peer:            p,
