@@ -21,7 +21,7 @@ This module encapsulates protocols for exchanging piece data between storage cli
 
 **Requires go 1.13**
 
-Install the module in your package or app with `go get "github.com/filecoin-project/go-data-transfer/v2/datatransfer"`
+Install the module in your package or app with `go get "github.com/filecoin-project/go-data-transfer/v2"`
 
 
 ### Initialize a data transfer module
