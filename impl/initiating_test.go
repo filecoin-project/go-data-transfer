@@ -34,7 +34,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"OpenPushDataTransfer": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open},
 			verify: func(t *testing.T, h *harness) {
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				require.Equal(t, channelID.Initiator, h.peers[0])
@@ -59,7 +59,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"OpenPullDataTransfer": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open},
 			verify: func(t *testing.T, h *harness) {
-				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				require.Equal(t, channelID.Initiator, h.peers[0])
@@ -92,7 +92,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"SendVoucher with channel open, push succeeds": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucher},
 			verify: func(t *testing.T, h *harness) {
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				voucher := testutil.NewTestTypedVoucher()
 				err = h.dt.SendVoucher(ctx, channelID, voucher)
@@ -110,7 +110,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"SendVoucher with channel open, pull succeeds": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucher},
 			verify: func(t *testing.T, h *harness) {
-				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				voucher := testutil.NewTestTypedVoucher()
 				err = h.dt.SendVoucher(ctx, channelID, voucher)
@@ -138,7 +138,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"success response": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept, datatransfer.ResumeResponder},
 			verify: func(t *testing.T, h *harness) {
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				response, err := message.NewResponse(channelID.ID, true, false, nil)
@@ -150,7 +150,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"success response, w/ voucher result": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.NewVoucherResult, datatransfer.Accept, datatransfer.ResumeResponder},
 			verify: func(t *testing.T, h *harness) {
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				response, err := message.NewResponse(channelID.ID, true, false, &h.voucherResult)
@@ -162,7 +162,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"push request, pause behavior": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept, datatransfer.ResumeResponder, datatransfer.PauseInitiator, datatransfer.ResumeInitiator},
 			verify: func(t *testing.T, h *harness) {
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				response, err := message.NewResponse(channelID.ID, true, false, nil)
@@ -196,7 +196,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"close push request": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Cancel, datatransfer.CleanupComplete},
 			verify: func(t *testing.T, h *harness) {
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				err = h.dt.CloseDataTransferChannel(h.ctx, channelID)
@@ -218,7 +218,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"pull request, pause behavior": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Accept, datatransfer.ResumeResponder, datatransfer.PauseInitiator, datatransfer.ResumeInitiator},
 			verify: func(t *testing.T, h *harness) {
-				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				response, err := message.NewResponse(channelID.ID, true, false, nil)
@@ -252,7 +252,7 @@ func TestDataTransferInitiating(t *testing.T) {
 		"close pull request": {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.Cancel, datatransfer.CleanupComplete},
 			verify: func(t *testing.T, h *harness) {
-				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				err = h.dt.CloseDataTransferChannel(h.ctx, channelID)
@@ -283,7 +283,7 @@ func TestDataTransferInitiating(t *testing.T) {
 					ft.RecordCustomizedTransfer(channelID, voucher)
 				})
 				require.NoError(t, err)
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				require.Len(t, h.transport.CustomizedTransfers, 1)
@@ -303,7 +303,7 @@ func TestDataTransferInitiating(t *testing.T) {
 					ft.RecordCustomizedTransfer(channelID, voucher)
 				})
 				require.NoError(t, err)
-				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				require.Len(t, h.transport.CustomizedTransfers, 1)
@@ -356,7 +356,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open, datatransfer.TransferInitiated, datatransfer.DataReceivedProgress, datatransfer.DataReceived, datatransfer.DataReceivedProgress, datatransfer.DataReceived},
 			verify: func(t *testing.T, h *harness) {
 				// open a pull channel
-				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPullDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				require.Len(t, h.transport.OpenedChannels, 1)
@@ -403,7 +403,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			expectedEvents: []datatransfer.EventCode{datatransfer.Open},
 			verify: func(t *testing.T, h *harness) {
 				// open a push channel
-				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor)
+				channelID, err := h.dt.OpenPushDataChannel(h.ctx, h.peers[1], h.voucher, h.baseCid, h.stor, nil)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
 				require.Len(t, h.transport.OpenedChannels, 0)

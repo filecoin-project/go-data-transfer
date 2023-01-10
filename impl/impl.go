@@ -59,7 +59,7 @@ func dispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
 	}
 	cb, ok := subscriberFn.(datatransfer.Subscriber)
 	if !ok {
-		return errors.New("wrong type of event")
+		return errors.New("wrong type of subscriber")
 	}
 	cb(ie.evt, ie.state)
 	return nil
@@ -72,7 +72,7 @@ func readyDispatcher(evt pubsub.Event, fn pubsub.SubscriberFn) error {
 	}
 	cb, ok := fn.(datatransfer.ReadyFunc)
 	if !ok {
-		return errors.New("wrong type of event")
+		return errors.New("wrong type of event subscriber")
 	}
 	cb(migrateErr)
 	return nil
@@ -176,7 +176,7 @@ func (m *manager) RegisterVoucherType(voucherType datatransfer.TypeIdentifier, v
 
 // OpenPushDataChannel opens a data transfer that will send data to the recipient peer and
 // transfer parts of the piece that match the selector
-func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (datatransfer.ChannelID, error) {
+func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node, eventsCb datatransfer.Subscriber) (datatransfer.ChannelID, error) {
 	log.Infof("open push channel to %s with base cid %s", requestTo, baseCid)
 
 	req, err := m.newRequest(ctx, selector, false, voucher, baseCid, requestTo)
@@ -189,6 +189,23 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 	if err != nil {
 		return chid, err
 	}
+
+	if eventsCb != nil {
+		// simulate first event
+		if chst, err := m.channels.GetByID(ctx, chid); err != nil {
+			eventsCb(datatransfer.Event{Code: datatransfer.Open, Timestamp: time.Now()}, chst)
+		}
+		var unsub func()
+		unsub = m.pubSub.Subscribe(datatransfer.Subscriber(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+			if channelState.ChannelID() == chid {
+				if event.Code == datatransfer.CleanupComplete { // this transfer is complete
+					unsub()
+				}
+				eventsCb(event, channelState)
+			}
+		}))
+	}
+
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
 	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
@@ -217,19 +234,37 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 
 // OpenPullDataChannel opens a data transfer that will request data from the sending peer and
 // transfer parts of the piece that match the selector
-func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (datatransfer.ChannelID, error) {
+func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node, eventsCb datatransfer.Subscriber) (datatransfer.ChannelID, error) {
 	log.Infof("open pull channel to %s with base cid %s", requestTo, baseCid)
 
 	req, err := m.newRequest(ctx, selector, true, voucher, baseCid, requestTo)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
+
 	// initiator = us, sender = them, receiver = us
 	chid, err := m.channels.CreateNew(m.peerID, req.TransferID(), baseCid, selector, voucher,
 		m.peerID, requestTo, m.peerID)
 	if err != nil {
 		return chid, err
 	}
+
+	if eventsCb != nil {
+		// simulate first event
+		if chst, err := m.channels.GetByID(ctx, chid); err != nil {
+			eventsCb(datatransfer.Event{Code: datatransfer.Open, Timestamp: time.Now()}, chst)
+		}
+		var unsub func()
+		unsub = m.pubSub.Subscribe(datatransfer.Subscriber(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+			if channelState.ChannelID() == chid {
+				if event.Code == datatransfer.CleanupComplete { // this transfer is complete
+					unsub()
+				}
+				eventsCb(event, channelState)
+			}
+		}))
+	}
+
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
 	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {

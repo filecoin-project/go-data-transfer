@@ -119,11 +119,11 @@ type Manager interface {
 
 	// open a data transfer that will send data to the recipient peer and
 	// transfer parts of the piece that match the selector
-	OpenPushDataChannel(ctx context.Context, to peer.ID, voucher TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (ChannelID, error)
+	OpenPushDataChannel(ctx context.Context, to peer.ID, voucher TypedVoucher, baseCid cid.Cid, selector datamodel.Node, eventsCb Subscriber) (ChannelID, error)
 
 	// open a data transfer that will request data from the sending peer and
 	// transfer parts of the piece that match the selector
-	OpenPullDataChannel(ctx context.Context, to peer.ID, voucher TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (ChannelID, error)
+	OpenPullDataChannel(ctx context.Context, to peer.ID, voucher TypedVoucher, baseCid cid.Cid, selector datamodel.Node, eventsCb Subscriber) (ChannelID, error)
 
 	// send an intermediate voucher as needed when the receiver sends a request for revalidation
 	SendVoucher(ctx context.Context, chid ChannelID, voucher TypedVoucher) error
