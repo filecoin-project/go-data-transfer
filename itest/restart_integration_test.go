@@ -43,7 +43,7 @@ func TestRestartPush(t *testing.T) {
 			stopAt: 20,
 			openPushF: func(rh *restartHarness) datatransfer.ChannelID {
 				voucher := testutil.NewTestTypedVoucherWith("applesauce")
-				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -85,7 +85,7 @@ func TestRestartPush(t *testing.T) {
 			stopAt: 20,
 			openPushF: func(rh *restartHarness) datatransfer.ChannelID {
 				voucher := testutil.NewTestTypedVoucherWith("applesauce")
-				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+				chid, err := rh.dt1.OpenPushDataChannel(rh.testCtx, rh.peer2, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -296,7 +296,7 @@ func TestRestartPull(t *testing.T) {
 			stopAt: 40,
 			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
 				voucher := testutil.NewTestTypedVoucherWith("applesauce")
-				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},
@@ -335,7 +335,7 @@ func TestRestartPull(t *testing.T) {
 			stopAt: 40,
 			openPullF: func(rh *restartHarness) datatransfer.ChannelID {
 				voucher := testutil.NewTestTypedVoucherWith("applesauce")
-				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+				chid, err := rh.dt2.OpenPullDataChannel(rh.testCtx, rh.peer1, voucher, rh.rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(rh.t, err)
 				return chid
 			},

@@ -226,11 +226,11 @@ func TestRoundTrip(t *testing.T) {
 				if data.isPull {
 					sv.ExpectSuccessPull()
 					require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
-					chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+					chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				} else {
 					sv.ExpectSuccessPush()
 					require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
-					chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+					chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				}
 				require.NoError(t, err)
 				opens := 0
@@ -267,6 +267,126 @@ func TestRoundTrip(t *testing.T) {
 			})
 		}
 	} //
+}
+
+func TestMultipleRoundTripWithSubscribers(t *testing.T) {
+	ctx := context.Background()
+	testCases := map[string]struct {
+		isPull bool
+	}{
+		"multiple roundtrip for push requests": {},
+		"multiple roundtrip for pull requests": {
+			isPull: true,
+		},
+	}
+	for testCase, data := range testCases {
+		t.Run(testCase, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+
+			gsData := NewGraphsyncTestingData(ctx, t, nil, nil)
+			host1 := gsData.Host1 // initiator, data sender
+			host2 := gsData.Host2 // data recipient
+
+			tp1 := gsData.SetupGSTransportHost1()
+			tp2 := gsData.SetupGSTransportHost2()
+
+			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1)
+			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt1)
+			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2)
+			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt2)
+
+			finishedFirst := make(chan struct{}, 1)
+			errChanFirst := make(chan string, 1)
+			openedFirst := make(chan struct{}, 1)
+			firstSubscriber := func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if channelState.Status() == datatransfer.Completed {
+					finishedFirst <- struct{}{}
+				}
+				if event.Code == datatransfer.Error {
+					errChanFirst <- event.Message
+				}
+				if event.Code == datatransfer.Open {
+					openedFirst <- struct{}{}
+				}
+			}
+			finishedSecond := make(chan struct{}, 1)
+			errChanSecond := make(chan string, 1)
+			openedSecond := make(chan struct{}, 1)
+			secondSubscriber := func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if channelState.Status() == datatransfer.Completed {
+					finishedSecond <- struct{}{}
+				}
+				if event.Code == datatransfer.Error {
+					errChanSecond <- event.Message
+				}
+				if event.Code == datatransfer.Open {
+					openedSecond <- struct{}{}
+				}
+			}
+			firstVoucher := testutil.NewTestTypedVoucher()
+			secondVoucher := testutil.NewTestTypedVoucher()
+			sv := testutil.NewStubbedValidator()
+			sv.StubResult(datatransfer.ValidationResult{Accepted: true})
+
+			firstRoot, _ := LoadUnixFSFile(ctx, t, gsData.DagService1, loremFile)
+			firstRootCid := firstRoot.(cidlink.Link).Cid
+			secondRoot, _ := LoadUnixFSFile(ctx, t, gsData.DagService1, loremLargeFile)
+			secondRootCid := secondRoot.(cidlink.Link).Cid
+
+			if data.isPull {
+				sv.ExpectSuccessPull()
+				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
+				_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), firstVoucher, firstRootCid, selectorparse.CommonSelector_ExploreAllRecursively, datatransfer.WithSubscriber(firstSubscriber))
+				require.NoError(t, err)
+				_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), secondVoucher, secondRootCid, selectorparse.CommonSelector_ExploreAllRecursively, datatransfer.WithSubscriber(secondSubscriber))
+				require.NoError(t, err)
+
+			} else {
+				sv.ExpectSuccessPush()
+				require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
+				_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), firstVoucher, firstRootCid, selectorparse.CommonSelector_ExploreAllRecursively, datatransfer.WithSubscriber(firstSubscriber))
+				require.NoError(t, err)
+
+				_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), secondVoucher, secondRootCid, selectorparse.CommonSelector_ExploreAllRecursively, datatransfer.WithSubscriber(secondSubscriber))
+				require.NoError(t, err)
+
+			}
+			var firstOpen, secondOpen, firstComplete, secondComplete bool
+			for !firstOpen || !secondOpen || !firstComplete || !secondComplete {
+				select {
+				case <-ctx.Done():
+					t.Fatal("Did not complete successful data transfer")
+				case <-finishedFirst:
+					if firstComplete {
+						t.Fatalf("first competed twice")
+					}
+					firstComplete = true
+				case <-openedFirst:
+					if firstOpen {
+						t.Fatalf("first opened twice")
+					}
+					firstOpen = true
+				case <-finishedSecond:
+					if secondComplete {
+						t.Fatalf("second competed twice")
+					}
+					secondComplete = true
+				case <-openedSecond:
+					if secondOpen {
+						t.Fatalf("second opened twice")
+					}
+					secondOpen = true
+				case err := <-errChanFirst:
+					t.Fatalf("received error on data transfer: %s", err)
+				case err := <-errChanSecond:
+					t.Fatalf("received error on data transfer: %s", err)
+				}
+			}
+		})
+	}
 }
 
 func TestMultipleRoundTripMultipleStores(t *testing.T) {
@@ -357,14 +477,14 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 				for i := 0; i < data.requestCount; i++ {
-					_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), vouchers[i], rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+					_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), vouchers[i], rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 					require.NoError(t, err)
 				}
 			} else {
 				sv.ExpectSuccessPush()
 				require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
 				for i := 0; i < data.requestCount; i++ {
-					_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), vouchers[i], rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+					_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), vouchers[i], rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 					require.NoError(t, err)
 				}
 			}
@@ -491,14 +611,14 @@ func TestManyReceiversAtOnce(t *testing.T) {
 				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 				for i, receiver := range receivers {
-					_, err = receiver.OpenPullDataChannel(ctx, host1.ID(), vouchers[i], rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+					_, err = receiver.OpenPullDataChannel(ctx, host1.ID(), vouchers[i], rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 					require.NoError(t, err)
 				}
 			} else {
 				sv.ExpectSuccessPush()
 				for i, receiver := range receivers {
 					require.NoError(t, receiver.RegisterVoucherType(testutil.TestVoucherType, sv))
-					_, err = dt1.OpenPushDataChannel(ctx, hosts[i].ID(), vouchers[i], rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+					_, err = dt1.OpenPushDataChannel(ctx, hosts[i].ID(), vouchers[i], rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 					require.NoError(t, err)
 				}
 			}
@@ -764,10 +884,10 @@ func TestAutoRestart(t *testing.T) {
 				var chid datatransfer.ChannelID
 				if tc.isPush {
 					// Open a push channel
-					chid, err = initiator.OpenPushDataChannel(ctx, responderHost.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+					chid, err = initiator.OpenPushDataChannel(ctx, responderHost.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				} else {
 					// Open a pull channel
-					chid, err = initiator.OpenPullDataChannel(ctx, responderHost.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+					chid, err = initiator.OpenPullDataChannel(ctx, responderHost.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 				}
 				require.NoError(t, err)
 
@@ -941,10 +1061,10 @@ func TestAutoRestartAfterBouncingInitiator(t *testing.T) {
 		var chid datatransfer.ChannelID
 		if isPush {
 			// Open a push channel
-			chid, err = initiator.OpenPushDataChannel(ctx, responderHost.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+			chid, err = initiator.OpenPushDataChannel(ctx, responderHost.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 		} else {
 			// Open a pull channel
-			chid, err = initiator.OpenPullDataChannel(ctx, responderHost.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+			chid, err = initiator.OpenPullDataChannel(ctx, responderHost.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 		}
 		require.NoError(t, err)
 
@@ -1126,12 +1246,12 @@ func TestRoundTripCancelledRequest(t *testing.T) {
 				sv.ExpectSuccessPull()
 				sv.StubResult(datatransfer.ValidationResult{Accepted: true, ForcePause: true})
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
-				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 			} else {
 				sv.ExpectSuccessPush()
 				sv.StubResult(datatransfer.ValidationResult{Accepted: true, ForcePause: true})
 				require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
-				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 			}
 			require.NoError(t, err)
 			opens := 0
@@ -1384,7 +1504,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 
 			require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 
-			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 			require.NoError(t, err)
 
 			for providerFinished != nil || clientFinished != nil {
@@ -1512,11 +1632,11 @@ func TestPauseAndResume(t *testing.T) {
 			if isPull {
 				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
-				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+				chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 			} else {
 				sv.ExpectSuccessPush()
 				require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
-				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+				chid, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 			}
 			require.NoError(t, err)
 			opens := 0
@@ -1610,9 +1730,9 @@ func TestUnrecognizedVoucherRoundTrip(t *testing.T) {
 			rootCid := root.(cidlink.Link).Cid
 
 			if isPull {
-				_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+				_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 			} else {
-				_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+				_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 			}
 			require.NoError(t, err)
 			opens := 0
@@ -1675,7 +1795,7 @@ func TestDataTransferSubscribing(t *testing.T) {
 	}
 	unsub1 := dt1.SubscribeToEvents(subscribe1)
 	unsub2 := dt1.SubscribeToEvents(subscribe2)
-	_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, baseCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+	_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, baseCid, selectorparse.CommonSelector_ExploreAllRecursively)
 	require.NoError(t, err)
 	select {
 	case <-ctx.Done():
@@ -1704,7 +1824,7 @@ func TestDataTransferSubscribing(t *testing.T) {
 	}
 	unsub3 := dt1.SubscribeToEvents(subscribe3)
 	unsub4 := dt1.SubscribeToEvents(subscribe4)
-	_, err = dt1.OpenPullDataChannel(ctx, host2.ID(), voucher, baseCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+	_, err = dt1.OpenPullDataChannel(ctx, host2.ID(), voucher, baseCid, selectorparse.CommonSelector_ExploreAllRecursively)
 	require.NoError(t, err)
 	select {
 	case <-ctx.Done():
@@ -1797,7 +1917,7 @@ func TestRespondingToPushGraphsyncRequests(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("when request is initiated", func(t *testing.T) {
-		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, link.(cidlink.Link).Cid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, link.(cidlink.Link).Cid, selectorparse.CommonSelector_ExploreAllRecursively)
 		require.NoError(t, err)
 
 		var messageReceived receivedMessage
@@ -1880,7 +2000,7 @@ func TestResponseHookWhenExtensionNotFound(t *testing.T) {
 		}
 		gs1.RegisterIncomingRequestHook(validateHook)
 
-		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, link.(cidlink.Link).Cid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+		_, err := dt1.OpenPushDataChannel(ctx, host2.ID(), voucher, link.(cidlink.Link).Cid, selectorparse.CommonSelector_ExploreAllRecursively)
 		require.NoError(t, err)
 
 		select {
@@ -2112,7 +2232,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 
 	voucher := testutil.NewTestTypedVoucherWith("applesauce")
-	chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+	chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 	require.NoError(t, err)
 
 	// Expect the client to receive a response voucher, the provider to complete the transfer and
@@ -2242,7 +2362,7 @@ func TestMultipleParallelTransfers(t *testing.T) {
 			rootCid := root.(cidlink.Link).Cid
 
 			voucher := testutil.NewTestTypedVoucher()
-			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively, nil)
+			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
 			require.NoError(t, err)
 			close(chidReceived)
 			// Expect the client to receive a response voucher, the provider to complete the transfer and

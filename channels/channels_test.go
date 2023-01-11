@@ -53,6 +53,7 @@ func TestChannels(t *testing.T) {
 	t.Run("adding channels", func(t *testing.T) {
 		chid, err := channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
 		require.NoError(t, err)
+		require.NoError(t, channelList.Open(chid))
 		require.Equal(t, peers[0], chid.Initiator)
 		require.Equal(t, tid1, chid.ID)
 
@@ -65,6 +66,7 @@ func TestChannels(t *testing.T) {
 		// can add for different id
 		chid, err = channelList.CreateNew(peers[2], tid2, cids[1], selector, fv2, peers[3], peers[2], peers[3])
 		require.NoError(t, err)
+		require.NoError(t, channelList.Open(chid))
 		require.Equal(t, peers[3], chid.Initiator)
 		require.Equal(t, tid2, chid.ID)
 		state = checkEvent(ctx, t, received, datatransfer.Open)
@@ -139,6 +141,7 @@ func TestChannels(t *testing.T) {
 
 		chid, err := channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
 		require.NoError(t, err)
+		require.NoError(t, channelList.Open(chid))
 		checkEvent(ctx, t, received, datatransfer.Open)
 		require.NoError(t, channelList.Accept(chid))
 		checkEvent(ctx, t, received, datatransfer.Accept)
@@ -169,8 +172,9 @@ func TestChannels(t *testing.T) {
 		err = channelList.Start(ctx)
 		require.NoError(t, err)
 
-		_, err = channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
+		chid, err := channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[0], peers[0], peers[1])
 		require.NoError(t, err)
+		require.NoError(t, channelList.Open(chid))
 		state := checkEvent(ctx, t, received, datatransfer.Open)
 		require.Equal(t, datatransfer.Requested, state.Status())
 		require.Equal(t, uint64(0), state.Received())
@@ -235,8 +239,9 @@ func TestChannels(t *testing.T) {
 		err = channelList.Start(ctx)
 		require.NoError(t, err)
 
-		_, err = channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[1], peers[0], peers[1])
+		chid, err := channelList.CreateNew(peers[0], tid1, cids[0], selector, fv1, peers[1], peers[0], peers[1])
 		require.NoError(t, err)
+		require.NoError(t, channelList.Open(chid))
 		state := checkEvent(ctx, t, received, datatransfer.Open)
 
 		err = channelList.TransferInitiated(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
@@ -381,6 +386,7 @@ func TestChannels(t *testing.T) {
 
 		chid, err := channelList.CreateNew(peers[0], tid2, cids[1], selector, fv2, peers[2], peers[1], peers[2])
 		require.NoError(t, err)
+		require.NoError(t, channelList.Open(chid))
 		require.Equal(t, peers[2], chid.Initiator)
 		require.Equal(t, tid2, chid.ID)
 		state = checkEvent(ctx, t, received, datatransfer.Open)
@@ -425,6 +431,7 @@ func TestChannels(t *testing.T) {
 
 		chid, err := channelList.CreateNew(peers[3], tid1, cids[0], selector, fv1, peers[3], peers[0], peers[3])
 		require.NoError(t, err)
+		require.NoError(t, channelList.Open(chid))
 		state := checkEvent(ctx, t, received, datatransfer.Open)
 		require.Equal(t, datatransfer.Requested, state.Status())
 

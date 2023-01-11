@@ -139,8 +139,8 @@ func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, base
 		log.Errorw("failed to create new tracking channel for data-transfer", "channelID", chid, "err", err)
 		return datatransfer.ChannelID{}, err
 	}
-	log.Debugw("created tracking channel for data-transfer, emitting channel Open event", "channelID", chid)
-	return chid, c.stateMachines.Send(chid, datatransfer.Open)
+	log.Debugw("created tracking channel for data-transfer", "channelID", chid)
+	return chid, nil
 }
 
 // InProgress returns a list of in progress channels
@@ -167,6 +167,10 @@ func (c *Channels) GetByID(ctx context.Context, chid datatransfer.ChannelID) (da
 		return nil, NewErrNotFound(chid)
 	}
 	return c.fromInternalChannelState(internalChannel), nil
+}
+
+func (c *Channels) Open(chid datatransfer.ChannelID) error {
+	return c.send(chid, datatransfer.Open)
 }
 
 // Accept marks a data transfer as accepted

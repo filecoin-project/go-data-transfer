@@ -22,6 +22,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channelmonitor"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
+	"github.com/filecoin-project/go-data-transfer/v2/channelsubscriptions"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/network"
@@ -45,6 +46,7 @@ type manager struct {
 	channelMonitorCfg    *channelmonitor.Config
 	transferIDGen        *timeCounter
 	spansIndex           *tracing.SpansIndex
+	channelSubscriptions *channelsubscriptions.ChannelSubscriptions
 }
 
 type internalEvent struct {
@@ -117,7 +119,7 @@ func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTran
 	// Create push / pull channel monitor after applying config options as the config
 	// options may apply to the monitor
 	m.channelMonitor = channelmonitor.NewMonitor(m, m.channelMonitorCfg)
-
+	m.channelSubscriptions = channelsubscriptions.NewChannelSubscriptions(m)
 	return m, nil
 }
 
@@ -158,6 +160,7 @@ func (m *manager) Stop(ctx context.Context) error {
 	log.Info("stop data-transfer module")
 	m.channelMonitor.Shutdown()
 	m.spansIndex.EndAll()
+	m.channelSubscriptions.Stop()
 	return m.transport.Shutdown(ctx)
 }
 
@@ -176,8 +179,10 @@ func (m *manager) RegisterVoucherType(voucherType datatransfer.TypeIdentifier, v
 
 // OpenPushDataChannel opens a data transfer that will send data to the recipient peer and
 // transfer parts of the piece that match the selector
-func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node, eventsCb datatransfer.Subscriber) (datatransfer.ChannelID, error) {
+func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node, options ...datatransfer.TransferOption) (datatransfer.ChannelID, error) {
 	log.Infof("open push channel to %s with base cid %s", requestTo, baseCid)
+
+	tc := datatransfer.FromOptions(options)
 
 	req, err := m.newRequest(ctx, selector, false, voucher, baseCid, requestTo)
 	if err != nil {
@@ -190,20 +195,14 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 		return chid, err
 	}
 
+	eventsCb := tc.EventsCb()
 	if eventsCb != nil {
-		// simulate first event
-		if chst, err := m.channels.GetByID(ctx, chid); err != nil {
-			eventsCb(datatransfer.Event{Code: datatransfer.Open, Timestamp: time.Now()}, chst)
-		}
-		var unsub func()
-		unsub = m.pubSub.Subscribe(datatransfer.Subscriber(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-			if channelState.ChannelID() == chid {
-				if event.Code == datatransfer.CleanupComplete { // this transfer is complete
-					unsub()
-				}
-				eventsCb(event, channelState)
-			}
-		}))
+		m.channelSubscriptions.Subscribe(chid, eventsCb)
+	}
+
+	err = m.channels.Open(chid)
+	if err != nil {
+		return chid, err
 	}
 
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
@@ -234,8 +233,10 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 
 // OpenPullDataChannel opens a data transfer that will request data from the sending peer and
 // transfer parts of the piece that match the selector
-func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node, eventsCb datatransfer.Subscriber) (datatransfer.ChannelID, error) {
+func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node, options ...datatransfer.TransferOption) (datatransfer.ChannelID, error) {
 	log.Infof("open pull channel to %s with base cid %s", requestTo, baseCid)
+
+	tc := datatransfer.FromOptions(options)
 
 	req, err := m.newRequest(ctx, selector, true, voucher, baseCid, requestTo)
 	if err != nil {
@@ -249,20 +250,14 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 		return chid, err
 	}
 
+	eventsCb := tc.EventsCb()
 	if eventsCb != nil {
-		// simulate first event
-		if chst, err := m.channels.GetByID(ctx, chid); err != nil {
-			eventsCb(datatransfer.Event{Code: datatransfer.Open, Timestamp: time.Now()}, chst)
-		}
-		var unsub func()
-		unsub = m.pubSub.Subscribe(datatransfer.Subscriber(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
-			if channelState.ChannelID() == chid {
-				if event.Code == datatransfer.CleanupComplete { // this transfer is complete
-					unsub()
-				}
-				eventsCb(event, channelState)
-			}
-		}))
+		m.channelSubscriptions.Subscribe(chid, eventsCb)
+	}
+
+	err = m.channels.Open(chid)
+	if err != nil {
+		return chid, err
 	}
 
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
