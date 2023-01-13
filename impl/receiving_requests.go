@@ -87,10 +87,14 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 		dataReceiver,
 	)
 	if err != nil {
-		log.Errorw("failed to create and start tracking channel", "channelID", chid, "err", err)
+		log.Errorw("failed to create tracking channel", "channelID", chid, "err", err)
 		return result, err
 	}
-
+	err = m.channels.Open(chid)
+	if err != nil {
+		log.Errorw("failed to start tracking channel", "channelID", chid, "err", err)
+		return result, err
+	}
 	// record that the channel was accepted
 	log.Debugw("successfully created and started tracking channel", "channelID", chid)
 	if err := m.channels.Accept(chid); err != nil {

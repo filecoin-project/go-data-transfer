@@ -269,6 +269,126 @@ func TestRoundTrip(t *testing.T) {
 	} //
 }
 
+func TestMultipleRoundTripWithSubscribers(t *testing.T) {
+	ctx := context.Background()
+	testCases := map[string]struct {
+		isPull bool
+	}{
+		"multiple roundtrip for push requests": {},
+		"multiple roundtrip for pull requests": {
+			isPull: true,
+		},
+	}
+	for testCase, data := range testCases {
+		t.Run(testCase, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+
+			gsData := NewGraphsyncTestingData(ctx, t, nil, nil)
+			host1 := gsData.Host1 // initiator, data sender
+			host2 := gsData.Host2 // data recipient
+
+			tp1 := gsData.SetupGSTransportHost1()
+			tp2 := gsData.SetupGSTransportHost2()
+
+			dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1)
+			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt1)
+			dt2, err := NewDataTransfer(gsData.DtDs2, gsData.DtNet2, tp2)
+			require.NoError(t, err)
+			testutil.StartAndWaitForReady(ctx, t, dt2)
+
+			finishedFirst := make(chan struct{}, 1)
+			errChanFirst := make(chan string, 1)
+			openedFirst := make(chan struct{}, 1)
+			firstSubscriber := func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if channelState.Status() == datatransfer.Completed {
+					finishedFirst <- struct{}{}
+				}
+				if event.Code == datatransfer.Error {
+					errChanFirst <- event.Message
+				}
+				if event.Code == datatransfer.Open {
+					openedFirst <- struct{}{}
+				}
+			}
+			finishedSecond := make(chan struct{}, 1)
+			errChanSecond := make(chan string, 1)
+			openedSecond := make(chan struct{}, 1)
+			secondSubscriber := func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+				if channelState.Status() == datatransfer.Completed {
+					finishedSecond <- struct{}{}
+				}
+				if event.Code == datatransfer.Error {
+					errChanSecond <- event.Message
+				}
+				if event.Code == datatransfer.Open {
+					openedSecond <- struct{}{}
+				}
+			}
+			firstVoucher := testutil.NewTestTypedVoucher()
+			secondVoucher := testutil.NewTestTypedVoucher()
+			sv := testutil.NewStubbedValidator()
+			sv.StubResult(datatransfer.ValidationResult{Accepted: true})
+
+			firstRoot, _ := LoadUnixFSFile(ctx, t, gsData.DagService1, loremFile)
+			firstRootCid := firstRoot.(cidlink.Link).Cid
+			secondRoot, _ := LoadUnixFSFile(ctx, t, gsData.DagService1, loremLargeFile)
+			secondRootCid := secondRoot.(cidlink.Link).Cid
+
+			if data.isPull {
+				sv.ExpectSuccessPull()
+				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
+				_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), firstVoucher, firstRootCid, selectorparse.CommonSelector_ExploreAllRecursively, datatransfer.WithSubscriber(firstSubscriber))
+				require.NoError(t, err)
+				_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), secondVoucher, secondRootCid, selectorparse.CommonSelector_ExploreAllRecursively, datatransfer.WithSubscriber(secondSubscriber))
+				require.NoError(t, err)
+
+			} else {
+				sv.ExpectSuccessPush()
+				require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
+				_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), firstVoucher, firstRootCid, selectorparse.CommonSelector_ExploreAllRecursively, datatransfer.WithSubscriber(firstSubscriber))
+				require.NoError(t, err)
+
+				_, err = dt1.OpenPushDataChannel(ctx, host2.ID(), secondVoucher, secondRootCid, selectorparse.CommonSelector_ExploreAllRecursively, datatransfer.WithSubscriber(secondSubscriber))
+				require.NoError(t, err)
+
+			}
+			var firstOpen, secondOpen, firstComplete, secondComplete bool
+			for !firstOpen || !secondOpen || !firstComplete || !secondComplete {
+				select {
+				case <-ctx.Done():
+					t.Fatal("Did not complete successful data transfer")
+				case <-finishedFirst:
+					if firstComplete {
+						t.Fatalf("first competed twice")
+					}
+					firstComplete = true
+				case <-openedFirst:
+					if firstOpen {
+						t.Fatalf("first opened twice")
+					}
+					firstOpen = true
+				case <-finishedSecond:
+					if secondComplete {
+						t.Fatalf("second competed twice")
+					}
+					secondComplete = true
+				case <-openedSecond:
+					if secondOpen {
+						t.Fatalf("second opened twice")
+					}
+					secondOpen = true
+				case err := <-errChanFirst:
+					t.Fatalf("received error on data transfer: %s", err)
+				case err := <-errChanSecond:
+					t.Fatalf("received error on data transfer: %s", err)
+				}
+			}
+		})
+	}
+}
+
 func TestMultipleRoundTripMultipleStores(t *testing.T) {
 	ctx := context.Background()
 	testCases := map[string]struct {

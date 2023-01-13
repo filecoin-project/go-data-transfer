@@ -22,6 +22,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channelmonitor"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
+	"github.com/filecoin-project/go-data-transfer/v2/channelsubscriptions"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 	"github.com/filecoin-project/go-data-transfer/v2/network"
@@ -45,6 +46,7 @@ type manager struct {
 	channelMonitorCfg    *channelmonitor.Config
 	transferIDGen        *timeCounter
 	spansIndex           *tracing.SpansIndex
+	channelSubscriptions *channelsubscriptions.ChannelSubscriptions
 }
 
 type internalEvent struct {
@@ -59,7 +61,7 @@ func dispatcher(evt pubsub.Event, subscriberFn pubsub.SubscriberFn) error {
 	}
 	cb, ok := subscriberFn.(datatransfer.Subscriber)
 	if !ok {
-		return errors.New("wrong type of event")
+		return errors.New("wrong type of subscriber")
 	}
 	cb(ie.evt, ie.state)
 	return nil
@@ -72,7 +74,7 @@ func readyDispatcher(evt pubsub.Event, fn pubsub.SubscriberFn) error {
 	}
 	cb, ok := fn.(datatransfer.ReadyFunc)
 	if !ok {
-		return errors.New("wrong type of event")
+		return errors.New("wrong type of event subscriber")
 	}
 	cb(migrateErr)
 	return nil
@@ -117,7 +119,7 @@ func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTran
 	// Create push / pull channel monitor after applying config options as the config
 	// options may apply to the monitor
 	m.channelMonitor = channelmonitor.NewMonitor(m, m.channelMonitorCfg)
-
+	m.channelSubscriptions = channelsubscriptions.NewChannelSubscriptions(m)
 	return m, nil
 }
 
@@ -158,6 +160,7 @@ func (m *manager) Stop(ctx context.Context) error {
 	log.Info("stop data-transfer module")
 	m.channelMonitor.Shutdown()
 	m.spansIndex.EndAll()
+	m.channelSubscriptions.Stop()
 	return m.transport.Shutdown(ctx)
 }
 
@@ -176,8 +179,10 @@ func (m *manager) RegisterVoucherType(voucherType datatransfer.TypeIdentifier, v
 
 // OpenPushDataChannel opens a data transfer that will send data to the recipient peer and
 // transfer parts of the piece that match the selector
-func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (datatransfer.ChannelID, error) {
+func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node, options ...datatransfer.TransferOption) (datatransfer.ChannelID, error) {
 	log.Infof("open push channel to %s with base cid %s", requestTo, baseCid)
+
+	tc := datatransfer.FromOptions(options)
 
 	req, err := m.newRequest(ctx, selector, false, voucher, baseCid, requestTo)
 	if err != nil {
@@ -189,6 +194,15 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 	if err != nil {
 		return chid, err
 	}
+
+	if eventsCb := tc.EventsCb(); eventsCb != nil {
+		m.channelSubscriptions.Subscribe(chid, eventsCb)
+	}
+
+	if err := m.channels.Open(chid); err != nil {
+		return chid, err
+	}
+
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
 	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
@@ -217,19 +231,31 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 
 // OpenPullDataChannel opens a data transfer that will request data from the sending peer and
 // transfer parts of the piece that match the selector
-func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node) (datatransfer.ChannelID, error) {
+func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, voucher datatransfer.TypedVoucher, baseCid cid.Cid, selector datamodel.Node, options ...datatransfer.TransferOption) (datatransfer.ChannelID, error) {
 	log.Infof("open pull channel to %s with base cid %s", requestTo, baseCid)
+
+	tc := datatransfer.FromOptions(options)
 
 	req, err := m.newRequest(ctx, selector, true, voucher, baseCid, requestTo)
 	if err != nil {
 		return datatransfer.ChannelID{}, err
 	}
+
 	// initiator = us, sender = them, receiver = us
 	chid, err := m.channels.CreateNew(m.peerID, req.TransferID(), baseCid, selector, voucher,
 		m.peerID, requestTo, m.peerID)
 	if err != nil {
 		return chid, err
 	}
+
+	if eventsCb := tc.EventsCb(); eventsCb != nil {
+		m.channelSubscriptions.Subscribe(chid, eventsCb)
+	}
+
+	if err := m.channels.Open(chid); err != nil {
+		return chid, err
+	}
+
 	ctx, span := m.spansIndex.SpanForChannel(ctx, chid)
 	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
