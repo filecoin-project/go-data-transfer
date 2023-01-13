@@ -195,13 +195,11 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 		return chid, err
 	}
 
-	eventsCb := tc.EventsCb()
-	if eventsCb != nil {
+	if eventsCb := tc.EventsCb(); eventsCb != nil {
 		m.channelSubscriptions.Subscribe(chid, eventsCb)
 	}
 
-	err = m.channels.Open(chid)
-	if err != nil {
+	if err := m.channels.Open(chid); err != nil {
 		return chid, err
 	}
 
