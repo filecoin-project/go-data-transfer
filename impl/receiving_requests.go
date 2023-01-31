@@ -116,7 +116,12 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
-		transportConfigurer(chid, voucher, m.transport)
+		if options := transportConfigurer(chid, voucher); len(options) > 0 {
+			m.transportOptions.SetOptions(chid, options)
+		}
+	}
+	if err := m.transportOptions.ApplyOptions(chid, m.transport); err != nil {
+		return result, err
 	}
 	m.dataTransferNetwork.Protect(chid.Initiator, chid.String())
 
@@ -198,7 +203,12 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 	processor, has := m.transportConfigurers.Processor(voucherType)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
-		transportConfigurer(chid, typedVoucher, m.transport)
+		if options := transportConfigurer(chid, typedVoucher); len(options) > 0 {
+			m.transportOptions.SetOptions(chid, options)
+		}
+	}
+	if err := m.transportOptions.ApplyOptions(chid, m.transport); err != nil {
+		return stayPaused, result, err
 	}
 	m.dataTransferNetwork.Protect(initiator, chid.String())
 	return stayPaused, result, nil

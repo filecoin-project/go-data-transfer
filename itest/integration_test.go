@@ -186,14 +186,12 @@ func TestRoundTrip(t *testing.T) {
 					bs := bstore.NewBlockstore(namespace.Wrap(ds, datastore.NewKey("blockstore")))
 					lsys := storeutil.LinkSystemForBlockstore(bs)
 					sourceDagService = merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
-					err := dt1.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher, transport datatransfer.Transport) {
+					err := dt1.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher) []datatransfer.TransportOption {
+						var options []datatransfer.TransportOption
 						if testVoucher.Equals(voucher) {
-							gsTransport, ok := transport.(*tp.Transport)
-							if ok {
-								err := gsTransport.UseStore(channelID, lsys)
-								require.NoError(t, err)
-							}
+							options = append(options, tp.UseStore(lsys))
 						}
+						return options
 					})
 					require.NoError(t, err)
 				} else {
@@ -208,14 +206,12 @@ func TestRoundTrip(t *testing.T) {
 					bs := bstore.NewBlockstore(namespace.Wrap(ds, datastore.NewKey("blockstore")))
 					lsys := storeutil.LinkSystemForBlockstore(bs)
 					destDagService = merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
-					err := dt2.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher, transport datatransfer.Transport) {
+					err := dt2.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher) []datatransfer.TransportOption {
+						var options []datatransfer.TransportOption
 						if testVoucher.Equals(voucher) {
-							gsTransport, ok := transport.(*tp.Transport)
-							if ok {
-								err := gsTransport.UseStore(channelID, lsys)
-								require.NoError(t, err)
-							}
+							options = append(options, tp.UseStore(lsys))
 						}
+						return options
 					})
 					require.NoError(t, err)
 				} else {
@@ -392,8 +388,9 @@ func TestMultipleRoundTripWithSubscribers(t *testing.T) {
 func TestMultipleRoundTripMultipleStores(t *testing.T) {
 	ctx := context.Background()
 	testCases := map[string]struct {
-		isPull       bool
-		requestCount int
+		isPull        bool
+		useConfigurer bool
+		requestCount  int
 	}{
 		"multiple roundtrip for push requests": {
 			requestCount: 2,
@@ -460,27 +457,26 @@ func TestMultipleRoundTripMultipleStores(t *testing.T) {
 				linkSystems = append(linkSystems, lsys)
 			}
 
-			err = dt2.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher, transport datatransfer.Transport) {
-				for i, voucher := range vouchers {
-					if testVoucher.Equals(voucher) {
-						gsTransport, ok := transport.(*tp.Transport)
-						if ok {
-							err := gsTransport.UseStore(channelID, linkSystems[i])
-							require.NoError(t, err)
-						}
-					}
-				}
-			})
-			require.NoError(t, err)
-
 			if data.isPull {
 				sv.ExpectSuccessPull()
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 				for i := 0; i < data.requestCount; i++ {
-					_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), vouchers[i], rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
+					_, err = dt2.OpenPullDataChannel(ctx, host1.ID(), vouchers[i], rootCid, selectorparse.CommonSelector_ExploreAllRecursively, datatransfer.WithTransportOptions(tp.UseStore(linkSystems[i])))
 					require.NoError(t, err)
 				}
 			} else {
+
+				err = dt2.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher) []datatransfer.TransportOption {
+					var options []datatransfer.TransportOption
+					for i, voucher := range vouchers {
+						if testVoucher.Equals(voucher) {
+							options = append(options, tp.UseStore(linkSystems[i]))
+						}
+					}
+					return options
+				})
+				require.NoError(t, err)
+
 				sv.ExpectSuccessPush()
 				require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
 				for i := 0; i < data.requestCount; i++ {
@@ -563,12 +559,8 @@ func TestManyReceiversAtOnce(t *testing.T) {
 				err = receiver.Start(gsData.Ctx)
 				require.NoError(t, err)
 
-				err = receiver.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher, transport datatransfer.Transport) {
-					gsTransport, isGs := transport.(*tp.Transport)
-					if isGs {
-						err := gsTransport.UseStore(channelID, altLinkSystem)
-						require.NoError(t, err)
-					}
+				err = receiver.RegisterTransportConfigurer(testutil.TestVoucherType, func(channelID datatransfer.ChannelID, testVoucher datatransfer.TypedVoucher) []datatransfer.TransportOption {
+					return []datatransfer.TransportOption{tp.UseStore(altLinkSystem)}
 				})
 				require.NoError(t, err)
 

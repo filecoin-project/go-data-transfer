@@ -598,19 +598,14 @@ func TestDataTransferResponding(t *testing.T) {
 				sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
-				err := h.dt.RegisterTransportConfigurer(h.voucher.Type, func(channelID datatransfer.ChannelID, voucher datatransfer.TypedVoucher, transport datatransfer.Transport) {
-					ft, ok := transport.(*testutil.FakeTransport)
-					if !ok {
-						return
-					}
-					ft.RecordCustomizedTransfer(channelID, voucher)
+				err := h.dt.RegisterTransportConfigurer(h.voucher.Type, func(channelID datatransfer.ChannelID, voucher datatransfer.TypedVoucher) []datatransfer.TransportOption {
+					return []datatransfer.TransportOption{testutil.RecordCustomizedTransfer()}
 				})
 				require.NoError(t, err)
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
 				require.Len(t, h.transport.CustomizedTransfers, 1)
 				customizedTransfer := h.transport.CustomizedTransfers[0]
-				require.Equal(t, channelID(h.id, h.peers), customizedTransfer.ChannelID)
-				require.Equal(t, h.voucher, customizedTransfer.Voucher)
+				require.Equal(t, channelID(h.id, h.peers), customizedTransfer)
 			},
 		},
 		"new pull request, customized transport": {
@@ -623,20 +618,15 @@ func TestDataTransferResponding(t *testing.T) {
 				sv.StubResult(datatransfer.ValidationResult{Accepted: true})
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
-				err := h.dt.RegisterTransportConfigurer(h.voucher.Type, func(channelID datatransfer.ChannelID, voucher datatransfer.TypedVoucher, transport datatransfer.Transport) {
-					ft, ok := transport.(*testutil.FakeTransport)
-					if !ok {
-						return
-					}
-					ft.RecordCustomizedTransfer(channelID, voucher)
+				err := h.dt.RegisterTransportConfigurer(h.voucher.Type, func(channelID datatransfer.ChannelID, voucher datatransfer.TypedVoucher) []datatransfer.TransportOption {
+					return []datatransfer.TransportOption{testutil.RecordCustomizedTransfer()}
 				})
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.pullRequest)
 				require.NoError(t, err)
 				require.Len(t, h.transport.CustomizedTransfers, 1)
 				customizedTransfer := h.transport.CustomizedTransfers[0]
-				require.Equal(t, channelID(h.id, h.peers), customizedTransfer.ChannelID)
-				require.Equal(t, h.voucher, customizedTransfer.Voucher)
+				require.Equal(t, channelID(h.id, h.peers), customizedTransfer)
 			},
 		},
 	}
