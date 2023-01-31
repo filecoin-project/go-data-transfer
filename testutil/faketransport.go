@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
@@ -26,12 +27,6 @@ type ResumedChannel struct {
 	Message   datatransfer.Message
 }
 
-// CustomizedTransfer is just a way to record calls made to transport configurer
-type CustomizedTransfer struct {
-	ChannelID datatransfer.ChannelID
-	Voucher   datatransfer.TypedVoucher
-}
-
 // FakeTransport is a fake transport with mocked results
 type FakeTransport struct {
 	OpenedChannels      []OpenedChannel
@@ -43,7 +38,7 @@ type FakeTransport struct {
 	ResumedChannels     []ResumedChannel
 	ResumeChannelErr    error
 	CleanedUpChannels   []datatransfer.ChannelID
-	CustomizedTransfers []CustomizedTransfer
+	CustomizedTransfers []datatransfer.ChannelID
 	EventHandler        datatransfer.EventsHandler
 	SetEventHandlerErr  error
 }
@@ -96,6 +91,13 @@ func (ft *FakeTransport) CleanupChannel(chid datatransfer.ChannelID) {
 	ft.CleanedUpChannels = append(ft.CleanedUpChannels, chid)
 }
 
-func (ft *FakeTransport) RecordCustomizedTransfer(chid datatransfer.ChannelID, voucher datatransfer.TypedVoucher) {
-	ft.CustomizedTransfers = append(ft.CustomizedTransfers, CustomizedTransfer{chid, voucher})
+func RecordCustomizedTransfer() datatransfer.TransportOption {
+	return func(chid datatransfer.ChannelID, transport datatransfer.Transport) error {
+		ft, ok := transport.(*FakeTransport)
+		if !ok {
+			return errors.New("incorrect transport")
+		}
+		ft.CustomizedTransfers = append(ft.CustomizedTransfers, chid)
+		return nil
+	}
 }

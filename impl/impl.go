@@ -28,6 +28,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/v2/network"
 	"github.com/filecoin-project/go-data-transfer/v2/registry"
 	"github.com/filecoin-project/go-data-transfer/v2/tracing"
+	"github.com/filecoin-project/go-data-transfer/v2/transportoptions"
 )
 
 var log = logging.Logger("dt-impl")
@@ -46,6 +47,7 @@ type manager struct {
 	channelMonitorCfg    *channelmonitor.Config
 	transferIDGen        *timeCounter
 	spansIndex           *tracing.SpansIndex
+	transportOptions     *transportoptions.TransportOptions
 	channelSubscriptions *channelsubscriptions.ChannelSubscriptions
 }
 
@@ -103,6 +105,7 @@ func NewDataTransfer(ds datastore.Batching, dataTransferNetwork network.DataTran
 		transport:            transport,
 		transferIDGen:        newTimeCounter(),
 		spansIndex:           tracing.NewSpansIndex(),
+		transportOptions:     transportoptions.NewTransportOptions(),
 	}
 
 	channels, err := channels.New(ds, m.notifier, &channelEnvironment{m}, dataTransferNetwork.ID())
@@ -160,6 +163,7 @@ func (m *manager) Stop(ctx context.Context) error {
 	log.Info("stop data-transfer module")
 	m.channelMonitor.Shutdown()
 	m.spansIndex.EndAll()
+	m.transportOptions.ClearAll()
 	m.channelSubscriptions.Stop()
 	return m.transport.Shutdown(ctx)
 }
@@ -195,6 +199,10 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 		return chid, err
 	}
 
+	if options := tc.TransportOptions(); len(options) > 0 {
+		m.transportOptions.SetOptions(chid, options)
+	}
+
 	if eventsCb := tc.EventsCb(); eventsCb != nil {
 		m.channelSubscriptions.Subscribe(chid, eventsCb)
 	}
@@ -207,7 +215,14 @@ func (m *manager) OpenPushDataChannel(ctx context.Context, requestTo peer.ID, vo
 	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
-		transportConfigurer(chid, voucher, m.transport)
+		if options := transportConfigurer(chid, voucher); len(options) > 0 {
+			m.transportOptions.SetOptions(chid, options)
+		}
+	}
+	if err := m.transportOptions.ApplyOptions(chid, m.transport); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return chid, err
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	monitoredChan := m.channelMonitor.AddPushChannel(chid)
@@ -251,6 +266,9 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 	if eventsCb := tc.EventsCb(); eventsCb != nil {
 		m.channelSubscriptions.Subscribe(chid, eventsCb)
 	}
+	if options := tc.TransportOptions(); len(options) > 0 {
+		m.transportOptions.SetOptions(chid, options)
+	}
 
 	if err := m.channels.Open(chid); err != nil {
 		return chid, err
@@ -260,7 +278,14 @@ func (m *manager) OpenPullDataChannel(ctx context.Context, requestTo peer.ID, vo
 	processor, has := m.transportConfigurers.Processor(voucher.Type)
 	if has {
 		transportConfigurer := processor.(datatransfer.TransportConfigurer)
-		transportConfigurer(chid, voucher, m.transport)
+		if options := transportConfigurer(chid, voucher); len(options) > 0 {
+			m.transportOptions.SetOptions(chid, options)
+		}
+	}
+	if err := m.transportOptions.ApplyOptions(chid, m.transport); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return chid, err
 	}
 	m.dataTransferNetwork.Protect(requestTo, chid.String())
 	monitoredChan := m.channelMonitor.AddPullChannel(chid)

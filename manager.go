@@ -90,7 +90,7 @@ type RequestValidator interface {
 }
 
 // TransportConfigurer provides a mechanism to provide transport specific configuration for a given voucher type
-type TransportConfigurer func(chid ChannelID, voucher TypedVoucher, transport Transport)
+type TransportConfigurer func(chid ChannelID, voucher TypedVoucher) []TransportOption
 
 // ReadyFunc is function that gets called once when the data transfer module is ready
 type ReadyFunc func(error)

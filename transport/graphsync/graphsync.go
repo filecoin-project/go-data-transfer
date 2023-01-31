@@ -337,6 +337,19 @@ func (t *Transport) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func UseStore(store ipld.LinkSystem) datatransfer.TransportOption {
+	return func(channelID datatransfer.ChannelID, transport datatransfer.Transport) error {
+		gsTransport, ok := transport.(*Transport)
+		if !ok {
+			return datatransfer.ErrUnsupported
+		}
+		if err := gsTransport.UseStore(channelID, store); err != nil {
+			log.Errorf("attempting to configure data store: %s", err.Error())
+		}
+		return nil
+	}
+}
+
 // UseStore tells the graphsync transport to use the given loader and storer for this channelID
 func (t *Transport) UseStore(channelID datatransfer.ChannelID, lsys ipld.LinkSystem) error {
 	ch := t.trackDTChannel(channelID)

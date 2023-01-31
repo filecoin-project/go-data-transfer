@@ -1,11 +1,18 @@
 package datatransfer
 
+type TransportOption func(chid ChannelID, transport Transport) error
+
 type transferConfig struct {
-	eventsCb Subscriber
+	eventsCb         Subscriber
+	transportOptions []TransportOption
 }
 
 func (tc *transferConfig) EventsCb() Subscriber {
 	return tc.eventsCb
+}
+
+func (tc *transferConfig) TransportOptions() []TransportOption {
+	return tc.transportOptions
 }
 
 // TransferOption customizes a single transfer
@@ -18,9 +25,16 @@ func WithSubscriber(eventsCb Subscriber) TransferOption {
 	}
 }
 
+func WithTransportOptions(transportOptions ...TransportOption) TransferOption {
+	return func(tc *transferConfig) {
+		tc.transportOptions = transportOptions
+	}
+}
+
 // TransferConfig accesses transfer properties
 type TransferConfig interface {
 	EventsCb() Subscriber
+	TransportOptions() []TransportOption
 }
 
 // FromOptions builds a config from an options list
