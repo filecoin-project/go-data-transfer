@@ -102,6 +102,9 @@ var NotAcceptedStates = statusList{
 func (s Status) IsAccepted() bool {
 	return !NotAcceptedStates.Contains(s)
 }
+func (s Status) String() string {
+	return Statuses[s]
+}
 
 var FinalizationStatuses = statusList{Finalizing, Completed, Completing}
 

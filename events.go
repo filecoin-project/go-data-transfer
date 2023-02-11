@@ -1,6 +1,8 @@
 package datatransfer
 
-import "time"
+import (
+	"time"
+)
 
 // EventCode is a name for an event that occurs on a data transfer channel
 type EventCode int
@@ -169,6 +171,10 @@ var Events = map[EventCode]string{
 	DataLimitExceeded:           "DataLimitExceeded",
 	TransferInitiated:           "TransferInitiated",
 	SendMessageError:            "SendMessageError",
+}
+
+func (e EventCode) String() string {
+	return Events[e]
 }
 
 // Event is a struct containing information about a data transfer event
