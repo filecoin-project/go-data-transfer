@@ -201,10 +201,7 @@ func (m *manager) OnResponseReceived(chid datatransfer.ChannelID, response datat
 
 		// if yes, mark the responder being in final settlement
 		log.Infow("received complete response, responder is paused, not completing channel", "chid", chid)
-		err := m.channels.ResponderBeginsFinalization(chid)
-		if err != nil {
-			return err
-		}
+		return m.channels.ResponderBeginsFinalization(chid)
 	}
 
 	// handle pause/resume for all response types
