@@ -1,5 +1,7 @@
 package datatransfer
 
+import "github.com/filecoin-project/go-statemachine/fsm"
+
 // Status is the status of transfer for a given channel
 type Status uint64
 
@@ -40,13 +42,13 @@ const (
 	// Cancelled means the data transfer ended prematurely
 	Cancelled
 
-	// InitiatorPaused means the data sender has paused the channel (only the sender can unpause this)
+	// DEPRECATED: Use InitiatorPaused() method on ChannelState
 	InitiatorPaused
 
-	// ResponderPaused means the data receiver has paused the channel (only the receiver can unpause this)
+	// DEPRECATED: Use ResponderPaused() method on ChannelState
 	ResponderPaused
 
-	// BothPaused means both sender and receiver have paused the channel seperately (both must unpause)
+	// DEPRECATED: Use BothPaused() method on ChannelState
 	BothPaused
 
 	// ResponderFinalizing is a unique state where the responder is awaiting a final voucher
@@ -58,7 +60,85 @@ const (
 
 	// ChannelNotFoundError means the searched for data transfer does not exist
 	ChannelNotFoundError
+
+	// Queued indicates a data transfer request has been accepted, but is not actively transfering yet
+	Queued
+
+	// AwaitingAcceptance indicates a transfer request is actively being processed by the transport
+	// even if the remote has not yet responded that it's accepted the transfer. Such a state can
+	// occur, for example, in a requestor-initiated transfer that starts processing prior to receiving
+	// acceptance from the server.
+	AwaitingAcceptance
 )
+
+type statusList []Status
+
+func (sl statusList) Contains(s Status) bool {
+	for _, ts := range sl {
+		if ts == s {
+			return true
+		}
+	}
+	return false
+}
+
+func (sl statusList) AsFSMStates() []fsm.StateKey {
+	sk := make([]fsm.StateKey, 0, len(sl))
+	for _, s := range sl {
+		sk = append(sk, s)
+	}
+	return sk
+}
+
+var NotAcceptedStates = statusList{
+	Requested,
+	AwaitingAcceptance,
+	Cancelled,
+	Cancelling,
+	Failed,
+	Failing,
+	ChannelNotFoundError}
+
+func (s Status) IsAccepted() bool {
+	return !NotAcceptedStates.Contains(s)
+}
+func (s Status) String() string {
+	return Statuses[s]
+}
+
+var FinalizationStatuses = statusList{Finalizing, Completed, Completing}
+
+func (s Status) InFinalization() bool {
+	return FinalizationStatuses.Contains(s)
+}
+
+var TransferCompleteStates = statusList{
+	TransferFinished,
+	ResponderFinalizingTransferFinished,
+	Finalizing,
+	Completed,
+	Completing,
+	Failing,
+	Failed,
+	Cancelling,
+	Cancelled,
+	ChannelNotFoundError,
+}
+
+func (s Status) TransferComplete() bool {
+	return TransferCompleteStates.Contains(s)
+}
+
+var TransferringStates = statusList{
+	Ongoing,
+	ResponderCompleted,
+	ResponderFinalizing,
+	AwaitingAcceptance,
+}
+
+func (s Status) Transferring() bool {
+	return TransferringStates.Contains(s)
+}
 
 // Statuses are human readable names for data transfer states
 var Statuses = map[Status]string{
@@ -80,4 +160,6 @@ var Statuses = map[Status]string{
 	ResponderFinalizing:                 "ResponderFinalizing",
 	ResponderFinalizingTransferFinished: "ResponderFinalizingTransferFinished",
 	ChannelNotFoundError:                "ChannelNotFoundError",
+	Queued:                              "Queued",
+	AwaitingAcceptance:                  "AwaitingAcceptance",
 }

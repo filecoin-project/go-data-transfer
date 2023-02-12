@@ -3,15 +3,15 @@ package message1_1
 import (
 	"io"
 
+	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	xerrors "golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/encoding"
-	"github.com/filecoin-project/go-data-transfer/message/types"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
 )
 
 // TransferResponse1_1 is a private struct that satisfies the datatransfer.Response interface
@@ -21,7 +21,7 @@ type TransferResponse1_1 struct {
 	RequestAccepted       bool
 	Paused                bool
 	TransferId            uint64
-	VoucherResultPtr      *datamodel.Node
+	VoucherResultPtr      datamodel.Node
 	VoucherTypeIdentifier datatransfer.TypeIdentifier
 }
 
@@ -59,12 +59,12 @@ func (trsp *TransferResponse1_1) IsComplete() bool {
 	return trsp.MessageType == uint64(types.CompleteMessage)
 }
 
-func (trsp *TransferResponse1_1) IsVoucherResult() bool {
+func (trsp *TransferResponse1_1) IsValidationResult() bool {
 	return trsp.MessageType == uint64(types.VoucherResultMessage) || trsp.MessageType == uint64(types.NewMessage) || trsp.MessageType == uint64(types.CompleteMessage) ||
 		trsp.MessageType == uint64(types.RestartMessage)
 }
 
-// 	Accepted returns true if the request is accepted in the response
+// Accepted returns true if the request is accepted in the response
 func (trsp *TransferResponse1_1) Accepted() bool {
 	return trsp.RequestAccepted
 }
@@ -73,11 +73,11 @@ func (trsp *TransferResponse1_1) VoucherResultType() datatransfer.TypeIdentifier
 	return trsp.VoucherTypeIdentifier
 }
 
-func (trsp *TransferResponse1_1) VoucherResult(decoder encoding.Decoder) (encoding.Encodable, error) {
+func (trsp *TransferResponse1_1) VoucherResult() (datamodel.Node, error) {
 	if trsp.VoucherResultPtr == nil {
 		return nil, xerrors.New("No voucher present to read")
 	}
-	return decoder.DecodeFromNode(*trsp.VoucherResultPtr)
+	return trsp.VoucherResultPtr, nil
 }
 
 func (trq *TransferResponse1_1) IsRestart() bool {
@@ -106,11 +106,11 @@ func (trsp *TransferResponse1_1) toIPLD() schema.TypedNode {
 	return msg.toIPLD()
 }
 
-func (trsp *TransferResponse1_1) ToIPLD() (datamodel.Node, error) {
-	return trsp.toIPLD().Representation(), nil
+func (trsp *TransferResponse1_1) ToIPLD() datamodel.Node {
+	return trsp.toIPLD().Representation()
 }
 
 // ToNet serializes a transfer response.
 func (trsp *TransferResponse1_1) ToNet(w io.Writer) error {
-	return dagcbor.Encode(trsp.toIPLD().Representation(), w)
+	return ipld.EncodeStreaming(w, trsp.toIPLD(), dagcbor.Encode)
 }

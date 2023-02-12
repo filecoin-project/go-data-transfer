@@ -59,7 +59,7 @@ import (
 
         "github.com/filecoin-project/go-statemachine"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 ```
 

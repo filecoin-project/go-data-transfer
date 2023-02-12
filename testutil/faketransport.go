@@ -2,11 +2,13 @@ package testutil
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ipld/go-ipld-prime"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/libp2p/go-libp2p/core/peer"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
 // OpenedChannel records a call to open a channel
@@ -14,7 +16,7 @@ type OpenedChannel struct {
 	DataSender peer.ID
 	ChannelID  datatransfer.ChannelID
 	Root       ipld.Link
-	Selector   ipld.Node
+	Selector   datamodel.Node
 	Channel    datatransfer.ChannelState
 	Message    datatransfer.Message
 }
@@ -23,12 +25,6 @@ type OpenedChannel struct {
 type ResumedChannel struct {
 	ChannelID datatransfer.ChannelID
 	Message   datatransfer.Message
-}
-
-// CustomizedTransfer is just a way to record calls made to transport configurer
-type CustomizedTransfer struct {
-	ChannelID datatransfer.ChannelID
-	Voucher   datatransfer.Voucher
 }
 
 // FakeTransport is a fake transport with mocked results
@@ -42,7 +38,7 @@ type FakeTransport struct {
 	ResumedChannels     []ResumedChannel
 	ResumeChannelErr    error
 	CleanedUpChannels   []datatransfer.ChannelID
-	CustomizedTransfers []CustomizedTransfer
+	CustomizedTransfers []datatransfer.ChannelID
 	EventHandler        datatransfer.EventsHandler
 	SetEventHandlerErr  error
 }
@@ -57,7 +53,7 @@ func NewFakeTransport() *FakeTransport {
 // Note: from a data transfer symantic standpoint, it doesn't matter if the
 // request is push or pull -- OpenChannel is called by the party that is
 // intending to receive data
-func (ft *FakeTransport) OpenChannel(ctx context.Context, dataSender peer.ID, channelID datatransfer.ChannelID, root ipld.Link, stor ipld.Node, channel datatransfer.ChannelState, msg datatransfer.Message) error {
+func (ft *FakeTransport) OpenChannel(ctx context.Context, dataSender peer.ID, channelID datatransfer.ChannelID, root ipld.Link, stor datamodel.Node, channel datatransfer.ChannelState, msg datatransfer.Message) error {
 	ft.OpenedChannels = append(ft.OpenedChannels, OpenedChannel{dataSender, channelID, root, stor, channel, msg})
 	return ft.OpenChannelErr
 }
@@ -95,6 +91,13 @@ func (ft *FakeTransport) CleanupChannel(chid datatransfer.ChannelID) {
 	ft.CleanedUpChannels = append(ft.CleanedUpChannels, chid)
 }
 
-func (ft *FakeTransport) RecordCustomizedTransfer(chid datatransfer.ChannelID, voucher datatransfer.Voucher) {
-	ft.CustomizedTransfers = append(ft.CustomizedTransfers, CustomizedTransfer{chid, voucher})
+func RecordCustomizedTransfer() datatransfer.TransportOption {
+	return func(chid datatransfer.ChannelID, transport datatransfer.Transport) error {
+		ft, ok := transport.(*FakeTransport)
+		if !ok {
+			return errors.New("incorrect transport")
+		}
+		ft.CustomizedTransfers = append(ft.CustomizedTransfers, chid)
+		return nil
+	}
 }

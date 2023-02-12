@@ -6,7 +6,7 @@ import (
 	"github.com/ipfs/go-graphsync"
 	"github.com/stretchr/testify/require"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
 func TestRequestIDToChannelIDMap(t *testing.T) {

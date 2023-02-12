@@ -9,19 +9,20 @@ import (
 
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
-	"github.com/libp2p/go-libp2p-core/host"
-	libp2pnet "github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/host"
+	libp2pnet "github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/xerrors"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message"
-	"github.com/filecoin-project/go-data-transfer/network"
-	"github.com/filecoin-project/go-data-transfer/testutil"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
+	"github.com/filecoin-project/go-data-transfer/v2/message/types"
+	"github.com/filecoin-project/go-data-transfer/v2/network"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 // Receiver is an interface for receiving messages from the DataTransferNetwork.
@@ -75,7 +76,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	mn := mocknet.New(ctx)
+	mn := mocknet.New()
 
 	host1, err := mn.GenPeer()
 	require.NoError(t, err)
@@ -101,8 +102,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
-		voucher := testutil.NewFakeDTType()
-		request, err := message.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+		voucher := testutil.NewTestTypedVoucher()
+		request, err := message.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 		require.NoError(t, err)
 		require.NoError(t, dtnet1.SendMessage(ctx, host2.ID(), request))
 
@@ -123,15 +124,15 @@ func TestMessageSendAndReceive(t *testing.T) {
 		assert.Equal(t, request.IsPull(), receivedRequest.IsPull())
 		assert.Equal(t, request.IsRequest(), receivedRequest.IsRequest())
 		assert.True(t, receivedRequest.BaseCid().Equals(request.BaseCid()))
-		testutil.AssertEqualFakeDTVoucher(t, request, receivedRequest)
+		testutil.AssertEqualTestVoucher(t, request, receivedRequest)
 		testutil.AssertEqualSelector(t, request, receivedRequest)
 	})
 
 	t.Run("Send Response", func(t *testing.T) {
 		accepted := false
 		id := datatransfer.TransferID(rand.Int31())
-		voucherResult := testutil.NewFakeDTType()
-		response, err := message.NewResponse(id, accepted, false, voucherResult.Type(), voucherResult)
+		voucherResult := testutil.NewTestTypedVoucher()
+		response, err := message.ValidationResultResponse(types.NewMessage, id, datatransfer.ValidationResult{Accepted: accepted, VoucherResult: &voucherResult}, nil, false)
 		require.NoError(t, err)
 		require.NoError(t, dtnet2.SendMessage(ctx, host1.ID(), response))
 
@@ -150,7 +151,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		assert.Equal(t, response.TransferID(), receivedResponse.TransferID())
 		assert.Equal(t, response.Accepted(), receivedResponse.Accepted())
 		assert.Equal(t, response.IsRequest(), receivedResponse.IsRequest())
-		testutil.AssertEqualFakeDTVoucherResult(t, response, receivedResponse)
+		testutil.AssertEqualTestVoucherResult(t, response, receivedResponse)
 	})
 
 	t.Run("Send Restart Request", func(t *testing.T) {
@@ -230,7 +231,7 @@ func TestSendMessageRetry(t *testing.T) {
 			ctx := context.Background()
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			mn := mocknet.New(ctx)
+			mn := mocknet.New()
 
 			host1, err := mn.GenPeer()
 			require.NoError(t, err)
@@ -272,8 +273,8 @@ func TestSendMessageRetry(t *testing.T) {
 			selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 			isPull := false
 			id := datatransfer.TransferID(rand.Int31())
-			voucher := testutil.NewFakeDTType()
-			request, err := message.NewRequest(id, false, isPull, voucher.Type(), voucher, baseCid, selector)
+			voucher := testutil.NewTestTypedVoucher()
+			request, err := message.NewRequest(id, false, isPull, &voucher, baseCid, selector)
 			require.NoError(t, err)
 
 			err = dtnet1.SendMessage(ctx, host2.ID(), request)
