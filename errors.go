@@ -30,3 +30,6 @@ const ErrRejected = errorType("response rejected")
 
 // ErrUnsupported indicates an operation is not supported by the transport protocol
 const ErrUnsupported = errorType("unsupported")
+
+// ErrAlreadySubscribed indicates a subscription to events exists for the given channel
+const ErrAlreadySubscribed = errorType("already subscribed to events for given channel id")

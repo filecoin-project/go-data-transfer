@@ -1,9 +1,9 @@
 package impl
 
 import (
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
 
 type channelEnvironment struct {
@@ -25,4 +25,5 @@ func (ce *channelEnvironment) ID() peer.ID {
 func (ce *channelEnvironment) CleanupChannel(chid datatransfer.ChannelID) {
 	ce.m.transport.CleanupChannel(chid)
 	ce.m.spansIndex.EndChannelSpan(chid)
+	ce.m.transportOptions.ClearOptions(chid)
 }

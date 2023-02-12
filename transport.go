@@ -4,7 +4,8 @@ import (
 	"context"
 
 	ipld "github.com/ipld/go-ipld-prime"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/ipld/go-ipld-prime/datamodel"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 )
 
 // EventsHandler are semantic data transfer events that happen as a result of graphsync hooks
@@ -27,8 +28,6 @@ type EventsHandler interface {
 
 	// OnDataQueued is called when data is queued for sending for the given channel ID
 	// return values are:
-	// message = data transfer message along with data
-	// err = error
 	// - nil = proceed with sending data
 	// - error = cancel this request
 	// - err == ErrPause - pause this request
@@ -37,8 +36,8 @@ type EventsHandler interface {
 	// OnDataSent is called when we send data for the given channel ID
 	OnDataSent(chid ChannelID, link ipld.Link, size uint64, index int64, unique bool) error
 
-	// OnTransferQueued is called when a new data transfer request is queued in the transport layer.
-	OnTransferQueued(chid ChannelID)
+	// OnTransferInitiated is called when the transport layer initiates transfer
+	OnTransferInitiated(chid ChannelID)
 
 	// OnRequestReceived is called when we receive a new request to send data
 	// for the given channel ID
@@ -88,7 +87,8 @@ data protocol.
 
 Transport is the minimum interface that must be satisfied to serve as a datatransfer
 transport layer. Transports must be able to open (open is always called by the receiving peer)
-and close channels, and set at an event handler */
+and close channels, and set at an event handler
+*/
 type Transport interface {
 	// OpenChannel initiates an outgoing request for the other peer to send data
 	// to us on this channel
@@ -100,7 +100,7 @@ type Transport interface {
 		dataSender peer.ID,
 		channelID ChannelID,
 		root ipld.Link,
-		stor ipld.Node,
+		stor datamodel.Node,
 		channel ChannelState,
 		msg Message,
 	) error

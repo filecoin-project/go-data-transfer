@@ -5,10 +5,10 @@ import (
 
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/protocol"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/message"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/message"
 )
 
 const (
@@ -39,10 +39,7 @@ func ToExtensionData(msg datatransfer.Message, supportedExtensions []graphsync.E
 		if err != nil {
 			continue
 		}
-		nd, err := versionedMsg.ToIPLD()
-		if err != nil {
-			return nil, err
-		}
+		nd := versionedMsg.ToIPLD()
 		exts = append(exts, graphsync.ExtensionData{
 			Name: supportedExtension,
 			Data: nd,
@@ -61,9 +58,9 @@ type GsExtended interface {
 
 // GetTransferData unmarshals extension data.
 // Returns:
-//    * nil + nil if the extension is not found
-//    * nil + error if the extendedData fails to unmarshal
-//    * unmarshaled ExtensionDataTransferData + nil if all goes well
+//   - nil + nil if the extension is not found
+//   - nil + error if the extendedData fails to unmarshal
+//   - unmarshaled ExtensionDataTransferData + nil if all goes well
 func GetTransferData(extendedData GsExtended, extNames []graphsync.ExtensionName) (datatransfer.Message, error) {
 	for _, name := range extNames {
 		data, ok := extendedData.Extension(name)

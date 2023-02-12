@@ -2,25 +2,14 @@ package channels
 
 import (
 	logging "github.com/ipfs/go-log/v2"
-	cbg "github.com/whyrusleeping/cbor-gen"
 
 	"github.com/filecoin-project/go-statemachine/fsm"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-data-transfer/channels/internal"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	"github.com/filecoin-project/go-data-transfer/v2/channels/internal"
 )
 
 var log = logging.Logger("data-transfer")
-
-var transferringStates = []fsm.StateKey{
-	datatransfer.Requested,
-	datatransfer.Ongoing,
-	datatransfer.InitiatorPaused,
-	datatransfer.ResponderPaused,
-	datatransfer.BothPaused,
-	datatransfer.ResponderCompleted,
-	datatransfer.ResponderFinalizing,
-}
 
 // ChannelEvents describe the events taht can
 var ChannelEvents = fsm.Events{
@@ -29,23 +18,32 @@ var ChannelEvents = fsm.Events{
 		chst.AddLog("")
 		return nil
 	}),
-	// Remote peer has accepted the Open channel request
-	fsm.Event(datatransfer.Accept).From(datatransfer.Requested).To(datatransfer.Ongoing).Action(func(chst *internal.ChannelState) error {
-		chst.AddLog("")
-		return nil
-	}),
 
-	fsm.Event(datatransfer.TransferRequestQueued).FromAny().ToJustRecord().Action(func(chst *internal.ChannelState) error {
-		chst.Message = ""
-		chst.AddLog("")
-		return nil
-	}),
+	// Remote peer has accepted the Open channel request
+	fsm.Event(datatransfer.Accept).
+		From(datatransfer.Requested).To(datatransfer.Queued).
+		From(datatransfer.AwaitingAcceptance).To(datatransfer.Ongoing).
+		Action(func(chst *internal.ChannelState) error {
+			chst.AddLog("")
+			return nil
+		}),
+
+	// The transport has indicated it's begun sending/receiving data
+	fsm.Event(datatransfer.TransferInitiated).
+		From(datatransfer.Requested).To(datatransfer.AwaitingAcceptance).
+		From(datatransfer.Queued).To(datatransfer.Ongoing).
+		From(datatransfer.Ongoing).ToJustRecord().
+		Action(func(chst *internal.ChannelState) error {
+			chst.AddLog("")
+			return nil
+		}),
 
 	fsm.Event(datatransfer.Restart).FromAny().ToJustRecord().Action(func(chst *internal.ChannelState) error {
 		chst.Message = ""
 		chst.AddLog("")
 		return nil
 	}),
+
 	fsm.Event(datatransfer.Cancel).FromAny().To(datatransfer.Cancelling).Action(func(chst *internal.ChannelState) error {
 		chst.AddLog("")
 		return nil
@@ -68,7 +66,7 @@ var ChannelEvents = fsm.Events{
 			chst.AddLog("")
 			return nil
 		}),
-	fsm.Event(datatransfer.DataReceivedProgress).FromMany(transferringStates...).ToNoChange().
+	fsm.Event(datatransfer.DataReceivedProgress).FromMany(datatransfer.TransferringStates.AsFSMStates()...).ToNoChange().
 		Action(func(chst *internal.ChannelState, delta uint64) error {
 			chst.Received += delta
 			chst.AddLog("received data")
@@ -76,7 +74,7 @@ var ChannelEvents = fsm.Events{
 		}),
 
 	fsm.Event(datatransfer.DataSent).
-		FromMany(transferringStates...).ToNoChange().
+		FromMany(datatransfer.TransferringStates.AsFSMStates()...).ToNoChange().
 		From(datatransfer.TransferFinished).ToNoChange().
 		Action(func(chst *internal.ChannelState, sentBlocksTotal int64) error {
 			if sentBlocksTotal > chst.SentBlocksTotal {
@@ -86,7 +84,7 @@ var ChannelEvents = fsm.Events{
 			return nil
 		}),
 
-	fsm.Event(datatransfer.DataSentProgress).FromMany(transferringStates...).ToNoChange().
+	fsm.Event(datatransfer.DataSentProgress).FromMany(datatransfer.TransferringStates.AsFSMStates()...).ToNoChange().
 		Action(func(chst *internal.ChannelState, delta uint64) error {
 			chst.Sent += delta
 			chst.AddLog("sending data")
@@ -94,7 +92,7 @@ var ChannelEvents = fsm.Events{
 		}),
 
 	fsm.Event(datatransfer.DataQueued).
-		FromMany(transferringStates...).ToNoChange().
+		FromMany(datatransfer.TransferringStates.AsFSMStates()...).ToNoChange().
 		From(datatransfer.TransferFinished).ToNoChange().
 		Action(func(chst *internal.ChannelState, queuedBlocksTotal int64) error {
 			if queuedBlocksTotal > chst.QueuedBlocksTotal {
@@ -103,9 +101,21 @@ var ChannelEvents = fsm.Events{
 			chst.AddLog("")
 			return nil
 		}),
-	fsm.Event(datatransfer.DataQueuedProgress).FromMany(transferringStates...).ToNoChange().
+	fsm.Event(datatransfer.DataQueuedProgress).FromMany(datatransfer.TransferringStates.AsFSMStates()...).ToNoChange().
 		Action(func(chst *internal.ChannelState, delta uint64) error {
 			chst.Queued += delta
+			chst.AddLog("")
+			return nil
+		}),
+	fsm.Event(datatransfer.SetDataLimit).FromAny().ToJustRecord().
+		Action(func(chst *internal.ChannelState, dataLimit uint64) error {
+			chst.DataLimit = dataLimit
+			chst.AddLog("")
+			return nil
+		}),
+	fsm.Event(datatransfer.SetRequiresFinalization).FromAny().ToJustRecord().
+		Action(func(chst *internal.ChannelState, RequiresFinalization bool) error {
+			chst.RequiresFinalization = RequiresFinalization
 			chst.AddLog("")
 			return nil
 		}),
@@ -136,51 +146,68 @@ var ChannelEvents = fsm.Events{
 	}),
 
 	fsm.Event(datatransfer.NewVoucher).FromAny().ToNoChange().
-		Action(func(chst *internal.ChannelState, vtype datatransfer.TypeIdentifier, voucherBytes []byte) error {
-			chst.Vouchers = append(chst.Vouchers, internal.EncodedVoucher{Type: vtype, Voucher: &cbg.Deferred{Raw: voucherBytes}})
+		Action(func(chst *internal.ChannelState, voucher datatransfer.TypedVoucher) error {
+			chst.Vouchers = append(chst.Vouchers, internal.EncodedVoucher{Type: voucher.Type, Voucher: internal.CborGenCompatibleNode{Node: voucher.Voucher}})
 			chst.AddLog("got new voucher")
 			return nil
 		}),
+
 	fsm.Event(datatransfer.NewVoucherResult).FromAny().ToNoChange().
-		Action(func(chst *internal.ChannelState, vtype datatransfer.TypeIdentifier, voucherResultBytes []byte) error {
+		Action(func(chst *internal.ChannelState, voucherResult datatransfer.TypedVoucher) error {
 			chst.VoucherResults = append(chst.VoucherResults,
-				internal.EncodedVoucherResult{Type: vtype, VoucherResult: &cbg.Deferred{Raw: voucherResultBytes}})
+				internal.EncodedVoucherResult{Type: voucherResult.Type, VoucherResult: internal.CborGenCompatibleNode{Node: voucherResult.Voucher}})
 			chst.AddLog("got new voucher result")
 			return nil
 		}),
 
+	// TODO: There are four states from which the request can be "paused": request, queued, awaiting acceptance
+	// and ongoing. There four states of being paused (no pause, initiator pause, responder pause, both paused).
+	// Until the state machine software supports orthogonal regions
+	// (https://en.wikipedia.org/wiki/UML_state_machine#Orthogonal_regions)
+	// we end up with a cartesian product of states and as you can see, fairly complicated state transfers.
+	// Previously, we had dealt with this by moving directly to the Ongoing state upon return from pause but this
+	// seems less than ideal. We need some kind of support for pausing being an independent aspect of state
+	// Possibly we should just remove whether a state is paused from the state entirely.
 	fsm.Event(datatransfer.PauseInitiator).
-		FromMany(datatransfer.Requested, datatransfer.Ongoing).To(datatransfer.InitiatorPaused).
-		From(datatransfer.ResponderPaused).To(datatransfer.BothPaused).
-		FromAny().ToJustRecord().Action(func(chst *internal.ChannelState) error {
-		chst.AddLog("")
-		return nil
-	}),
+		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance).ToJustRecord().
+		Action(func(chst *internal.ChannelState) error {
+			chst.InitiatorPaused = true
+			chst.AddLog("")
+			return nil
+		}),
 
 	fsm.Event(datatransfer.PauseResponder).
-		FromMany(datatransfer.Requested, datatransfer.Ongoing).To(datatransfer.ResponderPaused).
-		From(datatransfer.InitiatorPaused).To(datatransfer.BothPaused).
-		FromAny().ToJustRecord().Action(func(chst *internal.ChannelState) error {
-		chst.AddLog("")
-		return nil
-	}),
+		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance, datatransfer.TransferFinished).ToJustRecord().
+		Action(func(chst *internal.ChannelState) error {
+			chst.ResponderPaused = true
+			chst.AddLog("")
+			return nil
+		}),
+
+	fsm.Event(datatransfer.DataLimitExceeded).
+		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance, datatransfer.ResponderCompleted, datatransfer.ResponderFinalizing).ToJustRecord().
+		Action(func(chst *internal.ChannelState) error {
+			chst.ResponderPaused = true
+			chst.AddLog("")
+			return nil
+		}),
 
 	fsm.Event(datatransfer.ResumeInitiator).
-		From(datatransfer.InitiatorPaused).To(datatransfer.Ongoing).
-		From(datatransfer.BothPaused).To(datatransfer.ResponderPaused).
-		FromAny().ToJustRecord().Action(func(chst *internal.ChannelState) error {
-		chst.AddLog("")
-		return nil
-	}),
+		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance, datatransfer.ResponderCompleted, datatransfer.ResponderFinalizing).ToJustRecord().
+		Action(func(chst *internal.ChannelState) error {
+			chst.InitiatorPaused = false
+			chst.AddLog("")
+			return nil
+		}),
 
 	fsm.Event(datatransfer.ResumeResponder).
-		From(datatransfer.ResponderPaused).To(datatransfer.Ongoing).
-		From(datatransfer.BothPaused).To(datatransfer.InitiatorPaused).
+		FromMany(datatransfer.Ongoing, datatransfer.Requested, datatransfer.Queued, datatransfer.AwaitingAcceptance, datatransfer.TransferFinished).ToJustRecord().
 		From(datatransfer.Finalizing).To(datatransfer.Completing).
-		FromAny().ToJustRecord().Action(func(chst *internal.ChannelState) error {
-		chst.AddLog("")
-		return nil
-	}),
+		Action(func(chst *internal.ChannelState) error {
+			chst.ResponderPaused = false
+			chst.AddLog("")
+			return nil
+		}),
 
 	// The transfer has finished on the local node - all data was sent / received
 	fsm.Event(datatransfer.FinishTransfer).
@@ -188,10 +215,10 @@ var ChannelEvents = fsm.Events{
 		FromMany(datatransfer.Failing, datatransfer.Cancelling).ToJustRecord().
 		From(datatransfer.ResponderCompleted).To(datatransfer.Completing).
 		From(datatransfer.ResponderFinalizing).To(datatransfer.ResponderFinalizingTransferFinished).
-		// If we are in the requested state, it means the other party simply never responded to our
+		// If we are in the AwaitingAcceptance state, it means the other party simply never responded to our
 		// our data transfer, or we never actually contacted them. In any case, it's safe to skip
 		// the finalization process and complete the transfer
-		From(datatransfer.Requested).To(datatransfer.Completing).
+		From(datatransfer.AwaitingAcceptance).To(datatransfer.Completing).
 		Action(func(chst *internal.ChannelState) error {
 			chst.AddLog("")
 			return nil
@@ -200,7 +227,8 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.ResponderBeginsFinalization).
 		FromAny().To(datatransfer.ResponderFinalizing).
 		FromMany(datatransfer.Failing, datatransfer.Cancelling).ToJustRecord().
-		From(datatransfer.TransferFinished).To(datatransfer.ResponderFinalizingTransferFinished).Action(func(chst *internal.ChannelState) error {
+		From(datatransfer.TransferFinished).To(datatransfer.ResponderFinalizingTransferFinished).
+		FromMany(datatransfer.ResponderFinalizing, datatransfer.ResponderFinalizingTransferFinished).ToJustRecord().Action(func(chst *internal.ChannelState) error {
 		chst.AddLog("")
 		return nil
 	}),
@@ -209,9 +237,7 @@ var ChannelEvents = fsm.Events{
 	fsm.Event(datatransfer.ResponderCompletes).
 		FromAny().To(datatransfer.ResponderCompleted).
 		FromMany(datatransfer.Failing, datatransfer.Cancelling).ToJustRecord().
-		From(datatransfer.ResponderPaused).To(datatransfer.ResponderFinalizing).
 		From(datatransfer.TransferFinished).To(datatransfer.Completing).
-		From(datatransfer.ResponderFinalizing).To(datatransfer.ResponderCompleted).
 		From(datatransfer.ResponderFinalizingTransferFinished).To(datatransfer.Completing).Action(func(chst *internal.ChannelState) error {
 		chst.AddLog("")
 		return nil

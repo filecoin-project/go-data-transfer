@@ -6,15 +6,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	message1_1 "github.com/filecoin-project/go-data-transfer/message/message1_1prime"
-	"github.com/filecoin-project/go-data-transfer/testutil"
+	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
+	message1_1 "github.com/filecoin-project/go-data-transfer/v2/message/message1_1prime"
+	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 )
 
 func TestResponseMessageForProtocol(t *testing.T) {
 	id := datatransfer.TransferID(rand.Int31())
-	voucherResult := testutil.NewFakeDTType()
-	response, err := message1_1.NewResponse(id, false, true, voucherResult.Type(), voucherResult) // not accepted
+	voucherResult := testutil.NewTestTypedVoucher()
+	response, err := message1_1.NewResponse(id, false, true, &voucherResult) // not accepted
 	require.NoError(t, err)
 
 	// v1.2 protocol
@@ -25,8 +25,8 @@ func TestResponseMessageForProtocol(t *testing.T) {
 	resp, ok := (out).(datatransfer.Response)
 	require.True(t, ok)
 	require.True(t, resp.IsPaused())
-	require.Equal(t, voucherResult.Type(), resp.VoucherResultType())
-	require.True(t, resp.IsVoucherResult())
+	require.Equal(t, testutil.TestVoucherType, resp.VoucherResultType())
+	require.True(t, resp.IsValidationResult())
 
 	// random protocol
 	out, err = response.MessageForProtocol("RAND")
