@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/bep/debounce v1.2.0
 	github.com/filecoin-project/go-ds-versioning v0.0.0-20211206185234-508abd7c2aff
-	github.com/filecoin-project/go-statemachine v1.0.2-0.20220322104818-27f8fbb86dfd
+	github.com/filecoin-project/go-statemachine v1.0.2
 	github.com/hannahhoward/cbor-gen-for v0.0.0-20200817222906-ea96cece81f1
 	github.com/hannahhoward/go-pubsub v0.0.0-20200423002714-8d62886cc36e
 	github.com/ipfs/go-block-format v0.0.3
