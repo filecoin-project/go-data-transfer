@@ -108,7 +108,6 @@ type libp2pDataTransferNetwork struct {
 	minAttemptDuration    time.Duration
 	maxAttemptDuration    time.Duration
 	dtProtocols           []protocol.ID
-	dtProtocolStrings     []string
 	backoffFactor         float64
 }
 
@@ -324,7 +323,7 @@ func (dtnet *libp2pDataTransferNetwork) msgToStream(ctx context.Context, s netwo
 
 func (impl *libp2pDataTransferNetwork) Protocol(ctx context.Context, id peer.ID) (protocol.ID, error) {
 	// Check the cache for the peer's protocol version
-	firstProto, err := impl.host.Peerstore().FirstSupportedProtocol(id, impl.dtProtocolStrings...)
+	firstProto, err := impl.host.Peerstore().FirstSupportedProtocol(id, impl.dtProtocols...)
 	if err != nil {
 		return "", err
 	}
@@ -347,10 +346,4 @@ func (impl *libp2pDataTransferNetwork) Protocol(ctx context.Context, id peer.ID)
 
 func (impl *libp2pDataTransferNetwork) setDataTransferProtocols(protocols []protocol.ID) {
 	impl.dtProtocols = append([]protocol.ID{}, protocols...)
-
-	// Keep a string version of the protocols for performance reasons
-	impl.dtProtocolStrings = make([]string, 0, len(impl.dtProtocols))
-	for _, proto := range impl.dtProtocols {
-		impl.dtProtocolStrings = append(impl.dtProtocolStrings, string(proto))
-	}
 }
