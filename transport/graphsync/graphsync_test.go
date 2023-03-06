@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestManager(t *testing.T) {
 		requestConfig  gsRequestConfig
 		responseConfig gsResponseConfig
 		updatedConfig  gsRequestConfig
-		events         fakeEvents
+		events         *fakeEvents
 		action         func(gsData *harness)
 		check          func(t *testing.T, events *fakeEvents, gsData *harness)
 		protocol       protocol.ID
@@ -76,7 +77,7 @@ func TestManager(t *testing.T) {
 			},
 		},
 		"gs request unrecognized opened channel will not record incoming blocks": {
-			events: fakeEvents{
+			events: &fakeEvents{
 				OnChannelOpenedError: errors.New("Not recognized"),
 			},
 			action: func(gsData *harness) {
@@ -90,7 +91,7 @@ func TestManager(t *testing.T) {
 			},
 		},
 		"gs incoming block with data receive error will halt request": {
-			events: fakeEvents{
+			events: &fakeEvents{
 				OnDataReceivedError: errors.New("something went wrong"),
 			},
 			action: func(gsData *harness) {
@@ -206,7 +207,7 @@ func TestManager(t *testing.T) {
 			},
 		},
 		"outgoing gs request with recognized dt response can send message on update": {
-			events: fakeEvents{
+			events: &fakeEvents{
 				RequestReceivedResponse: testutil.NewDTResponse(t, datatransfer.TransferID(rand.Uint32())),
 			},
 			requestConfig: gsRequestConfig{
@@ -229,7 +230,7 @@ func TestManager(t *testing.T) {
 			requestConfig: gsRequestConfig{
 				dtIsResponse: true,
 			},
-			events: fakeEvents{
+			events: &fakeEvents{
 				OnRequestReceivedErrors: []error{errors.New("something went wrong")},
 			},
 			action: func(gsData *harness) {
@@ -246,7 +247,7 @@ func TestManager(t *testing.T) {
 			action: func(gsData *harness) {
 				gsData.incomingRequestHook()
 			},
-			events: fakeEvents{
+			events: &fakeEvents{
 				RequestReceivedResponse: testutil.NewDTResponse(t, datatransfer.TransferID(rand.Uint32())),
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
@@ -301,7 +302,7 @@ func TestManager(t *testing.T) {
 			},
 		},
 		"unrecognized incoming dt request will terminate but send response": {
-			events: fakeEvents{
+			events: &fakeEvents{
 				RequestReceivedResponse: testutil.NewDTResponse(t, datatransfer.TransferID(rand.Uint32())),
 				OnRequestReceivedErrors: []error{errors.New("something went wrong")},
 			},
@@ -359,7 +360,7 @@ func TestManager(t *testing.T) {
 			},
 		},
 		"outgoing data queued error will terminate request": {
-			events: fakeEvents{
+			events: &fakeEvents{
 				OnDataQueuedError: errors.New("something went wrong"),
 			},
 			action: func(gsData *harness) {
@@ -373,7 +374,7 @@ func TestManager(t *testing.T) {
 			},
 		},
 		"outgoing data queued error == pause will pause request": {
-			events: fakeEvents{
+			events: &fakeEvents{
 				OnDataQueuedError: datatransfer.ErrPause,
 			},
 			action: func(gsData *harness) {
@@ -392,7 +393,7 @@ func TestManager(t *testing.T) {
 				gsData.incomingRequestHook()
 				gsData.outgoingBlockHook()
 			},
-			events: fakeEvents{
+			events: &fakeEvents{
 				OnDataQueuedMessage: testutil.NewDTResponse(t, datatransfer.TransferID(rand.Uint32())),
 			},
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
@@ -484,7 +485,7 @@ func TestManager(t *testing.T) {
 			},
 		},
 		"incoming gs request with recognized dt request can send message on update": {
-			events: fakeEvents{
+			events: &fakeEvents{
 				RequestReceivedResponse: testutil.NewDTResponse(t, datatransfer.TransferID(rand.Uint32())),
 			},
 			action: func(gsData *harness) {
@@ -830,8 +831,12 @@ func TestManager(t *testing.T) {
 				close(requestReceived.ResponseErrChan)
 
 				require.Eventually(t, func() bool {
+					events.DataLk.Lock()
+					defer events.DataLk.Unlock()
 					return events.OnChannelCompletedCalled == true
 				}, 2*time.Second, 100*time.Millisecond)
+				events.DataLk.Lock()
+				defer events.DataLk.Unlock()
 				require.True(t, events.ChannelCompletedSuccess)
 			},
 		},
@@ -857,8 +862,12 @@ func TestManager(t *testing.T) {
 				close(requestReceived.ResponseErrChan)
 
 				require.Eventually(t, func() bool {
+					events.DataLk.Lock()
+					defer events.DataLk.Unlock()
 					return events.OnChannelCompletedCalled == true
 				}, 2*time.Second, 100*time.Millisecond)
+				events.DataLk.Lock()
+				defer events.DataLk.Unlock()
 				require.False(t, events.ChannelCompletedSuccess)
 			},
 		},
@@ -913,8 +922,12 @@ func TestManager(t *testing.T) {
 				close(requestReceived.ResponseErrChan)
 
 				require.Eventually(t, func() bool {
+					events.DataLk.Lock()
+					defer events.DataLk.Unlock()
 					return events.OnRequestCancelledCalled == true
 				}, 2*time.Second, 100*time.Millisecond)
+				events.DataLk.Lock()
+				defer events.DataLk.Unlock()
 				require.Equal(t, datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self}, events.OnRequestCancelledChannelId)
 			},
 		},
@@ -1040,6 +1053,10 @@ func TestManager(t *testing.T) {
 		t.Run(testCase, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
+			events := data.events
+			if events == nil {
+				events = &fakeEvents{}
+			}
 			peers := testutil.GeneratePeers(2)
 			transferID := datatransfer.TransferID(rand.Uint32())
 			requestID := graphsync.NewRequestID()
@@ -1073,16 +1090,17 @@ func TestManager(t *testing.T) {
 				requestUpdatedHookActions:   &testharness.FakeRequestUpdatedActions{},
 				incomingResponseHookActions: &testharness.FakeIncomingResponseHookActions{},
 			}
-			require.NoError(t, transport.SetEventHandler(&data.events))
+			require.NoError(t, transport.SetEventHandler(events))
 			if data.action != nil {
 				data.action(gsData)
 			}
-			data.check(t, &data.events, gsData)
+			data.check(t, events, gsData)
 		})
 	}
 }
 
 type fakeEvents struct {
+	DataLk                      sync.Mutex
 	ChannelOpenedChannelID      datatransfer.ChannelID
 	RequestReceivedChannelID    datatransfer.ChannelID
 	ResponseReceivedChannelID   datatransfer.ChannelID
@@ -1117,12 +1135,16 @@ type fakeEvents struct {
 }
 
 func (fe *fakeEvents) OnDataQueued(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) (datatransfer.Message, error) {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.OnDataQueuedCalled = true
 
 	return fe.OnDataQueuedMessage, fe.OnDataQueuedError
 }
 
 func (fe *fakeEvents) OnRequestCancelled(chid datatransfer.ChannelID, err error) error {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.OnRequestCancelledCalled = true
 	fe.OnRequestCancelledChannelId = chid
 
@@ -1130,6 +1152,8 @@ func (fe *fakeEvents) OnRequestCancelled(chid datatransfer.ChannelID, err error)
 }
 
 func (fe *fakeEvents) OnTransferInitiated(chid datatransfer.ChannelID) {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.TransferInitiatedCalled = true
 	fe.TransferInitiatedChannelID = chid
 }
@@ -1139,33 +1163,45 @@ func (fe *fakeEvents) OnRequestDisconnected(chid datatransfer.ChannelID, err err
 }
 
 func (fe *fakeEvents) OnSendDataError(chid datatransfer.ChannelID, err error) error {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.OnSendDataErrorCalled = true
 	fe.OnSendDataErrorChannelID = chid
 	return nil
 }
 
 func (fe *fakeEvents) OnReceiveDataError(chid datatransfer.ChannelID, err error) error {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.OnReceiveDataErrorCalled = true
 	fe.OnReceiveDataErrorChannelID = chid
 	return nil
 }
 
 func (fe *fakeEvents) OnChannelOpened(chid datatransfer.ChannelID) error {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.ChannelOpenedChannelID = chid
 	return fe.OnChannelOpenedError
 }
 
 func (fe *fakeEvents) OnDataReceived(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.OnDataReceivedCalled = true
 	return fe.OnDataReceivedError
 }
 
 func (fe *fakeEvents) OnDataSent(chid datatransfer.ChannelID, link ipld.Link, size uint64, index int64, unique bool) error {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.OnDataSentCalled = true
 	return nil
 }
 
 func (fe *fakeEvents) OnRequestReceived(chid datatransfer.ChannelID, request datatransfer.Request) (datatransfer.Response, error) {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.OnRequestReceivedCallCount++
 	fe.RequestReceivedChannelID = chid
 	fe.RequestReceivedRequest = request
@@ -1177,6 +1213,8 @@ func (fe *fakeEvents) OnRequestReceived(chid datatransfer.ChannelID, request dat
 }
 
 func (fe *fakeEvents) OnResponseReceived(chid datatransfer.ChannelID, response datatransfer.Response) error {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.OnResponseReceivedCallCount++
 	fe.ResponseReceivedResponse = response
 	fe.ResponseReceivedChannelID = chid
@@ -1188,6 +1226,8 @@ func (fe *fakeEvents) OnResponseReceived(chid datatransfer.ChannelID, response d
 }
 
 func (fe *fakeEvents) OnChannelCompleted(chid datatransfer.ChannelID, completeErr error) error {
+	fe.DataLk.Lock()
+	defer fe.DataLk.Unlock()
 	fe.OnChannelCompletedCalled = true
 	fe.ChannelCompletedSuccess = completeErr == nil
 	return fe.OnChannelCompletedErr
