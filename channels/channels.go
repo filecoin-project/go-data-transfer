@@ -89,6 +89,11 @@ func (c *Channels) Start(ctx context.Context) error {
 	return c.migrateStateMachines(ctx)
 }
 
+// Stop stops the channel statemachine
+func (c *Channels) Stop(ctx context.Context) error {
+	return c.stateMachines.Stop(ctx)
+}
+
 func (c *Channels) dispatch(eventName fsm.EventName, channel fsm.StateType) {
 	evtCode, ok := eventName.(datatransfer.EventCode)
 	if !ok {
