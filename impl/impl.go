@@ -165,6 +165,7 @@ func (m *manager) Stop(ctx context.Context) error {
 	m.spansIndex.EndAll()
 	m.transportOptions.ClearAll()
 	m.channelSubscriptions.Stop()
+	m.channels.Stop(ctx)
 	return m.transport.Shutdown(ctx)
 }
 
