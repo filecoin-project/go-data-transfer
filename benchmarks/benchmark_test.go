@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -216,7 +217,7 @@ func newTempDirMaker(b *testing.B) (*tempDirMaker, error) {
 
 func (tdm *tempDirMaker) TempDir() string {
 	seq := atomic.AddInt32(&tdm.tempDirSeq, 1)
-	dir := fmt.Sprintf("%s%c%03d", tdm.tdm, os.PathSeparator, seq)
+	dir := fmt.Sprintf("%s%c%03d", tdm.tdm, filepath.Separator, seq)
 	if err := os.Mkdir(dir, 0777); err != nil {
 		tdm.b.Fatalf("TempDir: %v", err)
 	}

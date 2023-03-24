@@ -3,8 +3,9 @@ package graphsync
 import (
 	"testing"
 
-	"github.com/ipfs/go-graphsync"
 	"github.com/stretchr/testify/require"
+
+	graphsync "github.com/filecoin-project/boost-graphsync"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 )

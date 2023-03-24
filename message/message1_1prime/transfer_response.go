@@ -6,7 +6,7 @@ import (
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -64,7 +64,7 @@ func (trsp *TransferResponse1_1) IsVoucherResult() bool {
 		trsp.MessageType == uint64(types.RestartMessage)
 }
 
-// 	Accepted returns true if the request is accepted in the response
+// Accepted returns true if the request is accepted in the response
 func (trsp *TransferResponse1_1) Accepted() bool {
 	return trsp.RequestAccepted
 }
