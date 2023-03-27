@@ -3,9 +3,10 @@ package testnet
 import (
 	"context"
 
-	gsnet "github.com/ipfs/go-graphsync/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	mockpeernet "github.com/libp2p/go-libp2p/p2p/net/mock"
+
+	gsnet "github.com/filecoin-project/boost-graphsync/network"
 
 	dtnet "github.com/filecoin-project/go-data-transfer/network"
 )

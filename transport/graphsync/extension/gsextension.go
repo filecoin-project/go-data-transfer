@@ -3,9 +3,10 @@ package extension
 import (
 	"errors"
 
-	"github.com/ipfs/go-graphsync"
 	"github.com/ipld/go-ipld-prime/datamodel"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/protocol"
+
+	graphsync "github.com/filecoin-project/boost-graphsync"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/message"
@@ -61,9 +62,9 @@ type GsExtended interface {
 
 // GetTransferData unmarshals extension data.
 // Returns:
-//    * nil + nil if the extension is not found
-//    * nil + error if the extendedData fails to unmarshal
-//    * unmarshaled ExtensionDataTransferData + nil if all goes well
+//   - nil + nil if the extension is not found
+//   - nil + error if the extendedData fails to unmarshal
+//   - unmarshaled ExtensionDataTransferData + nil if all goes well
 func GetTransferData(extendedData GsExtended, extNames []graphsync.ExtensionName) (datatransfer.Message, error) {
 	for _, name := range extNames {
 		data, ok := extendedData.Extension(name)

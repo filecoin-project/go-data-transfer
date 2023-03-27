@@ -30,10 +30,10 @@ Install the module in your package or app with `go get "github.com/filecoin-proj
     package mypackage
 
     import (
-        gsimpl "github.com/ipfs/go-graphsync/impl"
+        gsimpl "github.com/filecoin-project/boost-graphsync/impl"
         datatransfer "github.com/filecoin-project/go-data-transfer/impl"
         gstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
-        "github.com/libp2p/go-libp2p-core/host"
+        "github.com/libp2p/go-libp2p/core/host"
     )
             
     ```
