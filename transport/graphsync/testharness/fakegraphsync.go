@@ -519,12 +519,17 @@ func NewFakeResponse(id graphsync.RequestID, extensions map[graphsync.ExtensionN
 
 type FakeOutgoingRequestHookActions struct {
 	PersistenceOption string
+	MaxLinksOption    uint64
 }
 
 func (fa *FakeOutgoingRequestHookActions) UsePersistenceOption(name string) {
 	fa.PersistenceOption = name
 }
 func (fa *FakeOutgoingRequestHookActions) UseLinkTargetNodePrototypeChooser(_ traversal.LinkTargetNodePrototypeChooser) {
+}
+
+func (fa *FakeOutgoingRequestHookActions) MaxLinks(maxLinks uint64) {
+	fa.MaxLinksOption = maxLinks
 }
 
 var _ graphsync.OutgoingRequestHookActions = &FakeOutgoingRequestHookActions{}
@@ -576,6 +581,7 @@ type FakeIncomingRequestHookActions struct {
 	SentExtensions    []graphsync.ExtensionData
 	Paused            bool
 	CtxAugFuncs       []func(context.Context) context.Context
+	MaxLinksOption    uint64
 }
 
 func (fa *FakeIncomingRequestHookActions) SendExtensionData(ext graphsync.ExtensionData) {
@@ -623,6 +629,10 @@ func (fa *FakeIncomingRequestHookActions) RefuteAugmentedContextKey(t *testing.T
 
 func (fa *FakeIncomingRequestHookActions) DTMessage(t *testing.T) datatransfer.Message {
 	return matchDtMessage(t, fa.SentExtensions, extension.ExtensionIncomingRequest1_1)
+}
+
+func (fa *FakeIncomingRequestHookActions) MaxLinks(maxLinks uint64) {
+	fa.MaxLinksOption = maxLinks
 }
 
 var _ graphsync.IncomingRequestHookActions = &FakeIncomingRequestHookActions{}

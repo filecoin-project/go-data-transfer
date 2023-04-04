@@ -350,10 +350,28 @@ func UseStore(store ipld.LinkSystem) datatransfer.TransportOption {
 	}
 }
 
+// MaxLinks sets the maximum number of links for this channelID
+func MaxLinks(maxLinks uint64) datatransfer.TransportOption {
+	return func(channelID datatransfer.ChannelID, transport datatransfer.Transport) error {
+		gsTransport, ok := transport.(*Transport)
+		if !ok {
+			return datatransfer.ErrUnsupported
+		}
+		gsTransport.MaxLinks(channelID, maxLinks)
+		return nil
+	}
+}
+
 // UseStore tells the graphsync transport to use the given loader and storer for this channelID
 func (t *Transport) UseStore(channelID datatransfer.ChannelID, lsys ipld.LinkSystem) error {
 	ch := t.trackDTChannel(channelID)
 	return ch.useStore(lsys)
+}
+
+// MaxLinks sets the maximum number of links for this channelID
+func (t *Transport) MaxLinks(channelID datatransfer.ChannelID, maxLinks uint64) {
+	ch := t.trackDTChannel(channelID)
+	ch.setMaxLinks(maxLinks)
 }
 
 // ChannelGraphsyncRequests describes any graphsync request IDs associated with a given channel
@@ -905,8 +923,9 @@ type dtChannel struct {
 
 	opened chan graphsync.RequestID
 
-	storeLk         sync.RWMutex
+	optionsLk       sync.RWMutex
 	storeRegistered bool
+	maxLinksOption  uint64
 }
 
 // Info needed to monitor an ongoing graphsync request
@@ -1012,6 +1031,7 @@ func (c *dtChannel) gsReqOpened(requestID graphsync.RequestID, hookActions graph
 	if c.hasStore() {
 		hookActions.UsePersistenceOption("data-transfer-" + c.channelID.String())
 	}
+	hookActions.MaxLinks(c.maxLinks())
 	log.Infow("outgoing graphsync request", "peer", c.channelID.OtherParty(c.t.peerID), "graphsync request id", requestID, "data transfer channel id", c.channelID)
 	// Save a mapping from the graphsync key to the channel ID so that
 	// subsequent graphsync callbacks are associated with this channel
@@ -1042,6 +1062,8 @@ func (c *dtChannel) gsDataRequestRcvd(requestID graphsync.RequestID, hookActions
 	if c.hasStore() {
 		hookActions.UsePersistenceOption("data-transfer-" + c.channelID.String())
 	}
+
+	hookActions.MaxLinks(c.maxLinks())
 
 	// Save a mapping from the graphsync key to the channel ID so that
 	// subsequent graphsync callbacks are associated with this channel
@@ -1139,17 +1161,31 @@ func (c *dtChannel) onRequesterCancelled() {
 }
 
 func (c *dtChannel) hasStore() bool {
-	c.storeLk.RLock()
-	defer c.storeLk.RUnlock()
+	c.optionsLk.RLock()
+	defer c.optionsLk.RUnlock()
 
 	return c.storeRegistered
+}
+
+func (c *dtChannel) maxLinks() uint64 {
+	c.optionsLk.Lock()
+	defer c.optionsLk.Unlock()
+
+	return c.maxLinksOption
+}
+
+func (c *dtChannel) setMaxLinks(maxLinks uint64) {
+	c.optionsLk.Lock()
+	defer c.optionsLk.Unlock()
+
+	c.maxLinksOption = maxLinks
 }
 
 // Use the given loader and storer to get / put blocks for the data-transfer.
 // Note that each data-transfer channel uses a separate blockstore.
 func (c *dtChannel) useStore(lsys ipld.LinkSystem) error {
-	c.storeLk.Lock()
-	defer c.storeLk.Unlock()
+	c.optionsLk.Lock()
+	defer c.optionsLk.Unlock()
 
 	// Register the channel's store with graphsync
 	err := c.t.gs.RegisterPersistenceOption("data-transfer-"+c.channelID.String(), lsys)
