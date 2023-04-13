@@ -13,7 +13,7 @@ require (
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-datastore v0.6.0
 	github.com/ipfs/go-ds-badger v0.3.0
-	github.com/ipfs/go-graphsync v0.14.5
+	github.com/ipfs/go-graphsync v0.14.6-0.20230413181555-d23335bea7f3
 	github.com/ipfs/go-ipfs-blockstore v1.2.0
 	github.com/ipfs/go-ipfs-blocksutil v0.0.1
 	github.com/ipfs/go-ipfs-chunker v0.0.5
