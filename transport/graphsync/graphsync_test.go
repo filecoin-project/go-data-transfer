@@ -1033,6 +1033,24 @@ func TestManager(t *testing.T) {
 				gsData.fgs.AssertDoesNotHavePersistenceOption(t, expectedChannel)
 			},
 		},
+		"MaxLinks can set maxLinks used for outgoing requests": {
+			action: func(gsData *harness) {
+				gsData.transport.MaxLinks(datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self}, 101)
+				gsData.outgoingRequestHook()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				require.Equal(t, uint64(101), gsData.outgoingRequestHookActions.MaxLinksOption)
+			},
+		},
+		"MaxLinks can set maxLinks used for incoming requests": {
+			action: func(gsData *harness) {
+				gsData.transport.MaxLinks(datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.self, Initiator: gsData.other}, 101)
+				gsData.incomingRequestHook()
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				require.Equal(t, uint64(101), gsData.incomingRequestHookActions.MaxLinksOption)
+			},
+		},
 	}
 
 	ctx := context.Background()
