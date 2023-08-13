@@ -352,6 +352,8 @@ func TestDataTransferResponding(t *testing.T) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
 				_, err := h.transport.EventHandler.OnRequestReceived(channelID(h.id, h.peers), h.cancelUpdate)
 				require.NoError(t, err)
+				h.transport.TransportLk.Lock()
+				defer h.transport.TransportLk.Unlock()
 				require.Len(t, h.transport.CleanedUpChannels, 1)
 				require.Equal(t, channelID(h.id, h.peers), h.transport.CleanedUpChannels[0])
 			},

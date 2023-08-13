@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -1431,6 +1432,7 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 			require.NoError(t, err)
 			testutil.StartAndWaitForReady(ctx, t, dt2)
 			var chid datatransfer.ChannelID
+			var chidLk sync.Mutex
 			errChan := make(chan struct{}, 2)
 			clientPausePoint := 0
 			clientFinished := make(chan struct{}, 1)
@@ -1471,7 +1473,9 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 					timer := time.NewTimer(config.unpauseResponderDelay)
 					go func() {
 						<-timer.C
+						chidLk.Lock()
 						_ = dt1.ResumeDataTransferChannel(ctx, chid)
+						chidLk.Unlock()
 					}()
 				}
 				if event.Code == datatransfer.NewVoucher && channelState.Queued() > 0 {
@@ -1496,7 +1500,9 @@ func TestSimulatedRetrievalFlow(t *testing.T) {
 
 			require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 
+			chidLk.Lock()
 			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
+			chidLk.Unlock()
 			require.NoError(t, err)
 
 			for providerFinished != nil || clientFinished != nil {
@@ -2129,6 +2135,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	testutil.StartAndWaitForReady(ctx, t, dt2)
 
 	var chid datatransfer.ChannelID
+	var chidLk sync.Mutex
 	errChan := make(chan struct{}, 2)
 
 	clientPausePoint := 0
@@ -2155,13 +2162,15 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 	finalVoucherResult := testutil.NewTestTypedVoucher()
 
 	dt2.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+		chidLk.Lock()
+		currentChid := chid
+		chidLk.Unlock()
 		if event.Code == datatransfer.Error {
 			errChan <- struct{}{}
 		}
 		// Here we verify reception of voucherResults by the client
 		if event.Code == datatransfer.NewVoucherResult {
 			voucherResult := channelState.LastVoucherResult()
-			require.NoError(t, err)
 
 			// If this voucher result is the response voucher no action is needed
 			// we just know that the provider has accepted the transfer and is sending blocks
@@ -2174,7 +2183,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 			// to revalidate and unpause the transfer
 			if clientPausePoint < 5 {
 				if voucherResult.Equals(voucherResults[clientPausePoint]) {
-					_ = dt2.SendVoucher(ctx, chid, testutil.NewTestTypedVoucher())
+					_ = dt2.SendVoucher(ctx, currentChid, testutil.NewTestTypedVoucher())
 					clientPausePoint++
 				}
 			}
@@ -2182,7 +2191,7 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 			// If this voucher result is the final voucher result we need
 			// to send a new voucher to unpause the provider and complete the transfer
 			if voucherResult.Equals(finalVoucherResult) {
-				_ = dt2.SendVoucher(ctx, chid, testutil.NewTestTypedVoucher())
+				_ = dt2.SendVoucher(ctx, currentChid, testutil.NewTestTypedVoucher())
 			}
 		}
 
@@ -2200,6 +2209,9 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 		initialVoucherResult: &respVoucher,
 	}
 	dt1.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
+		chidLk.Lock()
+		currentChid := chid
+		chidLk.Unlock()
 		if event.Code == datatransfer.Error {
 			errChan <- struct{}{}
 		}
@@ -2208,23 +2220,25 @@ func TestMultipleMessagesInExtension(t *testing.T) {
 		}
 		if event.Code == datatransfer.NewVoucher && channelState.Queued() > 0 {
 			vs := sv.nextStatus()
-			dt1.UpdateValidationStatus(ctx, chid, vs)
+			dt1.UpdateValidationStatus(ctx, currentChid, vs)
 		}
 		if event.Code == datatransfer.DataLimitExceeded {
 			if nextVoucherResult < len(pausePoints) {
-				dt1.SendVoucherResult(ctx, chid, voucherResults[nextVoucherResult])
+				dt1.SendVoucherResult(ctx, currentChid, voucherResults[nextVoucherResult])
 				nextVoucherResult++
 			}
 		}
 		if event.Code == datatransfer.BeginFinalizing {
 			sv.requiresFinalization = false
-			dt1.SendVoucherResult(ctx, chid, finalVoucherResult)
+			dt1.SendVoucherResult(ctx, currentChid, finalVoucherResult)
 		}
 	})
 	require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 
 	voucher := testutil.NewTestTypedVoucherWith("applesauce")
+	chidLk.Lock()
 	chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
+	chidLk.Unlock()
 	require.NoError(t, err)
 
 	// Expect the client to receive a response voucher, the provider to complete the transfer and
@@ -2299,10 +2313,14 @@ func TestMultipleParallelTransfers(t *testing.T) {
 			clientFinished := make(chan struct{}, 1)
 
 			var chid datatransfer.ChannelID
+			var chidLk sync.Mutex
 			chidReceived := make(chan struct{})
 			dt2.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 				<-chidReceived
-				if chid != channelState.ChannelID() {
+				chidLk.Lock()
+				currentChid := chid
+				chidLk.Unlock()
+				if currentChid != channelState.ChannelID() {
 					return
 				}
 				if event.Code == datatransfer.Error {
@@ -2324,7 +2342,7 @@ func TestMultipleParallelTransfers(t *testing.T) {
 					// If this voucher result is the final voucher result we need
 					// to send a new voucher to unpause the provider and complete the transfer
 					if voucherResult.Equals(finalVoucherResult) {
-						_ = dt2.SendVoucher(ctx, chid, testutil.NewTestTypedVoucher())
+						_ = dt2.SendVoucher(ctx, currentChid, testutil.NewTestTypedVoucher())
 					}
 				}
 
@@ -2336,7 +2354,10 @@ func TestMultipleParallelTransfers(t *testing.T) {
 			providerFinished := make(chan struct{}, 1)
 			dt1.SubscribeToEvents(func(event datatransfer.Event, channelState datatransfer.ChannelState) {
 				<-chidReceived
-				if chid != channelState.ChannelID() {
+				chidLk.Lock()
+				currentChid := chid
+				chidLk.Unlock()
+				if currentChid != channelState.ChannelID() {
 					return
 				}
 				if event.Code == datatransfer.Error {
@@ -2346,7 +2367,7 @@ func TestMultipleParallelTransfers(t *testing.T) {
 					providerFinished <- struct{}{}
 				}
 				if event.Code == datatransfer.BeginFinalizing {
-					dt1.SendVoucherResult(ctx, chid, finalVoucherResult)
+					dt1.SendVoucherResult(ctx, currentChid, finalVoucherResult)
 				}
 			})
 
@@ -2354,7 +2375,10 @@ func TestMultipleParallelTransfers(t *testing.T) {
 			rootCid := root.(cidlink.Link).Cid
 
 			voucher := testutil.NewTestTypedVoucher()
+			chidLk.Lock()
+			var err error
 			chid, err = dt2.OpenPullDataChannel(ctx, host1.ID(), voucher, rootCid, selectorparse.CommonSelector_ExploreAllRecursively)
+			chidLk.Unlock()
 			require.NoError(t, err)
 			close(chidReceived)
 			// Expect the client to receive a response voucher, the provider to complete the transfer and

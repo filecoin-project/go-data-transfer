@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
@@ -29,6 +30,7 @@ type ResumedChannel struct {
 
 // FakeTransport is a fake transport with mocked results
 type FakeTransport struct {
+	TransportLk         sync.Mutex
 	OpenedChannels      []OpenedChannel
 	OpenChannelErr      error
 	ClosedChannels      []datatransfer.ChannelID
@@ -54,18 +56,24 @@ func NewFakeTransport() *FakeTransport {
 // request is push or pull -- OpenChannel is called by the party that is
 // intending to receive data
 func (ft *FakeTransport) OpenChannel(ctx context.Context, dataSender peer.ID, channelID datatransfer.ChannelID, root ipld.Link, stor datamodel.Node, channel datatransfer.ChannelState, msg datatransfer.Message) error {
+	ft.TransportLk.Lock()
+	defer ft.TransportLk.Unlock()
 	ft.OpenedChannels = append(ft.OpenedChannels, OpenedChannel{dataSender, channelID, root, stor, channel, msg})
 	return ft.OpenChannelErr
 }
 
 // CloseChannel closes the given channel
 func (ft *FakeTransport) CloseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	ft.TransportLk.Lock()
+	defer ft.TransportLk.Unlock()
 	ft.ClosedChannels = append(ft.ClosedChannels, chid)
 	return ft.CloseChannelErr
 }
 
 // SetEventHandler sets the handler for events on channels
 func (ft *FakeTransport) SetEventHandler(events datatransfer.EventsHandler) error {
+	ft.TransportLk.Lock()
+	defer ft.TransportLk.Unlock()
 	ft.EventHandler = events
 	return ft.SetEventHandlerErr
 }
@@ -76,18 +84,24 @@ func (ft *FakeTransport) Shutdown(ctx context.Context) error {
 
 // PauseChannel paused the given channel ID
 func (ft *FakeTransport) PauseChannel(ctx context.Context, chid datatransfer.ChannelID) error {
+	ft.TransportLk.Lock()
+	defer ft.TransportLk.Unlock()
 	ft.PausedChannels = append(ft.PausedChannels, chid)
 	return ft.PauseChannelErr
 }
 
 // ResumeChannel resumes the given channel
 func (ft *FakeTransport) ResumeChannel(ctx context.Context, msg datatransfer.Message, chid datatransfer.ChannelID) error {
+	ft.TransportLk.Lock()
+	defer ft.TransportLk.Unlock()
 	ft.ResumedChannels = append(ft.ResumedChannels, ResumedChannel{chid, msg})
 	return ft.ResumeChannelErr
 }
 
 // CleanupChannel cleans up the given channel
 func (ft *FakeTransport) CleanupChannel(chid datatransfer.ChannelID) {
+	ft.TransportLk.Lock()
+	defer ft.TransportLk.Unlock()
 	ft.CleanedUpChannels = append(ft.CleanedUpChannels, chid)
 }
 
@@ -97,6 +111,8 @@ func RecordCustomizedTransfer() datatransfer.TransportOption {
 		if !ok {
 			return errors.New("incorrect transport")
 		}
+		ft.TransportLk.Lock()
+		defer ft.TransportLk.Unlock()
 		ft.CustomizedTransfers = append(ft.CustomizedTransfers, chid)
 		return nil
 	}
