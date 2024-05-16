@@ -5,6 +5,7 @@ package datatransfer
 import (
 	"fmt"
 	"io"
+	"math"
 	"sort"
 
 	cid "github.com/ipfs/go-cid"
@@ -15,6 +16,7 @@ import (
 
 var _ = xerrors.Errorf
 var _ = cid.Undef
+var _ = math.E
 var _ = sort.Sort
 
 var lengthBufChannelID = []byte{131}
@@ -24,55 +26,61 @@ func (t *ChannelID) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufChannelID); err != nil {
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufChannelID); err != nil {
 		return err
 	}
 
-	scratch := make([]byte, 9)
-
 	// t.Initiator (peer.ID) (string)
-	if len(t.Initiator) > cbg.MaxLength {
+	if len(t.Initiator) > 8192 {
 		return xerrors.Errorf("Value in field t.Initiator was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Initiator))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Initiator))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.Initiator)); err != nil {
+	if _, err := cw.WriteString(string(t.Initiator)); err != nil {
 		return err
 	}
 
 	// t.Responder (peer.ID) (string)
-	if len(t.Responder) > cbg.MaxLength {
+	if len(t.Responder) > 8192 {
 		return xerrors.Errorf("Value in field t.Responder was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Responder))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Responder))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.Responder)); err != nil {
+	if _, err := cw.WriteString(string(t.Responder)); err != nil {
 		return err
 	}
 
 	// t.ID (datatransfer.TransferID) (uint64)
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ID)); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajUnsignedInt, uint64(t.ID)); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (t *ChannelID) UnmarshalCBOR(r io.Reader) error {
+func (t *ChannelID) UnmarshalCBOR(r io.Reader) (err error) {
 	*t = ChannelID{}
 
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
+	cr := cbg.NewCborReader(r)
 
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err := cr.ReadHeader()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
 	if maj != cbg.MajArray {
 		return fmt.Errorf("cbor input should be of type array")
 	}
@@ -84,7 +92,7 @@ func (t *ChannelID) UnmarshalCBOR(r io.Reader) error {
 	// t.Initiator (peer.ID) (string)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
+		sval, err := cbg.ReadStringWithMax(cr, 8192)
 		if err != nil {
 			return err
 		}
@@ -94,7 +102,7 @@ func (t *ChannelID) UnmarshalCBOR(r io.Reader) error {
 	// t.Responder (peer.ID) (string)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
+		sval, err := cbg.ReadStringWithMax(cr, 8192)
 		if err != nil {
 			return err
 		}
@@ -105,7 +113,7 @@ func (t *ChannelID) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		maj, extra, err = cr.ReadHeader()
 		if err != nil {
 			return err
 		}
@@ -125,38 +133,45 @@ func (t *ChannelStages) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufChannelStages); err != nil {
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufChannelStages); err != nil {
 		return err
 	}
 
-	scratch := make([]byte, 9)
-
 	// t.Stages ([]*datatransfer.ChannelStage) (slice)
-	if len(t.Stages) > cbg.MaxLength {
+	if len(t.Stages) > 8192 {
 		return xerrors.Errorf("Slice value in field t.Stages was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Stages))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.Stages))); err != nil {
 		return err
 	}
 	for _, v := range t.Stages {
-		if err := v.MarshalCBOR(w); err != nil {
+		if err := v.MarshalCBOR(cw); err != nil {
 			return err
 		}
+
 	}
 	return nil
 }
 
-func (t *ChannelStages) UnmarshalCBOR(r io.Reader) error {
+func (t *ChannelStages) UnmarshalCBOR(r io.Reader) (err error) {
 	*t = ChannelStages{}
 
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
+	cr := cbg.NewCborReader(r)
 
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err := cr.ReadHeader()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
 	if maj != cbg.MajArray {
 		return fmt.Errorf("cbor input should be of type array")
 	}
@@ -167,12 +182,12 @@ func (t *ChannelStages) UnmarshalCBOR(r io.Reader) error {
 
 	// t.Stages ([]*datatransfer.ChannelStage) (slice)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err = cr.ReadHeader()
 	if err != nil {
 		return err
 	}
 
-	if extra > cbg.MaxLength {
+	if extra > 8192 {
 		return fmt.Errorf("t.Stages: array too large (%d)", extra)
 	}
 
@@ -185,15 +200,34 @@ func (t *ChannelStages) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	for i := 0; i < int(extra); i++ {
+		{
+			var maj byte
+			var extra uint64
+			var err error
+			_ = maj
+			_ = extra
+			_ = err
 
-		var v ChannelStage
-		if err := v.UnmarshalCBOR(br); err != nil {
-			return err
+			{
+
+				b, err := cr.ReadByte()
+				if err != nil {
+					return err
+				}
+				if b != cbg.CborNull[0] {
+					if err := cr.UnreadByte(); err != nil {
+						return err
+					}
+					t.Stages[i] = new(ChannelStage)
+					if err := t.Stages[i].UnmarshalCBOR(cr); err != nil {
+						return xerrors.Errorf("unmarshaling t.Stages[i] pointer: %w", err)
+					}
+				}
+
+			}
+
 		}
-
-		t.Stages[i] = &v
 	}
-
 	return nil
 }
 
@@ -204,72 +238,79 @@ func (t *ChannelStage) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufChannelStage); err != nil {
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufChannelStage); err != nil {
 		return err
 	}
 
-	scratch := make([]byte, 9)
-
 	// t.Name (string) (string)
-	if len(t.Name) > cbg.MaxLength {
+	if len(t.Name) > 8192 {
 		return xerrors.Errorf("Value in field t.Name was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Name))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Name))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.Name)); err != nil {
+	if _, err := cw.WriteString(string(t.Name)); err != nil {
 		return err
 	}
 
 	// t.Description (string) (string)
-	if len(t.Description) > cbg.MaxLength {
+	if len(t.Description) > 8192 {
 		return xerrors.Errorf("Value in field t.Description was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Description))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Description))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.Description)); err != nil {
+	if _, err := cw.WriteString(string(t.Description)); err != nil {
 		return err
 	}
 
 	// t.CreatedTime (typegen.CborTime) (struct)
-	if err := t.CreatedTime.MarshalCBOR(w); err != nil {
+	if err := t.CreatedTime.MarshalCBOR(cw); err != nil {
 		return err
 	}
 
 	// t.UpdatedTime (typegen.CborTime) (struct)
-	if err := t.UpdatedTime.MarshalCBOR(w); err != nil {
+	if err := t.UpdatedTime.MarshalCBOR(cw); err != nil {
 		return err
 	}
 
 	// t.Logs ([]*datatransfer.Log) (slice)
-	if len(t.Logs) > cbg.MaxLength {
+	if len(t.Logs) > 8192 {
 		return xerrors.Errorf("Slice value in field t.Logs was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Logs))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.Logs))); err != nil {
 		return err
 	}
 	for _, v := range t.Logs {
-		if err := v.MarshalCBOR(w); err != nil {
+		if err := v.MarshalCBOR(cw); err != nil {
 			return err
 		}
+
 	}
 	return nil
 }
 
-func (t *ChannelStage) UnmarshalCBOR(r io.Reader) error {
+func (t *ChannelStage) UnmarshalCBOR(r io.Reader) (err error) {
 	*t = ChannelStage{}
 
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
+	cr := cbg.NewCborReader(r)
 
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err := cr.ReadHeader()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
 	if maj != cbg.MajArray {
 		return fmt.Errorf("cbor input should be of type array")
 	}
@@ -281,7 +322,7 @@ func (t *ChannelStage) UnmarshalCBOR(r io.Reader) error {
 	// t.Name (string) (string)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
+		sval, err := cbg.ReadStringWithMax(cr, 8192)
 		if err != nil {
 			return err
 		}
@@ -291,7 +332,7 @@ func (t *ChannelStage) UnmarshalCBOR(r io.Reader) error {
 	// t.Description (string) (string)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
+		sval, err := cbg.ReadStringWithMax(cr, 8192)
 		if err != nil {
 			return err
 		}
@@ -302,7 +343,7 @@ func (t *ChannelStage) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		if err := t.CreatedTime.UnmarshalCBOR(br); err != nil {
+		if err := t.CreatedTime.UnmarshalCBOR(cr); err != nil {
 			return xerrors.Errorf("unmarshaling t.CreatedTime: %w", err)
 		}
 
@@ -311,19 +352,19 @@ func (t *ChannelStage) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		if err := t.UpdatedTime.UnmarshalCBOR(br); err != nil {
+		if err := t.UpdatedTime.UnmarshalCBOR(cr); err != nil {
 			return xerrors.Errorf("unmarshaling t.UpdatedTime: %w", err)
 		}
 
 	}
 	// t.Logs ([]*datatransfer.Log) (slice)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err = cr.ReadHeader()
 	if err != nil {
 		return err
 	}
 
-	if extra > cbg.MaxLength {
+	if extra > 8192 {
 		return fmt.Errorf("t.Logs: array too large (%d)", extra)
 	}
 
@@ -336,15 +377,34 @@ func (t *ChannelStage) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	for i := 0; i < int(extra); i++ {
+		{
+			var maj byte
+			var extra uint64
+			var err error
+			_ = maj
+			_ = extra
+			_ = err
 
-		var v Log
-		if err := v.UnmarshalCBOR(br); err != nil {
-			return err
+			{
+
+				b, err := cr.ReadByte()
+				if err != nil {
+					return err
+				}
+				if b != cbg.CborNull[0] {
+					if err := cr.UnreadByte(); err != nil {
+						return err
+					}
+					t.Logs[i] = new(Log)
+					if err := t.Logs[i].UnmarshalCBOR(cr); err != nil {
+						return xerrors.Errorf("unmarshaling t.Logs[i] pointer: %w", err)
+					}
+				}
+
+			}
+
 		}
-
-		t.Logs[i] = &v
 	}
-
 	return nil
 }
 
@@ -355,41 +415,47 @@ func (t *Log) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufLog); err != nil {
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufLog); err != nil {
 		return err
 	}
 
-	scratch := make([]byte, 9)
-
 	// t.Log (string) (string)
-	if len(t.Log) > cbg.MaxLength {
+	if len(t.Log) > 8192 {
 		return xerrors.Errorf("Value in field t.Log was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Log))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Log))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.Log)); err != nil {
+	if _, err := cw.WriteString(string(t.Log)); err != nil {
 		return err
 	}
 
 	// t.UpdatedTime (typegen.CborTime) (struct)
-	if err := t.UpdatedTime.MarshalCBOR(w); err != nil {
+	if err := t.UpdatedTime.MarshalCBOR(cw); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *Log) UnmarshalCBOR(r io.Reader) error {
+func (t *Log) UnmarshalCBOR(r io.Reader) (err error) {
 	*t = Log{}
 
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
+	cr := cbg.NewCborReader(r)
 
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err := cr.ReadHeader()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
 	if maj != cbg.MajArray {
 		return fmt.Errorf("cbor input should be of type array")
 	}
@@ -401,7 +467,7 @@ func (t *Log) UnmarshalCBOR(r io.Reader) error {
 	// t.Log (string) (string)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
+		sval, err := cbg.ReadStringWithMax(cr, 8192)
 		if err != nil {
 			return err
 		}
@@ -412,7 +478,7 @@ func (t *Log) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		if err := t.UpdatedTime.UnmarshalCBOR(br); err != nil {
+		if err := t.UpdatedTime.UnmarshalCBOR(cr); err != nil {
 			return xerrors.Errorf("unmarshaling t.UpdatedTime: %w", err)
 		}
 
