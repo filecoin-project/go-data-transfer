@@ -199,7 +199,7 @@ func TestRestartPush(t *testing.T) {
 				}
 
 				if event.Code == datatransfer.Restart {
-					t.Logf("got restart event for peer %s", channelState.SelfPeer().Pretty())
+					t.Logf("got restart event for peer %s", channelState.SelfPeer().String())
 				}
 			}
 			rh.dt1.SubscribeToEvents(subscriber)
@@ -222,10 +222,10 @@ func TestRestartPush(t *testing.T) {
 					case <-waitCtx.Done():
 						return sentI, receivedI, xerrors.New("context timed-out without completing data transfer")
 					case p := <-finished:
-						t.Logf("peer %s completed", p.Pretty())
+						t.Logf("peer %s completed", p.String())
 						completes++
 					case perr := <-errChan:
-						t.Fatalf("\n received error on peer %s, err: %v", perr.p.Pretty(), perr.err)
+						t.Fatalf("\n received error on peer %s, err: %v", perr.p.String(), perr.err)
 					case s := <-queued:
 						sentI = append(sentI, s)
 					case r := <-received:
@@ -441,7 +441,7 @@ func TestRestartPull(t *testing.T) {
 				}
 
 				if event.Code == datatransfer.Restart {
-					t.Logf("got restart event for peer %s", channelState.SelfPeer().Pretty())
+					t.Logf("got restart event for peer %s", channelState.SelfPeer().String())
 				}
 			}
 			rh.dt1.SubscribeToEvents(subscriber)
@@ -468,10 +468,10 @@ func TestRestartPull(t *testing.T) {
 					case <-waitCtx.Done():
 						return sentI, receivedI, xerrors.New("context timed-out without completing data transfer")
 					case p := <-finished:
-						t.Logf("peer %s completed", p.Pretty())
+						t.Logf("peer %s completed", p.String())
 						completes++
 					case perr := <-errChan:
-						t.Fatalf("\n received error on peer %s, err: %v", perr.p.Pretty(), perr.err)
+						t.Fatalf("\n received error on peer %s, err: %v", perr.p.String(), perr.err)
 					case s := <-sent:
 						sentI = append(sentI, s)
 					case r := <-received:
@@ -557,8 +557,8 @@ func newRestartHarness(t *testing.T) *restartHarness {
 	host2 := gsData.Host2 // data recipient
 	peer1 := host1.ID()
 	peer2 := host2.ID()
-	t.Logf("peer1 is %s", peer1.Pretty())
-	t.Logf("peer2 is %s", peer2.Pretty())
+	t.Logf("peer1 is %s", peer1.String())
+	t.Logf("peer2 is %s", peer2.String())
 
 	// Setup data transfer
 	tp1 := gsData.SetupGSTransportHost1()
