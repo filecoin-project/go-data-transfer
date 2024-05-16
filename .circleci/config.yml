@@ -149,6 +149,9 @@ jobs:
         description: |
           Concurrency used to run linters. Defaults to 2 because NumCPU is not
           aware of container CPU limits.
+      timeout:
+        type: string
+        default: '10m'
       args:
         type: string
         default: ''
@@ -165,7 +168,7 @@ jobs:
           name: Lint
           command: |
             $HOME/.local/bin/golangci-lint run -v \
-              --concurrency << parameters.concurrency >> << parameters.args >>
+              --concurrency << parameters.concurrency >> --timeout << parameters.timeout >> << parameters.args >>
   lint-changes:
     <<: *lint
 
