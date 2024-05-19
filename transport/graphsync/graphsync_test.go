@@ -330,7 +330,6 @@ func TestManager(t *testing.T) {
 				require.NoError(t, gsData.outgoingBlockHookActions.TerminationError)
 			},
 		},
-
 		"incoming gs request with recognized dt response will record outgoing blocks": {
 			requestConfig: gsRequestConfig{
 				dtIsResponse: true,
@@ -512,7 +511,6 @@ func TestManager(t *testing.T) {
 				require.True(t, events.ChannelCompletedSuccess)
 			},
 		},
-
 		"recognized incoming request will record unsuccessful request completion": {
 			responseConfig: gsResponseConfig{
 				status: graphsync.RequestCompletedPartial,
@@ -614,7 +612,6 @@ func TestManager(t *testing.T) {
 				gsData.fgs.AssertNoPauseReceived(t)
 			},
 		},
-
 		"recognized incoming request can begin processing": {
 			action: func(gsData *harness) {
 				gsData.incomingRequestHook()
@@ -626,7 +623,6 @@ func TestManager(t *testing.T) {
 					events.TransferInitiatedChannelID)
 			},
 		},
-
 		"recognized incoming request can be resumed": {
 			action: func(gsData *harness) {
 				gsData.incomingRequestHook()
@@ -641,7 +637,6 @@ func TestManager(t *testing.T) {
 				gsData.fgs.AssertResumeReceived(gsData.ctx, t)
 			},
 		},
-
 		"unrecognized request cannot be resumed": {
 			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
 				err := gsData.transport.ResumeChannel(gsData.ctx,
@@ -1051,6 +1046,41 @@ func TestManager(t *testing.T) {
 				require.Equal(t, uint64(101), gsData.incomingRequestHookActions.MaxLinksOption)
 			},
 		},
+		"WithResponseProgressListener can be used to receive progress events": {
+			action: func(gsData *harness) {
+				gsData.fgs.LeaveRequestsOpen()
+				gsData.transport.WithResponseProgressListener(
+					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self},
+					gsData.progressCollector.OnProgress,
+				)
+
+				stor, _ := gsData.outgoing.Selector()
+				go gsData.outgoingRequestHook()
+				_ = gsData.transport.OpenChannel(
+					gsData.ctx,
+					gsData.other,
+					datatransfer.ChannelID{ID: gsData.transferID, Responder: gsData.other, Initiator: gsData.self},
+					cidlink.Link{Cid: gsData.outgoing.BaseCid()},
+					stor,
+					nil,
+					gsData.outgoing)
+			},
+			check: func(t *testing.T, events *fakeEvents, gsData *harness) {
+				requestReceived := gsData.fgs.AssertRequestReceived(gsData.ctx, t)
+				requestReceived.ResponseChan <- graphsync.ResponseProgress{Path: datamodel.ParsePath("yep")}
+				requestReceived.ResponseChan <- graphsync.ResponseProgress{Path: datamodel.ParsePath("yep/yerp")}
+				requestReceived.ResponseChan <- graphsync.ResponseProgress{Path: datamodel.ParsePath("yep/yerp/yeppity!")}
+				close(requestReceived.ResponseChan)
+				close(requestReceived.ResponseErrChan)
+
+				require.Eventually(t, func() bool {
+					return events.OnChannelCompletedCalled == true
+				}, 2*time.Second, 100*time.Millisecond)
+				require.True(t, events.ChannelCompletedSuccess)
+
+				require.Equal(t, []string{"yep", "yep/yerp", "yep/yerp/yeppity!"}, gsData.progressCollector.paths)
+			},
+		},
 	}
 
 	ctx := context.Background()
@@ -1090,6 +1120,7 @@ func TestManager(t *testing.T) {
 				incomingRequestHookActions:  &testharness.FakeIncomingRequestHookActions{},
 				requestUpdatedHookActions:   &testharness.FakeRequestUpdatedActions{},
 				incomingResponseHookActions: &testharness.FakeIncomingResponseHookActions{},
+				progressCollector:           &progressCollector{paths: make([]string, 0)},
 			}
 			require.NoError(t, transport.SetEventHandler(&data.events))
 			if data.action != nil {
@@ -1235,6 +1266,7 @@ type harness struct {
 	incomingRequestHookActions  *testharness.FakeIncomingRequestHookActions
 	requestUpdatedHookActions   *testharness.FakeRequestUpdatedActions
 	incomingResponseHookActions *testharness.FakeIncomingResponseHookActions
+	progressCollector           *progressCollector
 }
 
 func (ha *harness) outgoingRequestHook() {
@@ -1280,6 +1312,14 @@ func (ha *harness) outgoingRequestProcessingListener() {
 
 func (ha *harness) incomingRequestProcessingListener() {
 	ha.fgs.IncomingRequestProcessingListener(ha.other, ha.request, 0)
+}
+
+type progressCollector struct {
+	paths []string
+}
+
+func (pc *progressCollector) OnProgress(progress graphsync.ResponseProgress) {
+	pc.paths = append(pc.paths, progress.Path.String())
 }
 
 type dtConfig struct {
