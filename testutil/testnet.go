@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"sync"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -19,9 +20,10 @@ type FakeSentMessage struct {
 // FakeNetwork is a network that satisfies the DataTransferNetwork interface but
 // does not actually do anything
 type FakeNetwork struct {
-	PeerID       peer.ID
-	SentMessages []FakeSentMessage
-	Delegate     network.Receiver
+	PeerID         peer.ID
+	SentMessagesLk sync.Mutex
+	SentMessages   []FakeSentMessage
+	Delegate       network.Receiver
 }
 
 // NewFakeNetwork returns a new fake data transfer network instance
@@ -33,6 +35,8 @@ var _ network.DataTransferNetwork = (*FakeNetwork)(nil)
 
 // SendMessage sends a GraphSync message to a peer.
 func (fn *FakeNetwork) SendMessage(ctx context.Context, p peer.ID, m datatransfer.Message) error {
+	fn.SentMessagesLk.Lock()
+	defer fn.SentMessagesLk.Unlock()
 	fn.SentMessages = append(fn.SentMessages, FakeSentMessage{p, m})
 	return nil
 }

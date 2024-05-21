@@ -205,9 +205,13 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Equal(t, h.transport.ClosedChannels[0], channelID)
 
 				require.Eventually(t, func() bool {
+					h.network.SentMessagesLk.Lock()
+					defer h.network.SentMessagesLk.Unlock()
 					return len(h.network.SentMessages) == 2
 				}, 5*time.Second, 200*time.Millisecond)
+				h.network.SentMessagesLk.Lock()
 				cancelMessage := h.network.SentMessages[1].Message
+				h.network.SentMessagesLk.Unlock()
 				require.False(t, cancelMessage.IsUpdate())
 				require.False(t, cancelMessage.IsPaused())
 				require.True(t, cancelMessage.IsRequest())
@@ -261,10 +265,14 @@ func TestDataTransferInitiating(t *testing.T) {
 				require.Equal(t, h.transport.ClosedChannels[0], channelID)
 
 				require.Eventually(t, func() bool {
+					h.network.SentMessagesLk.Lock()
+					defer h.network.SentMessagesLk.Unlock()
 					return len(h.network.SentMessages) == 1
 				}, 5*time.Second, 200*time.Millisecond)
 
+				h.network.SentMessagesLk.Lock()
 				cancelMessage := h.network.SentMessages[0].Message
+				h.network.SentMessagesLk.Unlock()
 				require.False(t, cancelMessage.IsUpdate())
 				require.False(t, cancelMessage.IsPaused())
 				require.True(t, cancelMessage.IsRequest())
