@@ -1,6 +1,7 @@
 package message1_1
 
 import (
+	"errors"
 	"io"
 
 	"github.com/ipfs/go-cid"
@@ -8,7 +9,6 @@ import (
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
-	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
@@ -25,7 +25,7 @@ func NewRequest(id datatransfer.TransferID, isRestart bool, isPull bool, voucher
 		voucher = &emptyTypedVoucher
 	}
 	if baseCid == cid.Undef {
-		return nil, xerrors.Errorf("base CID must be defined")
+		return nil, errors.New("base CID must be defined")
 	}
 
 	var typ uint64
@@ -199,7 +199,7 @@ func FromNet(r io.Reader) (datatransfer.Message, error) {
 	tresp := tm.(*TransferMessage1_1)
 
 	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
-		return nil, xerrors.Errorf("invalid/malformed message")
+		return nil, errors.New("invalid/malformed message")
 	}
 
 	if tresp.IsRequest {
@@ -220,7 +220,7 @@ func FromIPLD(node datamodel.Node) (datatransfer.Message, error) {
 	tresp := tm.(*TransferMessage1_1)
 
 	if (tresp.IsRequest && tresp.Request == nil) || (!tresp.IsRequest && tresp.Response == nil) {
-		return nil, xerrors.Errorf("invalid/malformed message")
+		return nil, errors.New("invalid/malformed message")
 	}
 
 	if tresp.IsRequest {

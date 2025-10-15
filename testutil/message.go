@@ -3,6 +3,7 @@ package testutil
 import (
 	"testing"
 
+	"github.com/ipfs/go-test/random"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ import (
 // NewDTRequest makes a new DT Request message
 func NewDTRequest(t *testing.T, transferID datatransfer.TransferID) datatransfer.Request {
 	voucher := NewTestTypedVoucher()
-	baseCid := GenerateCids(1)[0]
+	baseCid := random.Cids(1)[0]
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	r, err := message.NewRequest(transferID, false, false, &voucher, baseCid, selector)
 	require.NoError(t, err)

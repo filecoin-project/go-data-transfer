@@ -3,6 +3,7 @@ package channelsubscriptions_test
 import (
 	"testing"
 
+	"github.com/ipfs/go-test/random"
 	"github.com/stretchr/testify/require"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestChannelSubscriptions(t *testing.T) {
-	peers := testutil.GeneratePeers(2)
+	peers := random.Peers(2)
 	tid1 := datatransfer.TransferID(0)
 	tid2 := datatransfer.TransferID(1)
 

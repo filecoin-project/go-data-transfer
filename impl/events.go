@@ -2,13 +2,13 @@ package impl
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
@@ -261,7 +261,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	if completeErr != nil {
 		// send an error, but only if we haven't already errored for some reason
 		if chst.Status() != datatransfer.Failing && chst.Status() != datatransfer.Failed {
-			err := xerrors.Errorf("data transfer channel %s failed to transfer data: %w", chid, completeErr)
+			err := fmt.Errorf("data transfer channel %s failed to transfer data: %w", chid, completeErr)
 			log.Warnf(err.Error())
 			return m.channels.Error(chid, err)
 		}
@@ -285,7 +285,7 @@ func (m *manager) OnChannelCompleted(chid datatransfer.ChannelID, completeErr er
 	log.Infow("sending completion message to initiator", "chid", chid)
 	ctx, _ := m.spansIndex.SpanForChannel(context.Background(), chid)
 	if err := m.dataTransferNetwork.SendMessage(ctx, chid.Initiator, msg); err != nil {
-		err := xerrors.Errorf("channel %s: failed to send completion message to initiator: %w", chid, err)
+		err := fmt.Errorf("channel %s: failed to send completion message to initiator: %w", chid, err)
 		log.Warnw("failed to send completion message to initiator", "chid", chid, "err", err)
 		return m.OnRequestDisconnected(chid, err)
 	}

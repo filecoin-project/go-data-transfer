@@ -3,6 +3,7 @@ package testutil
 import (
 	"testing"
 
+	"github.com/ipfs/go-test/random"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/fluent/qp"
@@ -54,7 +55,7 @@ func AssertEqualTestVoucherResult(t *testing.T, expectedResponse datatransfer.Re
 // NewTestVoucher returns a fake voucher with random data
 func NewTestVoucher() datamodel.Node {
 	n, err := qp.BuildList(basicnode.Prototype.Any, 1, func(ma datamodel.ListAssembler) {
-		qp.ListEntry(ma, qp.String(string(RandomBytes(100))))
+		qp.ListEntry(ma, qp.String(string(random.Bytes(100))))
 	})
 	if err != nil {
 		panic(err)

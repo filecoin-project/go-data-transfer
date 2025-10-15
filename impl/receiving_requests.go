@@ -2,11 +2,12 @@ package impl
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
@@ -47,7 +48,7 @@ func (m *manager) acceptRequest(chid datatransfer.ChannelID, incoming datatransf
 	}
 	processor, ok := m.validatedTypes.Processor(voucher.Type)
 	if !ok {
-		return datatransfer.ValidationResult{}, xerrors.Errorf("unknown voucher type: %s", voucher.Type)
+		return datatransfer.ValidationResult{}, fmt.Errorf("unknown voucher type: %s", voucher.Type)
 	}
 
 	var validatorFunc func(datatransfer.ChannelID, peer.ID, datamodel.Node, cid.Cid, datamodel.Node) (datatransfer.ValidationResult, error)
@@ -153,14 +154,14 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 	// (the responder must send a "restart existing channel request")
 	initiator := chid.Initiator
 	if m.peerID == initiator {
-		return false, datatransfer.ValidationResult{}, xerrors.New("initiator cannot be manager peer for a restart request")
+		return false, datatransfer.ValidationResult{}, errors.New("initiator cannot be manager peer for a restart request")
 	}
 
 	// valide that the request parameters match the original request
 	// TODO: not sure this is needed -- the request parameters cannot change,
 	// so perhaps the solution is just to ignore them in the message
 	if err := m.validateRestartRequest(context.Background(), initiator, chid, incoming); err != nil {
-		return false, datatransfer.ValidationResult{}, xerrors.Errorf("restart request for channel %s failed validation: %w", chid, err)
+		return false, datatransfer.ValidationResult{}, fmt.Errorf("restart request for channel %s failed validation: %w", chid, err)
 	}
 
 	// read the channel state
@@ -185,7 +186,7 @@ func (m *manager) restartRequest(chid datatransfer.ChannelID,
 
 	// record the restart events
 	if err := m.channels.Restart(chid); err != nil {
-		return stayPaused, result, xerrors.Errorf("failed to restart channel %s: %w", chid, err)
+		return stayPaused, result, fmt.Errorf("failed to restart channel %s: %w", chid, err)
 	}
 
 	// record validation events

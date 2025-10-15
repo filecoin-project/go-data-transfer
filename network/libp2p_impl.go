@@ -16,7 +16,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
@@ -140,7 +139,7 @@ func (impl *libp2pDataTransferNetwork) openStream(ctx context.Context, id peer.I
 		// b.Attempt() starts from zero
 		nAttempts := b.Attempt() + 1
 		if nAttempts >= impl.maxStreamOpenAttempts {
-			return nil, xerrors.Errorf("exhausted %g attempts but failed to open stream to %s, err: %w", impl.maxStreamOpenAttempts, id, err)
+			return nil, fmt.Errorf("exhausted %g attempts but failed to open stream to %s, err: %w", impl.maxStreamOpenAttempts, id, err)
 		}
 
 		d := b.Duration()
@@ -181,7 +180,7 @@ func (dtnet *libp2pDataTransferNetwork) SendMessage(
 
 	outgoing, err = outgoing.MessageForProtocol(s.Protocol())
 	if err != nil {
-		err = xerrors.Errorf("failed to convert message for protocol: %w", err)
+		err = fmt.Errorf("failed to convert message for protocol: %w", err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err

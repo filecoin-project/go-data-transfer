@@ -10,6 +10,7 @@ import (
 
 	"github.com/ipfs/go-graphsync"
 	"github.com/ipfs/go-graphsync/donotsendfirstblocks"
+	"github.com/ipfs/go-test/random"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -1058,7 +1059,7 @@ func TestManager(t *testing.T) {
 		t.Run(testCase, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			peers := testutil.GeneratePeers(2)
+			peers := random.Peers(2)
 			transferID := datatransfer.TransferID(rand.Uint32())
 			requestID := graphsync.NewRequestID()
 			request := data.requestConfig.makeRequest(t, transferID, requestID)

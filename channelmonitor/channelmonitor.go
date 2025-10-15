@@ -9,7 +9,6 @@ import (
 	"github.com/bep/debounce"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
@@ -272,12 +271,12 @@ func (mc *monitoredChannel) start() {
 		case datatransfer.SendDataError:
 			// If the transport layer reports an error sending data over the wire,
 			// attempt to restart the channel
-			err := xerrors.Errorf("%s: data transfer transport send error, restarting data transfer", mc.chid)
+			err := fmt.Errorf("%s: data transfer transport send error, restarting data transfer", mc.chid)
 			go mc.restartChannelDebounced(err)
 		case datatransfer.ReceiveDataError:
 			// If the transport layer reports an error receiving data over the wire,
 			// attempt to restart the channel
-			err := xerrors.Errorf("%s: data transfer transport receive error, restarting data transfer", mc.chid)
+			err := fmt.Errorf("%s: data transfer transport receive error, restarting data transfer", mc.chid)
 			go mc.restartChannelDebounced(err)
 		case datatransfer.FinishTransfer:
 			// The channel initiator has finished sending / receiving all data.
@@ -312,7 +311,7 @@ func (mc *monitoredChannel) watchForResponderAccept() func() {
 		case <-timer.C:
 			// Timer expired before we received an Accept from the responder,
 			// fail the data transfer
-			err := xerrors.Errorf("%s: timed out waiting %s for Accept message from remote peer",
+			err := fmt.Errorf("%s: timed out waiting %s for Accept message from remote peer",
 				mc.chid, mc.cfg.AcceptTimeout)
 			mc.closeChannelAndShutdown(err)
 		}
@@ -338,7 +337,7 @@ func (mc *monitoredChannel) watchForResponderComplete() {
 		// its context is cancelled
 	case <-timer.C:
 		// Timer expired before we received a Complete message from the responder
-		err := xerrors.Errorf("%s: timed out waiting %s for Complete message from remote peer",
+		err := fmt.Errorf("%s: timed out waiting %s for Complete message from remote peer",
 			mc.chid, mc.cfg.CompleteTimeout)
 		mc.closeChannelAndShutdown(err)
 	}
@@ -437,7 +436,7 @@ func (mc *monitoredChannel) doRestartChannel() error {
 	if uint32(restartCount) > mc.cfg.MaxConsecutiveRestarts {
 		// If no data has been transferred since the last restart, and we've
 		// reached the consecutive restart limit, return an error
-		return xerrors.Errorf("%s: after %d consecutive restarts failed to transfer any data", mc.chid, restartCount)
+		return fmt.Errorf("%s: after %d consecutive restarts failed to transfer any data", mc.chid, restartCount)
 	}
 
 	// Send the restart message
@@ -462,7 +461,7 @@ func (mc *monitoredChannel) sendRestartMessage(restartCount int) error {
 	start := time.Now()
 	err := mc.mgr.ConnectTo(mc.ctx, p)
 	if err != nil {
-		return xerrors.Errorf("%s: failed to reconnect to peer %s after %s: %w",
+		return fmt.Errorf("%s: failed to reconnect to peer %s after %s: %w",
 			mc.chid, p, time.Since(start), err)
 	}
 	log.Debugf("%s: re-established connection to %s in %s", mc.chid, p, time.Since(start))
@@ -471,7 +470,7 @@ func (mc *monitoredChannel) sendRestartMessage(restartCount int) error {
 	log.Debugf("%s: sending restart message to %s (%d consecutive restarts)", mc.chid, p, restartCount)
 	err = mc.mgr.RestartDataTransferChannel(mc.ctx, mc.chid)
 	if err != nil {
-		return xerrors.Errorf("%s: failed to send restart message to %s: %w", mc.chid, p, err)
+		return fmt.Errorf("%s: failed to send restart message to %s: %w", mc.chid, p, err)
 	}
 
 	// The restart message was sent successfully.

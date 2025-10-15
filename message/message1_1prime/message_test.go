@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-test/random"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -20,7 +21,7 @@ import (
 )
 
 func TestNewRequest(t *testing.T) {
-	baseCid := testutil.GenerateCids(1)[0]
+	baseCid := random.Cids(1)[0]
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	isPull := true
 	id := datatransfer.TransferID(rand.Int31())
@@ -48,7 +49,7 @@ func TestNewRequest(t *testing.T) {
 }
 
 func TestRestartRequest(t *testing.T) {
-	baseCid := testutil.GenerateCids(1)[0]
+	baseCid := random.Cids(1)[0]
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	isPull := true
 	id := datatransfer.TransferID(rand.Int31())
@@ -77,7 +78,7 @@ func TestRestartRequest(t *testing.T) {
 
 func TestRestartExistingChannelRequest(t *testing.T) {
 	t.Run("round-trip", func(t *testing.T) {
-		peers := testutil.GeneratePeers(2)
+		peers := random.Peers(2)
 		tid := uint64(1)
 		chid := datatransfer.ChannelID{Initiator: peers[0],
 			Responder: peers[1], ID: datatransfer.TransferID(tid)}
@@ -387,7 +388,7 @@ func TestCompleteResponse(t *testing.T) {
 }
 func TestToNetFromNetEquivalency(t *testing.T) {
 	t.Run("round-trip", func(t *testing.T) {
-		baseCid := testutil.GenerateCids(1)[0]
+		baseCid := random.Cids(1)[0]
 		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
@@ -445,7 +446,7 @@ func TestToNetFromNetEquivalency(t *testing.T) {
 		require.Equal(t, deserializedRequest.IsRequest(), request.IsRequest())
 	})
 	t.Run("cbor-gen compat", func(t *testing.T) {
-		baseCid := testutil.GenerateCids(1)[0]
+		baseCid := random.Cids(1)[0]
 		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 		isPull := false
 		id := datatransfer.TransferID(1298498081)
@@ -525,7 +526,7 @@ func TestFromNetMessageValidation(t *testing.T) {
 }
 
 func NewTestTransferRequest(data string) (message1_1.TransferRequest1_1, error) {
-	bcid := testutil.GenerateCids(1)[0]
+	bcid := random.Cids(1)[0]
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	isPull := false
 	id := datatransfer.TransferID(rand.Int31())

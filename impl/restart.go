@@ -2,11 +2,12 @@ package impl
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channels"
@@ -33,7 +34,7 @@ const (
 func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel datatransfer.ChannelState) error {
 	result, err := m.validateRestart(channel)
 	if err != nil {
-		return xerrors.Errorf("failed to restart channel, validation error: %w", err)
+		return fmt.Errorf("failed to restart channel, validation error: %w", err)
 	}
 
 	if !result.Accepted {
@@ -44,7 +45,7 @@ func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel dat
 	req := message.RestartExistingChannelRequest(channel.ChannelID())
 
 	if err := m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req); err != nil {
-		return xerrors.Errorf("unable to send restart request: %w", err)
+		return fmt.Errorf("unable to send restart request: %w", err)
 	}
 
 	return nil
@@ -53,7 +54,7 @@ func (m *manager) restartManagerPeerReceivePush(ctx context.Context, channel dat
 func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel datatransfer.ChannelState) error {
 	result, err := m.validateRestart(channel)
 	if err != nil {
-		return xerrors.Errorf("failed to restart channel, validation error: %w", err)
+		return fmt.Errorf("failed to restart channel, validation error: %w", err)
 	}
 
 	if !result.Accepted {
@@ -64,7 +65,7 @@ func (m *manager) restartManagerPeerReceivePull(ctx context.Context, channel dat
 
 	// send a libp2p message to the other peer asking to send a "restart pull request"
 	if err := m.dataTransferNetwork.SendMessage(ctx, channel.OtherPeer(), req); err != nil {
-		return xerrors.Errorf("unable to send restart request: %w", err)
+		return fmt.Errorf("unable to send restart request: %w", err)
 	}
 
 	return nil
@@ -104,7 +105,7 @@ func (m *manager) openPushRestartChannel(ctx context.Context, channel datatransf
 			monitoredChan.Shutdown()
 		}
 
-		return xerrors.Errorf("Unable to send restart request: %w", err)
+		return fmt.Errorf("Unable to send restart request: %w", err)
 	}
 
 	return nil
@@ -144,7 +145,7 @@ func (m *manager) openPullRestartChannel(ctx context.Context, channel datatransf
 			monitoredChan.Shutdown()
 		}
 
-		return xerrors.Errorf("Unable to send open channel restart request: %w", err)
+		return fmt.Errorf("Unable to send open channel restart request: %w", err)
 	}
 
 	return nil
@@ -159,31 +160,31 @@ func (m *manager) validateRestartRequest(ctx context.Context, otherPeer peer.ID,
 
 	// channel is not terminated
 	if channels.IsChannelTerminated(channel.Status()) {
-		return xerrors.New("channel is already terminated")
+		return errors.New("channel is already terminated")
 	}
 
 	// channel initator should be the sender peer
 	if channel.ChannelID().Initiator != otherPeer {
-		return xerrors.New("other peer is not the initiator of the channel")
+		return errors.New("other peer is not the initiator of the channel")
 	}
 
 	// channel and request baseCid should match
 	if req.BaseCid() != channel.BaseCID() {
-		return xerrors.New("base cid does not match")
+		return errors.New("base cid does not match")
 	}
 
 	// vouchers should match
 	reqVoucher, err := req.Voucher()
 	if err != nil {
-		return xerrors.Errorf("failed to fetch request voucher: %w", err)
+		return fmt.Errorf("failed to fetch request voucher: %w", err)
 	}
 	channelVoucher := channel.Voucher()
 	if req.VoucherType() != channelVoucher.Type {
-		return xerrors.New("channel and request voucher types do not match")
+		return errors.New("channel and request voucher types do not match")
 	}
 
 	if !ipld.DeepEqual(reqVoucher, channelVoucher.Voucher) {
-		return xerrors.New("channel and request vouchers do not match")
+		return errors.New("channel and request vouchers do not match")
 	}
 
 	return nil

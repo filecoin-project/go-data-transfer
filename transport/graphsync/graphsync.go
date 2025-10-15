@@ -14,7 +14,6 @@ import (
 	"github.com/ipld/go-ipld-prime/datamodel"
 	peer "github.com/libp2p/go-libp2p/core/peer"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
@@ -197,7 +196,7 @@ func (t *Transport) executeGsRequest(req *gsReq) {
 
 	// Request cancelled by client
 	if _, ok := lastError.(graphsync.RequestClientCancelledErr); ok {
-		terr := xerrors.Errorf("graphsync request cancelled")
+		terr := errors.New("graphsync request cancelled")
 		log.Warnf("channel %s: %s", req.channelID, terr)
 		if err := t.events.OnRequestCancelled(req.channelID, terr); err != nil {
 			log.Error(err)
@@ -220,7 +219,7 @@ func (t *Transport) executeGsRequest(req *gsReq) {
 
 	var completeErr error
 	if lastError != nil {
-		completeErr = xerrors.Errorf("channel %s: graphsync request failed to complete: %w", req.channelID, lastError)
+		completeErr = fmt.Errorf("channel %s: graphsync request failed to complete: %w", req.channelID, lastError)
 	}
 
 	// Used by the tests to listen for when a request completes
@@ -266,7 +265,7 @@ func (t *Transport) CloseChannel(ctx context.Context, chid datatransfer.ChannelI
 
 	err = ch.close(ctx)
 	if err != nil {
-		return xerrors.Errorf("closing channel: %w", err)
+		return fmt.Errorf("closing channel: %w", err)
 	}
 	return nil
 }
@@ -332,7 +331,7 @@ func (t *Transport) Shutdown(ctx context.Context) error {
 
 	err := eg.Wait()
 	if err != nil {
-		return xerrors.Errorf("shutting down graphsync transport: %w", err)
+		return fmt.Errorf("shutting down graphsync transport: %w", err)
 	}
 	return nil
 }
@@ -693,7 +692,7 @@ func (t *Transport) gsCompletedResponseListener(p peer.ID, request graphsync.Req
 	var completeErr error
 	if status != graphsync.RequestCompletedFull {
 		statusStr := gsResponseStatusCodeString(status)
-		completeErr = xerrors.Errorf("graphsync response to peer %s did not complete: response status code %s", p, statusStr)
+		completeErr = fmt.Errorf("graphsync response to peer %s did not complete: response status code %s", p, statusStr)
 	}
 
 	// Used by the tests to listen for when a response completes
@@ -832,7 +831,7 @@ func (t *Transport) gsRequestorCancelledListener(p peer.ID, request graphsync.Re
 
 	ch, err := t.getDTChannel(chid)
 	if err != nil {
-		if !xerrors.Is(datatransfer.ErrChannelNotFound, err) {
+		if !errors.Is(err, datatransfer.ErrChannelNotFound) {
 			log.Errorf("requestor cancelled: getting channel %s: %s", chid, err)
 		}
 		return
@@ -903,7 +902,7 @@ func (t *Transport) getDTChannel(chid datatransfer.ChannelID) (*dtChannel, error
 
 	ch, ok := t.dtChannels[chid]
 	if !ok {
-		return nil, xerrors.Errorf("channel %s: %w", chid, datatransfer.ErrChannelNotFound)
+		return nil, fmt.Errorf("channel %s: %w", chid, datatransfer.ErrChannelNotFound)
 	}
 	return ch, nil
 }
@@ -958,17 +957,17 @@ func (c *dtChannel) open(
 		// Wait for the complete callback to be called
 		err := waitForCompleteHook(ctx, completed)
 		if err != nil {
-			return nil, xerrors.Errorf("%s: waiting for cancelled graphsync request to complete: %w", chid, err)
+			return nil, fmt.Errorf("%s: waiting for cancelled graphsync request to complete: %w", chid, err)
 		}
 
 		// Wait for the cancel request method to complete
 		select {
 		case err = <-errch:
 		case <-ctx.Done():
-			err = xerrors.Errorf("timed out waiting for graphsync request to be cancelled")
+			err = errors.New("timed out waiting for graphsync request to be cancelled")
 		}
 		if err != nil {
-			return nil, xerrors.Errorf("%s: restarting graphsync request: %w", chid, err)
+			return nil, fmt.Errorf("%s: restarting graphsync request: %w", chid, err)
 		}
 	}
 
@@ -1252,8 +1251,8 @@ func (c *dtChannel) cancel(ctx context.Context) chan error {
 		err := c.t.gs.Cancel(ctx, *requestID)
 
 		// Ignore "request not found" errors
-		if err != nil && !xerrors.Is(graphsync.RequestNotFoundErr{}, err) {
-			errch <- xerrors.Errorf("cancelling graphsync request for channel %s: %w", c.channelID, err)
+		if err != nil && !errors.Is(err, graphsync.RequestNotFoundErr{}) {
+			errch <- fmt.Errorf("cancelling graphsync request for channel %s: %w", c.channelID, err)
 		} else {
 			errch <- nil
 		}

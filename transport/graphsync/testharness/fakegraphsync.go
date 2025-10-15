@@ -9,6 +9,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
+	"github.com/ipfs/go-test/random"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -19,7 +20,6 @@ import (
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
-	"github.com/filecoin-project/go-data-transfer/v2/testutil"
 	"github.com/filecoin-project/go-data-transfer/v2/transport/graphsync/extension"
 )
 
@@ -420,7 +420,7 @@ func (fbd fakeBlkData) Index() int64 {
 // NewFakeBlockData returns a fake block that matches the block data interface
 func NewFakeBlockData(size uint64, index int64, onWire bool) graphsync.BlockData {
 	return &fakeBlkData{
-		link:   cidlink.Link{Cid: testutil.GenerateCids(1)[0]},
+		link:   cidlink.Link{Cid: random.Cids(1)[0]},
 		size:   size,
 		index:  index,
 		onWire: onWire,
@@ -472,7 +472,7 @@ func (fr *fakeRequest) Type() graphsync.RequestType {
 func NewFakeRequest(id graphsync.RequestID, extensions map[graphsync.ExtensionName]datamodel.Node, requestType graphsync.RequestType) graphsync.RequestData {
 	return &fakeRequest{
 		id:          id,
-		root:        testutil.GenerateCids(1)[0],
+		root:        random.Cids(1)[0],
 		selector:    selectorparse.CommonSelector_ExploreAllRecursively,
 		priority:    graphsync.Priority(rand.Int()),
 		extensions:  extensions,

@@ -2,11 +2,13 @@ package network_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/ipfs/go-test/random"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -16,7 +18,6 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message"
@@ -98,7 +99,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Send Request", func(t *testing.T) {
-		baseCid := testutil.GenerateCids(1)[0]
+		baseCid := random.Cids(1)[0]
 		selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 		isPull := false
 		id := datatransfer.TransferID(rand.Int31())
@@ -155,7 +156,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 	})
 
 	t.Run("Send Restart Request", func(t *testing.T) {
-		peers := testutil.GeneratePeers(2)
+		peers := random.Peers(2)
 		id := datatransfer.TransferID(rand.Int31())
 		chId := datatransfer.ChannelID{Initiator: peers[0],
 			Responder: peers[1], ID: id}
@@ -243,7 +244,7 @@ func TestSendMessageRetry(t *testing.T) {
 				errs: make(chan error, tcase.errors),
 			}
 			for i := 0; i < tcase.errors; i++ {
-				mockHost1.errs <- xerrors.Errorf("network err")
+				mockHost1.errs <- errors.New("network err")
 			}
 			host1 = mockHost1
 
@@ -269,7 +270,7 @@ func TestSendMessageRetry(t *testing.T) {
 			err = dtnet1.ConnectTo(ctx, host2.ID())
 			require.NoError(t, err)
 
-			baseCid := testutil.GenerateCids(1)[0]
+			baseCid := random.Cids(1)[0]
 			selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 			isPull := false
 			id := datatransfer.TransferID(rand.Int31())
