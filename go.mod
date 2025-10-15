@@ -28,6 +28,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0
 	golang.org/x/exp v0.0.0-20251009144603-d2f985daa21b
 	golang.org/x/sync v0.17.0
+	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
 )
 
 require (
@@ -144,7 +145,6 @@ require (
 	golang.org/x/text v0.30.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
-	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/protobuf v1.36.9 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
