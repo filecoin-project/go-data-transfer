@@ -3,7 +3,6 @@
 package datatransfer
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -12,8 +11,10 @@ import (
 	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p/core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
+	xerrors "golang.org/x/xerrors"
 )
 
+var _ = xerrors.Errorf
 var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
@@ -34,7 +35,7 @@ func (t *ChannelID) MarshalCBOR(w io.Writer) error {
 
 	// t.Initiator (peer.ID) (string)
 	if len(t.Initiator) > 8192 {
-		return errors.New("Value in field t.Initiator was too long")
+		return xerrors.Errorf("Value in field t.Initiator was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Initiator))); err != nil {
@@ -46,7 +47,7 @@ func (t *ChannelID) MarshalCBOR(w io.Writer) error {
 
 	// t.Responder (peer.ID) (string)
 	if len(t.Responder) > 8192 {
-		return errors.New("Value in field t.Responder was too long")
+		return xerrors.Errorf("Value in field t.Responder was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Responder))); err != nil {
@@ -141,7 +142,7 @@ func (t *ChannelStages) MarshalCBOR(w io.Writer) error {
 
 	// t.Stages ([]*datatransfer.ChannelStage) (slice)
 	if len(t.Stages) > 8192 {
-		return errors.New("Slice value in field t.Stages was too long")
+		return xerrors.Errorf("Slice value in field t.Stages was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.Stages))); err != nil {
@@ -219,7 +220,7 @@ func (t *ChannelStages) UnmarshalCBOR(r io.Reader) (err error) {
 					}
 					t.Stages[i] = new(ChannelStage)
 					if err := t.Stages[i].UnmarshalCBOR(cr); err != nil {
-						return fmt.Errorf("unmarshaling t.Stages[i] pointer: %w", err)
+						return xerrors.Errorf("unmarshaling t.Stages[i] pointer: %w", err)
 					}
 				}
 
@@ -246,7 +247,7 @@ func (t *ChannelStage) MarshalCBOR(w io.Writer) error {
 
 	// t.Name (string) (string)
 	if len(t.Name) > 8192 {
-		return errors.New("Value in field t.Name was too long")
+		return xerrors.Errorf("Value in field t.Name was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Name))); err != nil {
@@ -258,7 +259,7 @@ func (t *ChannelStage) MarshalCBOR(w io.Writer) error {
 
 	// t.Description (string) (string)
 	if len(t.Description) > 8192 {
-		return errors.New("Value in field t.Description was too long")
+		return xerrors.Errorf("Value in field t.Description was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Description))); err != nil {
@@ -280,7 +281,7 @@ func (t *ChannelStage) MarshalCBOR(w io.Writer) error {
 
 	// t.Logs ([]*datatransfer.Log) (slice)
 	if len(t.Logs) > 8192 {
-		return errors.New("Slice value in field t.Logs was too long")
+		return xerrors.Errorf("Slice value in field t.Logs was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.Logs))); err != nil {
@@ -343,7 +344,7 @@ func (t *ChannelStage) UnmarshalCBOR(r io.Reader) (err error) {
 	{
 
 		if err := t.CreatedTime.UnmarshalCBOR(cr); err != nil {
-			return fmt.Errorf("unmarshaling t.CreatedTime: %w", err)
+			return xerrors.Errorf("unmarshaling t.CreatedTime: %w", err)
 		}
 
 	}
@@ -352,7 +353,7 @@ func (t *ChannelStage) UnmarshalCBOR(r io.Reader) (err error) {
 	{
 
 		if err := t.UpdatedTime.UnmarshalCBOR(cr); err != nil {
-			return fmt.Errorf("unmarshaling t.UpdatedTime: %w", err)
+			return xerrors.Errorf("unmarshaling t.UpdatedTime: %w", err)
 		}
 
 	}
@@ -396,7 +397,7 @@ func (t *ChannelStage) UnmarshalCBOR(r io.Reader) (err error) {
 					}
 					t.Logs[i] = new(Log)
 					if err := t.Logs[i].UnmarshalCBOR(cr); err != nil {
-						return fmt.Errorf("unmarshaling t.Logs[i] pointer: %w", err)
+						return xerrors.Errorf("unmarshaling t.Logs[i] pointer: %w", err)
 					}
 				}
 
@@ -423,7 +424,7 @@ func (t *Log) MarshalCBOR(w io.Writer) error {
 
 	// t.Log (string) (string)
 	if len(t.Log) > 8192 {
-		return errors.New("Value in field t.Log was too long")
+		return xerrors.Errorf("Value in field t.Log was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Log))); err != nil {
@@ -478,7 +479,7 @@ func (t *Log) UnmarshalCBOR(r io.Reader) (err error) {
 	{
 
 		if err := t.UpdatedTime.UnmarshalCBOR(cr); err != nil {
-			return fmt.Errorf("unmarshaling t.UpdatedTime: %w", err)
+			return xerrors.Errorf("unmarshaling t.UpdatedTime: %w", err)
 		}
 
 	}
