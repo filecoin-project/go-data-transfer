@@ -1,6 +1,8 @@
 package message1_1
 
 import (
+	"errors"
+	"fmt"
 	"io"
 
 	"github.com/ipld/go-ipld-prime"
@@ -8,7 +10,6 @@ import (
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
@@ -75,7 +76,7 @@ func (trsp *TransferResponse1_1) VoucherResultType() datatransfer.TypeIdentifier
 
 func (trsp *TransferResponse1_1) VoucherResult() (datamodel.Node, error) {
 	if trsp.VoucherResultPtr == nil {
-		return nil, xerrors.New("No voucher present to read")
+		return nil, errors.New("No voucher present to read")
 	}
 	return trsp.VoucherResultPtr, nil
 }
@@ -93,7 +94,7 @@ func (trsp *TransferResponse1_1) MessageForProtocol(targetProtocol protocol.ID) 
 	case datatransfer.ProtocolDataTransfer1_2:
 		return trsp, nil
 	default:
-		return nil, xerrors.Errorf("protocol %s not supported", targetProtocol)
+		return nil, fmt.Errorf("protocol %s not supported", targetProtocol)
 	}
 }
 

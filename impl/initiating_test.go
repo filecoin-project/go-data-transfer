@@ -10,6 +10,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	dss "github.com/ipfs/go-datastore/sync"
+	"github.com/ipfs/go-test/random"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
@@ -311,7 +312,7 @@ func TestDataTransferInitiating(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 			h.ctx = ctx
-			h.peers = testutil.GeneratePeers(2)
+			h.peers = random.Peers(2)
 			h.network = testutil.NewFakeNetwork(h.peers[0])
 			h.transport = testutil.NewFakeTransport()
 			h.ds = dss.MutexWrap(datastore.NewMapDatastore())
@@ -328,7 +329,7 @@ func TestDataTransferInitiating(t *testing.T) {
 			h.voucher = testutil.NewTestTypedVoucher()
 			h.voucherResult = testutil.NewTestTypedVoucher()
 			require.NoError(t, err)
-			h.baseCid = testutil.GenerateCids(1)[0]
+			h.baseCid = random.Cids(1)[0]
 			verify.verify(t, h)
 			ev.verify(ctx, t)
 		})
@@ -353,7 +354,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 0)
 
 				// some cids should already be received
-				testCids := testutil.GenerateCids(2)
+				testCids := random.Cids(2)
 				ev, ok := h.dt.(datatransfer.EventsHandler)
 				require.True(t, ok)
 				ev.OnTransferInitiated(channelID)
@@ -570,7 +571,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 
 			// create the harness
 			h.ctx = ctx
-			h.peers = testutil.GeneratePeers(2)
+			h.peers = random.Peers(2)
 			h.network = testutil.NewFakeNetwork(h.peers[0])
 			h.transport = testutil.NewFakeTransport()
 			h.ds = dss.MutexWrap(datastore.NewMapDatastore())
@@ -595,7 +596,7 @@ func TestDataTransferRestartInitiating(t *testing.T) {
 			require.NoError(t, h.dt.RegisterVoucherType(h.voucher.Type, h.voucherValidator))
 			h.voucherResult = testutil.NewTestTypedVoucher()
 			require.NoError(t, err)
-			h.baseCid = testutil.GenerateCids(1)[0]
+			h.baseCid = random.Cids(1)[0]
 
 			h.id = datatransfer.TransferID(rand.Int31())
 			h.pushRequest, err = message.NewRequest(h.id, false, false, &h.voucher, h.baseCid, h.stor)

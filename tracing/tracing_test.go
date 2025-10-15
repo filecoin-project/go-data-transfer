@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ipfs/go-test/random"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/rand"
 
@@ -14,7 +15,7 @@ import (
 
 func TestSpansIndex(t *testing.T) {
 	ctx := context.Background()
-	peers := testutil.GeneratePeers(2)
+	peers := random.Peers(2)
 	chid1 := datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: datatransfer.TransferID(rand.Uint32())}
 	chid2 := datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: datatransfer.TransferID(rand.Uint32())}
 	testCases := map[string]struct {

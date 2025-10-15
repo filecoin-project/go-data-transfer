@@ -8,7 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ipfs/go-blockservice"
+	"github.com/ipfs/boxo/blockservice"
+	bstore "github.com/ipfs/boxo/blockstore"
+	chunker "github.com/ipfs/boxo/chunker"
+	offline "github.com/ipfs/boxo/exchange/offline"
+	"github.com/ipfs/boxo/ipld/merkledag"
+	"github.com/ipfs/boxo/ipld/unixfs/importer/balanced"
+	ihelper "github.com/ipfs/boxo/ipld/unixfs/importer/helpers"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
@@ -18,14 +24,9 @@ import (
 	gsmsg "github.com/ipfs/go-graphsync/message"
 	gsnet "github.com/ipfs/go-graphsync/network"
 	"github.com/ipfs/go-graphsync/storeutil"
-	bstore "github.com/ipfs/go-ipfs-blockstore"
-	chunker "github.com/ipfs/go-ipfs-chunker"
-	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	ipldformat "github.com/ipfs/go-ipld-format"
 	logging "github.com/ipfs/go-log/v2"
-	"github.com/ipfs/go-merkledag"
-	"github.com/ipfs/go-unixfs/importer/balanced"
-	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
+	"github.com/ipfs/go-test/random"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -1768,7 +1769,7 @@ func TestDataTransferSubscribing(t *testing.T) {
 	testutil.StartAndWaitForReady(ctx, t, dt2)
 	require.NoError(t, dt2.RegisterVoucherType(testutil.TestVoucherType, sv))
 	voucher := testutil.NewTestTypedVoucherWith("applesauce")
-	baseCid := testutil.GenerateCids(1)[0]
+	baseCid := random.Cids(1)[0]
 
 	dt1, err := NewDataTransfer(gsData.DtDs1, gsData.DtNet1, tp1)
 	require.NoError(t, err)
@@ -2031,7 +2032,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 
 				voucher := testutil.NewTestTypedVoucher()
-				request, err := message.NewRequest(id, false, true, &voucher, testutil.GenerateCids(1)[0], selectorparse.CommonSelector_ExploreAllRecursively)
+				request, err := message.NewRequest(id, false, true, &voucher, random.Cids(1)[0], selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(t, err)
 				nd := request.ToIPLD()
 				gsRequest := gsmsg.NewRequest(graphsync.NewRequestID(), link.(cidlink.Link).Cid, selectorparse.CommonSelector_ExploreAllRecursively, graphsync.Priority(rand.Int31()), graphsync.ExtensionData{
@@ -2058,7 +2059,7 @@ func TestRespondingToPullGraphsyncRequests(t *testing.T) {
 				testutil.StartAndWaitForReady(ctx, t, dt1)
 				require.NoError(t, dt1.RegisterVoucherType(testutil.TestVoucherType, sv))
 				voucher := testutil.NewTestTypedVoucher()
-				dtRequest, err := message.NewRequest(id, false, true, &voucher, testutil.GenerateCids(1)[0], selectorparse.CommonSelector_ExploreAllRecursively)
+				dtRequest, err := message.NewRequest(id, false, true, &voucher, random.Cids(1)[0], selectorparse.CommonSelector_ExploreAllRecursively)
 				require.NoError(t, err)
 
 				nd := dtRequest.ToIPLD()

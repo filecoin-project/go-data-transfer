@@ -3,13 +3,13 @@ package channels
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	peer "github.com/libp2p/go-libp2p/core/peer"
-	"golang.org/x/xerrors"
 
 	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
 	versionedfsm "github.com/filecoin-project/go-ds-versioning/pkg/fsm"
@@ -134,8 +134,10 @@ func (c *Channels) CreateNew(selfPeer peer.ID, tid datatransfer.TransferID, base
 		Stages:     &datatransfer.ChannelStages{},
 		Vouchers: []internal.EncodedVoucher{
 			{
-				Type:    voucher.Type,
-				Voucher: internal.CborGenCompatibleNode{voucher.Voucher},
+				Type: voucher.Type,
+				Voucher: internal.CborGenCompatibleNode{
+					Node: voucher.Voucher,
+				},
 			},
 		},
 		Status: datatransfer.Requested,
@@ -456,7 +458,7 @@ func (c *Channels) checkChannelExists(chid datatransfer.ChannelID, code datatran
 		return err
 	}
 	if !has {
-		return xerrors.Errorf("cannot send FSM event %s to data-transfer channel %s: %w",
+		return fmt.Errorf("cannot send FSM event %s to data-transfer channel %s: %w",
 			datatransfer.Events[code], chid, NewErrNotFound(chid))
 	}
 	return nil

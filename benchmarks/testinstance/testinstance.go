@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	blockstore "github.com/ipfs/boxo/blockstore"
 	"github.com/ipfs/go-datastore"
 	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/delayed"
@@ -13,7 +14,6 @@ import (
 	graphsync "github.com/ipfs/go-graphsync"
 	gsimpl "github.com/ipfs/go-graphsync/impl"
 	"github.com/ipfs/go-graphsync/storeutil"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	delay "github.com/ipfs/go-ipfs-delay"
 	"github.com/ipld/go-ipld-prime"
 	peer "github.com/libp2p/go-libp2p/core/peer"

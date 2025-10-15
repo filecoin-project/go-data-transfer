@@ -11,6 +11,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	dss "github.com/ipfs/go-datastore/sync"
+	"github.com/ipfs/go-test/random"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -379,7 +380,7 @@ func TestDataTransferResponding(t *testing.T) {
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
 				h.transport.EventHandler.OnTransferInitiated(channelID(h.id, h.peers))
-				err := h.transport.EventHandler.OnDataReceived(channelID(h.id, h.peers), cidlink.Link{Cid: testutil.GenerateCids(1)[0]}, 12345, 1, true)
+				err := h.transport.EventHandler.OnDataReceived(channelID(h.id, h.peers), cidlink.Link{Cid: random.Cids(1)[0]}, 12345, 1, true)
 				require.EqualError(t, err, datatransfer.ErrPause.Error())
 				require.Len(t, h.network.SentMessages, 1)
 				response, ok := h.network.SentMessages[0].Message.(datatransfer.Response)
@@ -432,7 +433,7 @@ func TestDataTransferResponding(t *testing.T) {
 			verify: func(t *testing.T, h *receiverHarness) {
 				h.network.Delegate.ReceiveRequest(h.ctx, h.peers[1], h.pushRequest)
 				h.transport.EventHandler.OnTransferInitiated(channelID(h.id, h.peers))
-				err := h.transport.EventHandler.OnDataReceived(channelID(h.id, h.peers), cidlink.Link{Cid: testutil.GenerateCids(1)[0]}, 12345, 1, true)
+				err := h.transport.EventHandler.OnDataReceived(channelID(h.id, h.peers), cidlink.Link{Cid: random.Cids(1)[0]}, 12345, 1, true)
 				require.EqualError(t, err, datatransfer.ErrPause.Error())
 				require.Len(t, h.network.SentMessages, 1)
 				response, ok := h.network.SentMessages[0].Message.(datatransfer.Response)
@@ -489,7 +490,7 @@ func TestDataTransferResponding(t *testing.T) {
 				h.transport.EventHandler.OnTransferInitiated(channelID(h.id, h.peers))
 				msg, err := h.transport.EventHandler.OnDataQueued(
 					channelID(h.id, h.peers),
-					cidlink.Link{Cid: testutil.GenerateCids(1)[0]},
+					cidlink.Link{Cid: random.Cids(1)[0]},
 					12345, 1, true)
 				require.EqualError(t, err, datatransfer.ErrPause.Error())
 				response, ok := msg.(datatransfer.Response)
@@ -636,7 +637,7 @@ func TestDataTransferResponding(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 			h.ctx = ctx
-			h.peers = testutil.GeneratePeers(2)
+			h.peers = random.Peers(2)
 			h.network = testutil.NewFakeNetwork(h.peers[0])
 			h.transport = testutil.NewFakeTransport()
 			h.ds = dss.MutexWrap(datastore.NewMapDatastore())
@@ -651,7 +652,7 @@ func TestDataTransferResponding(t *testing.T) {
 			ev.setup(t, dt)
 			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
 			h.voucher = testutil.NewTestTypedVoucher()
-			h.baseCid = testutil.GenerateCids(1)[0]
+			h.baseCid = random.Cids(1)[0]
 			h.id = datatransfer.TransferID(rand.Int31())
 			h.pullRequest, err = message.NewRequest(h.id, false, true, &h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)
@@ -729,7 +730,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 
 				// some cids are received
 				chid := datatransfer.ChannelID{Initiator: h.peers[1], Responder: h.peers[0], ID: h.pushRequest.TransferID()}
-				testCids := testutil.GenerateCids(2)
+				testCids := random.Cids(2)
 				ev, ok := h.dt.(datatransfer.EventsHandler)
 				require.True(t, ok)
 				ev.OnTransferInitiated(chid)
@@ -836,7 +837,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				// receive restart pull request
 				restartReq, err := message.NewRequest(h.id, true, true, &h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
-				p := testutil.GeneratePeers(1)[0]
+				p := random.Peers(1)[0]
 				chid := datatransfer.ChannelID{ID: h.pullRequest.TransferID(), Initiator: p, Responder: h.peers[0]}
 				_, err = h.transport.EventHandler.OnRequestReceived(chid, restartReq)
 				require.True(t, errors.As(err, new(*channels.ErrNotFound)))
@@ -894,7 +895,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.Len(t, h.network.SentMessages, 0)
 
 				// receive restart pull request
-				randCid := testutil.GenerateCids(1)[0]
+				randCid := random.Cids(1)[0]
 				restartReq, err := message.NewRequest(h.id, true, true, &h.voucher, randCid, h.stor)
 				require.NoError(t, err)
 				_, err = h.transport.EventHandler.OnRequestReceived(chid, restartReq)
@@ -975,7 +976,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 				require.NotEmpty(t, channelID)
 
 				// some cids should already be received
-				testCids := testutil.GenerateCids(2)
+				testCids := random.Cids(2)
 				ev, ok := h.dt.(datatransfer.EventsHandler)
 				require.True(t, ok)
 				ev.OnTransferInitiated(channelID)
@@ -1086,7 +1087,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			},
 			verify: func(t *testing.T, h *receiverHarness) {
 				// create an outgoing push request first
-				p := testutil.GeneratePeers(1)[0]
+				p := random.Peers(1)[0]
 				channelID, err := h.dt.OpenPushDataChannel(h.ctx, p, h.voucher, h.baseCid, h.stor)
 				require.NoError(t, err)
 				require.NotEmpty(t, channelID)
@@ -1106,7 +1107,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 			h.ctx = ctx
-			h.peers = testutil.GeneratePeers(2)
+			h.peers = random.Peers(2)
 			h.network = testutil.NewFakeNetwork(h.peers[0])
 			h.transport = testutil.NewFakeTransport()
 			h.ds = dss.MutexWrap(datastore.NewMapDatastore())
@@ -1121,7 +1122,7 @@ func TestDataTransferRestartResponding(t *testing.T) {
 			ev.setup(t, dt)
 			h.stor = selectorparse.CommonSelector_ExploreAllRecursively
 			h.voucher = testutil.NewTestTypedVoucher()
-			h.baseCid = testutil.GenerateCids(1)[0]
+			h.baseCid = random.Cids(1)[0]
 			h.id = datatransfer.TransferID(rand.Int31())
 			h.pullRequest, err = message.NewRequest(h.id, false, true, &h.voucher, h.baseCid, h.stor)
 			require.NoError(t, err)

@@ -1,9 +1,8 @@
 package registry
 
 import (
+	"fmt"
 	"sync"
-
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 )
@@ -35,7 +34,7 @@ func (r *Registry) Register(identifier datatransfer.TypeIdentifier, processor Pr
 	r.registryLk.Lock()
 	defer r.registryLk.Unlock()
 	if _, ok := r.entries[identifier]; ok {
-		return xerrors.Errorf("identifier already registered: %s", identifier)
+		return fmt.Errorf("identifier already registered: %s", identifier)
 	}
 	r.entries[identifier] = processor
 	return nil

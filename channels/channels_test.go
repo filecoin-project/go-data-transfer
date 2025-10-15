@@ -11,11 +11,11 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	dss "github.com/ipfs/go-datastore/sync"
+	"github.com/ipfs/go-test/random"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	peer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/xerrors"
 
 	versioning "github.com/filecoin-project/go-ds-versioning/pkg"
 	versionedds "github.com/filecoin-project/go-ds-versioning/pkg/datastore"
@@ -41,9 +41,9 @@ func TestChannels(t *testing.T) {
 	tid2 := datatransfer.TransferID(1)
 	fv1 := testutil.NewTestTypedVoucher()
 	fv2 := testutil.NewTestTypedVoucher()
-	cids := testutil.GenerateCids(4)
+	cids := random.Cids(4)
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
-	peers := testutil.GeneratePeers(4)
+	peers := random.Peers(4)
 
 	channelList, err := channels.New(ds, notifier, &fakeEnv{}, peers[0])
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestChannels(t *testing.T) {
 		// empty if channel does not exist
 		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[1], Responder: peers[1], ID: tid1})
 		require.Equal(t, nil, state)
-		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
+		require.True(t, errors.As(err, new(*channels.ErrNotFound)))
 
 		// works for other channel as well
 		state, err = channelList.GetByID(ctx, datatransfer.ChannelID{Initiator: peers[3], Responder: peers[2], ID: tid2})
@@ -117,7 +117,7 @@ func TestChannels(t *testing.T) {
 		require.Equal(t, state.Status(), datatransfer.Queued)
 
 		err = channelList.Accept(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1})
-		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
+		require.True(t, errors.As(err, new(*channels.ErrNotFound)))
 	})
 
 	t.Run("transfer initiated", func(t *testing.T) {
@@ -207,9 +207,9 @@ func TestChannels(t *testing.T) {
 
 		// errors if channel does not exist
 		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200, 2, true)
-		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
+		require.True(t, errors.As(err, new(*channels.ErrNotFound)))
 		err = channelList.DataSent(datatransfer.ChannelID{Initiator: peers[1], Responder: peers[0], ID: tid1}, cids[1], 200, 2, true)
-		require.True(t, xerrors.As(err, new(*channels.ErrNotFound)))
+		require.True(t, errors.As(err, new(*channels.ErrNotFound)))
 
 		err = channelList.DataReceived(datatransfer.ChannelID{Initiator: peers[0], Responder: peers[1], ID: tid1}, cids[1], 50, 2, true)
 		require.NoError(t, err)
@@ -435,7 +435,7 @@ func TestChannels(t *testing.T) {
 		state := checkEvent(ctx, t, received, datatransfer.Open)
 		require.Equal(t, datatransfer.Requested, state.Status())
 
-		disconnectErr := xerrors.Errorf("disconnected")
+		disconnectErr := errors.New("disconnected")
 		err = channelList.Disconnected(chid, disconnectErr)
 		require.NoError(t, err)
 		state = checkEvent(ctx, t, received, datatransfer.Disconnected)
@@ -443,7 +443,7 @@ func TestChannels(t *testing.T) {
 	})
 
 	t.Run("test self peer and other peer", func(t *testing.T) {
-		peers := testutil.GeneratePeers(3)
+		peers := random.Peers(3)
 		// sender is self peer
 		chid, err := channelList.CreateNew(peers[1], tid1, cids[0], selector, fv1, peers[1], peers[1], peers[2])
 		require.NoError(t, err)
@@ -502,7 +502,7 @@ func TestMigrations(t *testing.T) {
 	receivedIndex := make([]int64, numChannels)
 	queuedIndex := make([]int64, numChannels)
 	allSelector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
-	selfPeer := testutil.GeneratePeers(1)[0]
+	selfPeer := random.Peers(1)[0]
 
 	list, err := migrations.GetChannelStateMigrations(selfPeer)
 	require.NoError(t, err)
@@ -518,13 +518,13 @@ func TestMigrations(t *testing.T) {
 	}
 	for i := 0; i < numChannels; i++ {
 		transferIDs[i] = datatransfer.TransferID(rand.Uint64())
-		initiators[i] = testutil.GeneratePeers(1)[0]
-		responders[i] = testutil.GeneratePeers(1)[0]
-		baseCids[i] = testutil.GenerateCids(1)[0]
+		initiators[i] = random.Peers(1)[0]
+		responders[i] = random.Peers(1)[0]
+		baseCids[i] = random.Cids(1)[0]
 		totalSizes[i] = rand.Uint64()
 		sents[i] = rand.Uint64()
 		receiveds[i] = rand.Uint64()
-		messages[i] = string(testutil.RandomBytes(20))
+		messages[i] = string(random.Bytes(20))
 		vouchers[i] = testutil.NewTestTypedVoucher()
 		voucherResults[i] = testutil.NewTestTypedVoucher()
 		sentIndex[i] = rand.Int63()

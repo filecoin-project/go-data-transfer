@@ -2,6 +2,7 @@ package channelmonitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/testutil"
@@ -191,7 +191,7 @@ func awaitRestartComplete(mch *monitoredChannel) error {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	return xerrors.Errorf("restart did not complete after 10ms")
+	return errors.New("restart did not complete after 10ms")
 }
 
 func TestChannelMonitorQueuedRestart(t *testing.T) {
@@ -416,7 +416,7 @@ func (m *mockMonitorAPI) fireEvent(e datatransfer.Event, state datatransfer.Chan
 
 func (m *mockMonitorAPI) ConnectTo(ctx context.Context, id peer.ID) error {
 	if m.connectErrors {
-		return xerrors.Errorf("connect err")
+		return errors.New("connect err")
 	}
 	return nil
 }
@@ -431,7 +431,7 @@ func (m *mockMonitorAPI) RestartDataTransferChannel(ctx context.Context, chid da
 	}()
 
 	if m.restartErrors {
-		return xerrors.Errorf("restart err")
+		return errors.New("restart err")
 	}
 	return nil
 }
@@ -440,7 +440,7 @@ func (m *mockMonitorAPI) awaitRestartSent() error {
 	timeout := 100 * time.Millisecond
 	select {
 	case <-time.After(timeout):
-		return xerrors.Errorf("failed to restart channel after %s", timeout)
+		return fmt.Errorf("failed to restart channel after %s", timeout)
 	case <-m.restartMessages:
 		return nil
 	}

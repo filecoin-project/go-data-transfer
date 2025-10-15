@@ -3,6 +3,7 @@
 package migrations
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -13,10 +14,8 @@ import (
 	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p/core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
-	xerrors "golang.org/x/xerrors"
 )
 
-var _ = xerrors.Errorf
 var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
@@ -35,7 +34,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Sent (uint64) (uint64)
 	if len("Sent") > 8192 {
-		return xerrors.Errorf("Value in field \"Sent\" was too long")
+		return errors.New("Value in field \"Sent\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Sent"))); err != nil {
@@ -51,7 +50,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Queued (uint64) (uint64)
 	if len("Queued") > 8192 {
-		return xerrors.Errorf("Value in field \"Queued\" was too long")
+		return errors.New("Value in field \"Queued\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Queued"))); err != nil {
@@ -67,7 +66,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Sender (peer.ID) (string)
 	if len("Sender") > 8192 {
-		return xerrors.Errorf("Value in field \"Sender\" was too long")
+		return errors.New("Value in field \"Sender\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Sender"))); err != nil {
@@ -78,7 +77,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 	}
 
 	if len(t.Sender) > 8192 {
-		return xerrors.Errorf("Value in field t.Sender was too long")
+		return errors.New("Value in field t.Sender was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Sender))); err != nil {
@@ -90,7 +89,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Stages (datatransfer.ChannelStages) (struct)
 	if len("Stages") > 8192 {
-		return xerrors.Errorf("Value in field \"Stages\" was too long")
+		return errors.New("Value in field \"Stages\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Stages"))); err != nil {
@@ -106,7 +105,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Status (datatransfer.Status) (uint64)
 	if len("Status") > 8192 {
-		return xerrors.Errorf("Value in field \"Status\" was too long")
+		return errors.New("Value in field \"Status\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Status"))); err != nil {
@@ -122,7 +121,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.BaseCid (cid.Cid) (struct)
 	if len("BaseCid") > 8192 {
-		return xerrors.Errorf("Value in field \"BaseCid\" was too long")
+		return errors.New("Value in field \"BaseCid\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("BaseCid"))); err != nil {
@@ -133,12 +132,12 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 	}
 
 	if err := cbg.WriteCid(cw, t.BaseCid); err != nil {
-		return xerrors.Errorf("failed to write cid field t.BaseCid: %w", err)
+		return fmt.Errorf("failed to write cid field t.BaseCid: %w", err)
 	}
 
 	// t.Message (string) (string)
 	if len("Message") > 8192 {
-		return xerrors.Errorf("Value in field \"Message\" was too long")
+		return errors.New("Value in field \"Message\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Message"))); err != nil {
@@ -149,7 +148,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 	}
 
 	if len(t.Message) > 8192 {
-		return xerrors.Errorf("Value in field t.Message was too long")
+		return errors.New("Value in field t.Message was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Message))); err != nil {
@@ -161,7 +160,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Received (uint64) (uint64)
 	if len("Received") > 8192 {
-		return xerrors.Errorf("Value in field \"Received\" was too long")
+		return errors.New("Value in field \"Received\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Received"))); err != nil {
@@ -177,7 +176,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Selector (internal.CborGenCompatibleNode) (struct)
 	if len("Selector") > 8192 {
-		return xerrors.Errorf("Value in field \"Selector\" was too long")
+		return errors.New("Value in field \"Selector\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Selector"))); err != nil {
@@ -193,7 +192,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.SelfPeer (peer.ID) (string)
 	if len("SelfPeer") > 8192 {
-		return xerrors.Errorf("Value in field \"SelfPeer\" was too long")
+		return errors.New("Value in field \"SelfPeer\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("SelfPeer"))); err != nil {
@@ -204,7 +203,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 	}
 
 	if len(t.SelfPeer) > 8192 {
-		return xerrors.Errorf("Value in field t.SelfPeer was too long")
+		return errors.New("Value in field t.SelfPeer was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.SelfPeer))); err != nil {
@@ -216,7 +215,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Vouchers ([]internal.EncodedVoucher) (slice)
 	if len("Vouchers") > 8192 {
-		return xerrors.Errorf("Value in field \"Vouchers\" was too long")
+		return errors.New("Value in field \"Vouchers\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Vouchers"))); err != nil {
@@ -227,7 +226,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 	}
 
 	if len(t.Vouchers) > 8192 {
-		return xerrors.Errorf("Slice value in field t.Vouchers was too long")
+		return errors.New("Slice value in field t.Vouchers was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.Vouchers))); err != nil {
@@ -242,7 +241,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.DataLimit (uint64) (uint64)
 	if len("DataLimit") > 8192 {
-		return xerrors.Errorf("Value in field \"DataLimit\" was too long")
+		return errors.New("Value in field \"DataLimit\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("DataLimit"))); err != nil {
@@ -258,7 +257,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Initiator (peer.ID) (string)
 	if len("Initiator") > 8192 {
-		return xerrors.Errorf("Value in field \"Initiator\" was too long")
+		return errors.New("Value in field \"Initiator\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Initiator"))); err != nil {
@@ -269,7 +268,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 	}
 
 	if len(t.Initiator) > 8192 {
-		return xerrors.Errorf("Value in field t.Initiator was too long")
+		return errors.New("Value in field t.Initiator was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Initiator))); err != nil {
@@ -281,7 +280,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Recipient (peer.ID) (string)
 	if len("Recipient") > 8192 {
-		return xerrors.Errorf("Value in field \"Recipient\" was too long")
+		return errors.New("Value in field \"Recipient\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Recipient"))); err != nil {
@@ -292,7 +291,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 	}
 
 	if len(t.Recipient) > 8192 {
-		return xerrors.Errorf("Value in field t.Recipient was too long")
+		return errors.New("Value in field t.Recipient was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Recipient))); err != nil {
@@ -304,7 +303,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.Responder (peer.ID) (string)
 	if len("Responder") > 8192 {
-		return xerrors.Errorf("Value in field \"Responder\" was too long")
+		return errors.New("Value in field \"Responder\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("Responder"))); err != nil {
@@ -315,7 +314,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 	}
 
 	if len(t.Responder) > 8192 {
-		return xerrors.Errorf("Value in field t.Responder was too long")
+		return errors.New("Value in field t.Responder was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Responder))); err != nil {
@@ -327,7 +326,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.TotalSize (uint64) (uint64)
 	if len("TotalSize") > 8192 {
-		return xerrors.Errorf("Value in field \"TotalSize\" was too long")
+		return errors.New("Value in field \"TotalSize\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("TotalSize"))); err != nil {
@@ -343,7 +342,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.TransferID (datatransfer.TransferID) (uint64)
 	if len("TransferID") > 8192 {
-		return xerrors.Errorf("Value in field \"TransferID\" was too long")
+		return errors.New("Value in field \"TransferID\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("TransferID"))); err != nil {
@@ -359,7 +358,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.VoucherResults ([]internal.EncodedVoucherResult) (slice)
 	if len("VoucherResults") > 8192 {
-		return xerrors.Errorf("Value in field \"VoucherResults\" was too long")
+		return errors.New("Value in field \"VoucherResults\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("VoucherResults"))); err != nil {
@@ -370,7 +369,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 	}
 
 	if len(t.VoucherResults) > 8192 {
-		return xerrors.Errorf("Slice value in field t.VoucherResults was too long")
+		return errors.New("Slice value in field t.VoucherResults was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.VoucherResults))); err != nil {
@@ -385,7 +384,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.SentBlocksTotal (int64) (int64)
 	if len("SentBlocksTotal") > 8192 {
-		return xerrors.Errorf("Value in field \"SentBlocksTotal\" was too long")
+		return errors.New("Value in field \"SentBlocksTotal\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("SentBlocksTotal"))); err != nil {
@@ -407,7 +406,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.QueuedBlocksTotal (int64) (int64)
 	if len("QueuedBlocksTotal") > 8192 {
-		return xerrors.Errorf("Value in field \"QueuedBlocksTotal\" was too long")
+		return errors.New("Value in field \"QueuedBlocksTotal\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("QueuedBlocksTotal"))); err != nil {
@@ -429,7 +428,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.ReceivedBlocksTotal (int64) (int64)
 	if len("ReceivedBlocksTotal") > 8192 {
-		return xerrors.Errorf("Value in field \"ReceivedBlocksTotal\" was too long")
+		return errors.New("Value in field \"ReceivedBlocksTotal\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("ReceivedBlocksTotal"))); err != nil {
@@ -451,7 +450,7 @@ func (t *ChannelStateV2) MarshalCBOR(w io.Writer) error {
 
 	// t.RequiresFinalization (bool) (bool)
 	if len("RequiresFinalization") > 8192 {
-		return xerrors.Errorf("Value in field \"RequiresFinalization\" was too long")
+		return errors.New("Value in field \"RequiresFinalization\" was too long")
 	}
 
 	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("RequiresFinalization"))); err != nil {
@@ -561,7 +560,7 @@ func (t *ChannelStateV2) UnmarshalCBOR(r io.Reader) (err error) {
 					}
 					t.Stages = new(datatransfer.ChannelStages)
 					if err := t.Stages.UnmarshalCBOR(cr); err != nil {
-						return xerrors.Errorf("unmarshaling t.Stages pointer: %w", err)
+						return fmt.Errorf("unmarshaling t.Stages pointer: %w", err)
 					}
 				}
 
@@ -576,7 +575,7 @@ func (t *ChannelStateV2) UnmarshalCBOR(r io.Reader) (err error) {
 					return err
 				}
 				if maj != cbg.MajUnsignedInt {
-					return fmt.Errorf("wrong type for uint64 field")
+					return errors.New("wrong type for uint64 field")
 				}
 				t.Status = datatransfer.Status(extra)
 
@@ -588,7 +587,7 @@ func (t *ChannelStateV2) UnmarshalCBOR(r io.Reader) (err error) {
 
 				c, err := cbg.ReadCid(cr)
 				if err != nil {
-					return xerrors.Errorf("failed to read cid field t.BaseCid: %w", err)
+					return fmt.Errorf("failed to read cid field t.BaseCid: %w", err)
 				}
 
 				t.BaseCid = c
@@ -626,7 +625,7 @@ func (t *ChannelStateV2) UnmarshalCBOR(r io.Reader) (err error) {
 			{
 
 				if err := t.Selector.UnmarshalCBOR(cr); err != nil {
-					return xerrors.Errorf("unmarshaling t.Selector: %w", err)
+					return fmt.Errorf("unmarshaling t.Selector: %w", err)
 				}
 
 			}
@@ -673,7 +672,7 @@ func (t *ChannelStateV2) UnmarshalCBOR(r io.Reader) (err error) {
 					{
 
 						if err := t.Vouchers[i].UnmarshalCBOR(cr); err != nil {
-							return xerrors.Errorf("unmarshaling t.Vouchers[i]: %w", err)
+							return fmt.Errorf("unmarshaling t.Vouchers[i]: %w", err)
 						}
 
 					}
@@ -790,7 +789,7 @@ func (t *ChannelStateV2) UnmarshalCBOR(r io.Reader) (err error) {
 					{
 
 						if err := t.VoucherResults[i].UnmarshalCBOR(cr); err != nil {
-							return xerrors.Errorf("unmarshaling t.VoucherResults[i]: %w", err)
+							return fmt.Errorf("unmarshaling t.VoucherResults[i]: %w", err)
 						}
 
 					}

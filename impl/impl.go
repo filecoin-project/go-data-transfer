@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/channelmonitor"
@@ -177,7 +176,7 @@ func (m *manager) Stop(ctx context.Context) error {
 func (m *manager) RegisterVoucherType(voucherType datatransfer.TypeIdentifier, validator datatransfer.RequestValidator) error {
 	err := m.validatedTypes.Register(voucherType, validator)
 	if err != nil {
-		return xerrors.Errorf("error registering voucher type: %w", err)
+		return fmt.Errorf("error registering voucher type: %w", err)
 	}
 	return nil
 }
@@ -520,7 +519,7 @@ func (m *manager) CloseDataTransferChannel(ctx context.Context, chid datatransfe
 	// Fire a cancel event
 	fsmerr := m.channels.Cancel(chid)
 	if fsmerr != nil {
-		return xerrors.Errorf("unable to send cancel to channel FSM: %w", fsmerr)
+		return fmt.Errorf("unable to send cancel to channel FSM: %w", fsmerr)
 	}
 
 	return nil
@@ -569,7 +568,7 @@ func (m *manager) CloseDataTransferChannelWithError(ctx context.Context, chid da
 	// Fire an error event
 	err = m.channels.Error(chid, cherr)
 	if err != nil {
-		return xerrors.Errorf("unable to send error %s to channel FSM: %w", cherr, err)
+		return fmt.Errorf("unable to send error %s to channel FSM: %w", cherr, err)
 	}
 
 	return nil
@@ -648,7 +647,7 @@ func (m *manager) InProgressChannels(ctx context.Context) (map[datatransfer.Chan
 func (m *manager) RegisterTransportConfigurer(voucherType datatransfer.TypeIdentifier, configurer datatransfer.TransportConfigurer) error {
 	err := m.transportConfigurers.Register(voucherType, configurer)
 	if err != nil {
-		return xerrors.Errorf("error registering transport configurer: %w", err)
+		return fmt.Errorf("error registering transport configurer: %w", err)
 	}
 	return nil
 }
@@ -659,7 +658,7 @@ func (m *manager) RestartDataTransferChannel(ctx context.Context, chid datatrans
 
 	channel, err := m.channels.GetByID(ctx, chid)
 	if err != nil {
-		return xerrors.Errorf("failed to fetch channel: %w", err)
+		return fmt.Errorf("failed to fetch channel: %w", err)
 	}
 
 	// if channel has already been completed, there is nothing to do.

@@ -2,7 +2,9 @@ package itest
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,8 +15,6 @@ import (
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
-	"golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	. "github.com/filecoin-project/go-data-transfer/v2/impl"
@@ -148,10 +148,10 @@ func TestRestartPush(t *testing.T) {
 			queued := make(chan uint64, totalIncrements*2)
 			sent := make(chan uint64, totalIncrements*2)
 			received := make(chan uint64, totalIncrements*2)
-			receivedTillNow := atomic.NewInt32(0)
+			var receivedTillNow atomic.Int32
 
 			// counters we will check at the end for correctness
-			opens := atomic.NewInt32(0)
+			var opens atomic.Int32
 			var finishedPeersLk sync.Mutex
 			var finishedPeers []peer.ID
 			disConnChan := make(chan struct{})
@@ -173,7 +173,7 @@ func TestRestartPush(t *testing.T) {
 				// disconnect and unlink the peers after we've received the required number of increments
 				if event.Code == datatransfer.DataReceived {
 					if channelState.Received() > 0 {
-						receivedTillNow.Inc()
+						receivedTillNow.Add(1)
 						received <- channelState.Received()
 						if receivedTillNow.Load() == int32(tc.stopAt) {
 							require.NoError(t, rh.gsData.Mn.UnlinkPeers(rh.peer1, rh.peer2))
@@ -191,11 +191,11 @@ func TestRestartPush(t *testing.T) {
 					finished <- channelState.SelfPeer()
 				}
 				if event.Code == datatransfer.Error {
-					err := xerrors.New(channelState.Message())
+					err := errors.New(channelState.Message())
 					errChan <- &peerError{channelState.SelfPeer(), err}
 				}
 				if event.Code == datatransfer.Open {
-					opens.Inc()
+					opens.Add(1)
 				}
 
 				if event.Code == datatransfer.Restart {
@@ -220,7 +220,7 @@ func TestRestartPush(t *testing.T) {
 				for completes < nCompletes {
 					select {
 					case <-waitCtx.Done():
-						return sentI, receivedI, xerrors.New("context timed-out without completing data transfer")
+						return sentI, receivedI, errors.New("context timed-out without completing data transfer")
 					case p := <-finished:
 						t.Logf("peer %s completed", p.String())
 						completes++
@@ -395,10 +395,10 @@ func TestRestartPull(t *testing.T) {
 			errChan := make(chan *peerError, 2)
 			sent := make(chan uint64, totalIncrements)
 			received := make(chan uint64, totalIncrements)
-			receivedTillNow := atomic.NewInt32(0)
+			var receivedTillNow atomic.Int32
 
 			// counters we will check at the end for correctness
-			opens := atomic.NewInt32(0)
+			var opens atomic.Int32
 			var finishedPeersLk sync.Mutex
 			var finishedPeers []peer.ID
 			disConnChan := make(chan struct{})
@@ -414,7 +414,7 @@ func TestRestartPull(t *testing.T) {
 				// disconnect and unlink the peers after we've received the required number of increments
 				if event.Code == datatransfer.DataReceived {
 					if channelState.Received() > 0 {
-						receivedTillNow.Inc()
+						receivedTillNow.Add(1)
 						received <- channelState.Received()
 						if receivedTillNow.Load() == int32(tc.stopAt) {
 							require.NoError(t, rh.gsData.Mn.UnlinkPeers(rh.peer1, rh.peer2))
@@ -433,11 +433,11 @@ func TestRestartPull(t *testing.T) {
 					finished <- channelState.SelfPeer()
 				}
 				if event.Code == datatransfer.Error {
-					err := xerrors.New(channelState.Message())
+					err := errors.New(channelState.Message())
 					errChan <- &peerError{channelState.SelfPeer(), err}
 				}
 				if event.Code == datatransfer.Open {
-					opens.Inc()
+					opens.Add(1)
 				}
 
 				if event.Code == datatransfer.Restart {
@@ -466,7 +466,7 @@ func TestRestartPull(t *testing.T) {
 				for completes < nCompletes {
 					select {
 					case <-waitCtx.Done():
-						return sentI, receivedI, xerrors.New("context timed-out without completing data transfer")
+						return sentI, receivedI, errors.New("context timed-out without completing data transfer")
 					case p := <-finished:
 						t.Logf("peer %s completed", p.String())
 						completes++

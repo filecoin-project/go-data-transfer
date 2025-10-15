@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/ipfs/go-test/random"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ import (
 )
 
 func TestRequestMessageForProtocol(t *testing.T) {
-	baseCid := testutil.GenerateCids(1)[0]
+	baseCid := random.Cids(1)[0]
 	selector := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any).Matcher().Node()
 	isPull := true
 	id := datatransfer.TransferID(rand.Int31())

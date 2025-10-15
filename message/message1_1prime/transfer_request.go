@@ -1,6 +1,7 @@
 package message1_1
 
 import (
+	"errors"
 	"io"
 
 	"github.com/ipfs/go-cid"
@@ -9,7 +10,6 @@ import (
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/schema"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	xerrors "golang.org/x/xerrors"
 
 	datatransfer "github.com/filecoin-project/go-data-transfer/v2"
 	"github.com/filecoin-project/go-data-transfer/v2/message/types"
@@ -35,7 +35,7 @@ func (trq *TransferRequest1_1) MessageForProtocol(targetProtocol protocol.ID) (d
 	case datatransfer.ProtocolDataTransfer1_2:
 		return trq, nil
 	default:
-		return nil, xerrors.Errorf("protocol not supported")
+		return nil, errors.New("protocol not supported")
 	}
 }
 
@@ -54,7 +54,7 @@ func (trq *TransferRequest1_1) IsRestartExistingChannelRequest() bool {
 
 func (trq *TransferRequest1_1) RestartChannelId() (datatransfer.ChannelID, error) {
 	if !trq.IsRestartExistingChannelRequest() {
-		return datatransfer.ChannelID{}, xerrors.New("not a restart request")
+		return datatransfer.ChannelID{}, errors.New("not a restart request")
 	}
 	return trq.RestartChannel, nil
 }
@@ -93,7 +93,7 @@ func (trq *TransferRequest1_1) VoucherType() datatransfer.TypeIdentifier {
 // Voucher returns the Voucher bytes
 func (trq *TransferRequest1_1) Voucher() (datamodel.Node, error) {
 	if trq.VoucherPtr == nil {
-		return nil, xerrors.New("No voucher present to read")
+		return nil, errors.New("No voucher present to read")
 	}
 	return trq.VoucherPtr, nil
 }
@@ -124,7 +124,7 @@ func (trq *TransferRequest1_1) BaseCid() cid.Cid {
 // Selector returns the message Selector bytes
 func (trq *TransferRequest1_1) Selector() (datamodel.Node, error) {
 	if trq.SelectorPtr == nil {
-		return nil, xerrors.New("No selector present to read")
+		return nil, errors.New("No selector present to read")
 	}
 	return trq.SelectorPtr, nil
 }
