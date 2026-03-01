@@ -23,9 +23,9 @@ require (
 	github.com/libp2p/go-libp2p v0.43.0
 	github.com/stretchr/testify v1.11.1
 	github.com/whyrusleeping/cbor-gen v0.3.1
-	go.opentelemetry.io/otel v1.38.0
-	go.opentelemetry.io/otel/sdk v1.38.0
-	go.opentelemetry.io/otel/trace v1.38.0
+	go.opentelemetry.io/otel v1.40.0
+	go.opentelemetry.io/otel/sdk v1.40.0
+	go.opentelemetry.io/otel/trace v1.40.0
 	golang.org/x/exp v0.0.0-20251009144603-d2f985daa21b
 	golang.org/x/sync v0.18.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
@@ -131,8 +131,8 @@ require (
 	github.com/urfave/cli/v2 v2.0.0 // indirect
 	github.com/whyrusleeping/chunker v0.0.0-20181014151217-fe64bd25879f // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
-	go.opentelemetry.io/otel/metric v1.38.0 // indirect
+	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
+	go.opentelemetry.io/otel/metric v1.40.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/mock v0.5.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -141,7 +141,7 @@ require (
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
